@@ -48,7 +48,6 @@ fun LibraryScreen(
     val regions by viewModel.regions.collectAsState()
     val spots by viewModel.spots.collectAsState()
     val busy = viewModel.busy.value
-    val message = viewModel.message.value
     val snackbarHostState = remember { SnackbarHostState() }
 
     // Чужие файлы приходят через системный выбор — приложению не нужен
@@ -67,24 +66,13 @@ fun LibraryScreen(
         }
     }
 
-    LaunchedEffect(message) {
-        when (message) {
-            is LibraryMessage.MapsReady -> {
-                shareMapsDatabase(context, message.file)
-                viewModel.dismissMessage()
+    LaunchedEffect(Unit) {
+        viewModel.events.collect { event ->
+            when (event) {
+                is LibraryMessage.MapsReady -> shareMapsDatabase(context, event.file)
+                is LibraryMessage.Info -> snackbarHostState.showSnackbar(event.text)
+                is LibraryMessage.Error -> snackbarHostState.showSnackbar(event.text)
             }
-
-            is LibraryMessage.Info -> {
-                snackbarHostState.showSnackbar(message.text)
-                viewModel.dismissMessage()
-            }
-
-            is LibraryMessage.Error -> {
-                snackbarHostState.showSnackbar(message.text)
-                viewModel.dismissMessage()
-            }
-
-            null -> Unit
         }
     }
 

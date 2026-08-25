@@ -15,9 +15,11 @@ import com.example.fishforecast.domain.share.GpxParser
 import com.example.fishforecast.domain.share.GpxWriter
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -49,12 +51,13 @@ class LibraryViewModel @Inject constructor(
     private val _busy = mutableStateOf(false)
     val busy: State<Boolean> = _busy
 
-    private val _message = mutableStateOf<LibraryMessage?>(null)
-    val message: State<LibraryMessage?> = _message
-
-    fun dismissMessage() {
-        _message.value = null
-    }
+    /**
+     * Результат обмена файлами — одноразовое событие, а не состояние:
+     * пока пользователь выбирает файл, экран успевает пересобраться, и
+     * сообщение-состояние терялось бы, не дойдя до снекбара.
+     */
+    private val _events = Channel<LibraryMessage>(Channel.BUFFERED)
+    val events = _events.receiveAsFlow()
 
     fun exportMaps() {
         withBusy {
@@ -97,7 +100,9 @@ class LibraryViewModel @Inject constructor(
                         LibraryMessage.Info("В файле нет точек с координатами")
                     }
                 },
-                onFailure = { LibraryMessage.Error("Не удалось прочитать GPX: ${it.message}") }
+                // Текст ошибки парсера («Unexpected token…») рыболову ничего
+                // не объясняет, поэтому наружу идёт понятная причина.
+                onFailure = { LibraryMessage.Error("Не удалось прочитать GPX: файл повреждён или это не GPX") }
             )
         }
     }
@@ -111,7 +116,7 @@ class LibraryViewModel @Inject constructor(
     private fun withBusy(block: suspend () -> LibraryMessage) {
         viewModelScope.launch {
             _busy.value = true
-            _message.value = block()
+            _events.send(block())
             _busy.value = false
         }
     }
