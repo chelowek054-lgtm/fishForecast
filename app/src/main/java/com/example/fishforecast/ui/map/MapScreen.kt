@@ -58,7 +58,6 @@ import com.example.fishforecast.data.local.entities.FishingSpotEntity
 import com.example.fishforecast.data.local.entities.MapRegionEntity
 import com.example.fishforecast.data.repository.RegionDownloadState
 import com.example.fishforecast.domain.share.GpxWriter
-import org.maplibre.android.MapLibre
 import org.maplibre.android.camera.CameraUpdateFactory
 import org.maplibre.android.geometry.LatLng
 import org.maplibre.android.geometry.LatLngBounds
@@ -544,7 +543,6 @@ private fun SavedRegionsPanel(
 private fun rememberMapViewWithLifecycle(): MapView {
     val context = LocalContext.current
     val mapView = remember {
-        MapLibre.getInstance(context)
         MapView(context).apply { onCreate(Bundle()) }
     }
 

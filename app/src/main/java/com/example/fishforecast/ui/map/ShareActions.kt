@@ -39,6 +39,11 @@ fun shareSpotsAsGpx(context: Context, gpx: String) {
     shareIntent(context, file, "application/gpx+xml", "Поделиться точками")
 }
 
+/** Отдаёт наружу базу скачанных карт: файл уже подготовлен репозиторием. */
+fun shareMapsDatabase(context: Context, file: File) {
+    shareIntent(context, file, "application/octet-stream", "Поделиться картами")
+}
+
 fun shareMapSnapshot(context: Context, bitmap: Bitmap) {
     val file = sharedFile(context, "fishforecast_map.png")
     FileOutputStream(file).use { output ->

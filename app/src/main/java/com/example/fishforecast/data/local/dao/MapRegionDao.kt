@@ -23,6 +23,9 @@ interface MapRegionDao {
     @Query("UPDATE map_regions SET sizeBytes = :sizeBytes WHERE offlineRegionId = :offlineRegionId")
     suspend fun updateSize(offlineRegionId: Long, sizeBytes: Long)
 
+    @Query("SELECT offlineRegionId FROM map_regions")
+    suspend fun getKnownRegionIds(): List<Long>
+
     @Delete
     suspend fun deleteRegion(region: MapRegionEntity)
 }
