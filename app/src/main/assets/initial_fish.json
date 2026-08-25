@@ -1,0 +1,29 @@
+[
+  {
+    "name": "Щука",
+    "description": "Хищная рыба, активна при умеренной температуре.",
+    "minTemp": 8.0,
+    "maxTemp": 18.0,
+    "minPressure": 740.0,
+    "maxPressure": 760.0,
+    "moonPhaseImpact": "None"
+  },
+  {
+    "name": "Окунь",
+    "description": "Стайный хищник, любит стабильное давление.",
+    "minTemp": 10.0,
+    "maxTemp": 22.0,
+    "minPressure": 745.0,
+    "maxPressure": 755.0,
+    "moonPhaseImpact": "None"
+  },
+  {
+    "name": "Карп",
+    "description": "Любит теплую воду и слабую освещенность.",
+    "minTemp": 15.0,
+    "maxTemp": 28.0,
+    "minPressure": 740.0,
+    "maxPressure": 750.0,
+    "moonPhaseImpact": "Full Moon"
+  }
+]
