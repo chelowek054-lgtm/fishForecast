@@ -9,6 +9,9 @@ object FishListRoute
 object WeatherRoute
 
 @Serializable
+object MapRoute
+
+@Serializable
 data class AddEditFishRoute(val fishId: Int = NEW_FISH_ID) {
     companion object {
         const val NEW_FISH_ID = -1

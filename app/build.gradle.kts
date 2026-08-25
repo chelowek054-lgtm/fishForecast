@@ -48,12 +48,14 @@ dependencies {
     coreLibraryDesugaring(libs.desugar.jdk.libs)
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
+    implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.androidx.activity.compose)
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.compose.ui)
     implementation(libs.androidx.compose.ui.graphics)
     implementation(libs.androidx.compose.ui.tooling.preview)
     implementation(libs.androidx.compose.material3)
+    implementation(libs.androidx.compose.material.icons.extended)
 
     // Hilt
     implementation(libs.hilt.android)
@@ -74,6 +76,9 @@ dependencies {
     implementation(libs.okhttp)
     implementation(libs.okhttp.logging) // Было okhttp-logging
     implementation(libs.kotlinx.serialization.json) // Было kotlinx-serialization-json
+
+    // Maps
+    implementation(libs.maplibre.android.sdk)
 
     // Location
     implementation(libs.play.services.location)
