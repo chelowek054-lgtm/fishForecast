@@ -17,9 +17,12 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.MyLocation
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
@@ -54,6 +57,7 @@ import com.example.fishforecast.data.local.entities.FishEntity
 import com.example.fishforecast.data.local.entities.FishingSpotEntity
 import com.example.fishforecast.data.local.entities.MapRegionEntity
 import com.example.fishforecast.data.repository.RegionDownloadState
+import com.example.fishforecast.domain.share.GpxWriter
 import org.maplibre.android.MapLibre
 import org.maplibre.android.camera.CameraUpdateFactory
 import org.maplibre.android.geometry.LatLng
@@ -83,9 +87,40 @@ fun MapScreen(
     val fishList by viewModel.fishList.collectAsState()
     val spots by viewModel.spots.collectAsState()
 
+    val context = LocalContext.current
+    var showShareMenu by remember { mutableStateOf(false) }
+
     Scaffold(
         topBar = {
-            TopAppBar(title = { Text("Карта") })
+            TopAppBar(
+                title = { Text("Карта") },
+                actions = {
+                    IconButton(onClick = { showShareMenu = true }) {
+                        Icon(Icons.Default.Share, contentDescription = "Поделиться")
+                    }
+                    DropdownMenu(
+                        expanded = showShareMenu,
+                        onDismissRequest = { showShareMenu = false }
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text("Точки файлом GPX") },
+                            enabled = spots.isNotEmpty(),
+                            onClick = {
+                                showShareMenu = false
+                                val fishNames = fishList.associate { it.id to it.name }
+                                shareSpotsAsGpx(context, GpxWriter.write(spots, fishNames))
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Снимок карты") },
+                            onClick = {
+                                showShareMenu = false
+                                map?.snapshot { bitmap -> shareMapSnapshot(context, bitmap) }
+                            }
+                        )
+                    }
+                }
+            )
         },
         floatingActionButton = {
             Column(horizontalAlignment = Alignment.End) {
@@ -205,10 +240,12 @@ fun MapScreen(
     }
 
     selectedSpot?.let { spot ->
+        val fishName = fishList.firstOrNull { it.id == spot.fishId }?.name
         SpotDetailsDialog(
             spot = spot,
-            fishName = fishList.firstOrNull { it.id == spot.fishId }?.name,
+            fishName = fishName,
             onDismiss = { selectedSpot = null },
+            onShare = { shareSpotLocation(context, spot, fishName) },
             onDelete = {
                 viewModel.deleteSpot(spot)
                 selectedSpot = null
@@ -284,6 +321,7 @@ private fun SpotDetailsDialog(
     spot: FishingSpotEntity,
     fishName: String?,
     onDismiss: () -> Unit,
+    onShare: () -> Unit,
     onDelete: () -> Unit
 ) {
     AlertDialog(
@@ -306,12 +344,15 @@ private fun SpotDetailsDialog(
             }
         },
         confirmButton = {
-            TextButton(onClick = onDelete) {
-                Text("Удалить", color = MaterialTheme.colorScheme.error)
-            }
+            TextButton(onClick = onShare) { Text("Поделиться") }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Закрыть") }
+            Row {
+                TextButton(onClick = onDelete) {
+                    Text("Удалить", color = MaterialTheme.colorScheme.error)
+                }
+                TextButton(onClick = onDismiss) { Text("Закрыть") }
+            }
         }
     )
 }

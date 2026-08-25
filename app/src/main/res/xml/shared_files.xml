@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths>
+    <!-- Только каталог для отправки: наружу не должна утекать вся внутренняя память. -->
+    <cache-path
+        name="shared"
+        path="shared/" />
+</paths>
