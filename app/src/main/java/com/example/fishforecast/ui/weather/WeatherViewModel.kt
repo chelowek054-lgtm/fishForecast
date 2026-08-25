@@ -41,6 +41,9 @@ class WeatherViewModel @Inject constructor(
             val location = locationTracker.getCurrentLocation()
             if (location != null) {
                 repository.fetchWeather(location.latitude, location.longitude)
+                    .onFailure {
+                        _error.value = "Не удалось загрузить прогноз: ${it.message ?: "нет сети"}"
+                    }
             } else {
                 _error.value = "Не удалось получить местоположение. Проверьте GPS и разрешения."
             }

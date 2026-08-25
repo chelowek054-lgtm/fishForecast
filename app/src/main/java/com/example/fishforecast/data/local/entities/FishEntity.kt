@@ -2,7 +2,9 @@ package com.example.fishforecast.data.local.entities
 
 import androidx.room.Entity
 import androidx.room.PrimaryKey
+import kotlinx.serialization.Serializable
 
+@Serializable
 @Entity(tableName = "fish")
 data class FishEntity(
     @PrimaryKey(autoGenerate = true)

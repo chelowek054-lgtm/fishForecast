@@ -146,7 +146,7 @@ fun WeatherForecastItem(weather: WeatherEntity) {
                 fontWeight = FontWeight.Bold
             )
             Text(
-                text = "${weather.pressure.toInt()} мм",
+                text = "${weather.pressure.toInt()} гПа",
                 style = MaterialTheme.typography.bodySmall
             )
         }

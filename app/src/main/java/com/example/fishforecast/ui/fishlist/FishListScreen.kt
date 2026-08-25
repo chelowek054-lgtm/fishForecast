@@ -46,7 +46,16 @@ fun FishListScreen(
                     .padding(paddingValues),
                 contentAlignment = Alignment.Center
             ) {
-                Text("Список пуст. Добавьте первую рыбу!")
+                val error = viewModel.error.value
+                if (error != null) {
+                    Text(
+                        text = error,
+                        color = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.padding(16.dp)
+                    )
+                } else {
+                    Text("Список пуст. Добавьте первую рыбу!")
+                }
             }
         } else {
             LazyColumn(

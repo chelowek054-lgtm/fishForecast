@@ -1,5 +1,7 @@
 package com.example.fishforecast.ui.fishlist
 
+import androidx.compose.runtime.State
+import androidx.compose.runtime.mutableStateOf
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.fishforecast.data.local.entities.FishEntity
@@ -23,9 +25,14 @@ class FishListViewModel @Inject constructor(
             initialValue = emptyList()
         )
 
+    private val _error = mutableStateOf<String?>(null)
+    val error: State<String?> = _error
+
     init {
         viewModelScope.launch {
-            repository.preloadDataIfNeeded()
+            repository.preloadDataIfNeeded().onFailure {
+                _error.value = "Не удалось загрузить базовый справочник: ${it.message}"
+            }
         }
     }
 

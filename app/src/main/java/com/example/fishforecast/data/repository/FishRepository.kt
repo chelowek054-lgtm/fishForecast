@@ -6,6 +6,7 @@ import com.example.fishforecast.data.local.entities.FishEntity
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
+import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.Json
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -19,12 +20,19 @@ class FishRepository @Inject constructor(
 
     suspend fun getFishById(id: Int): FishEntity? = fishDao.getFishById(id)
 
-    suspend fun preloadDataIfNeeded() {
-        val currentFish = fishDao.getAllFish().first()
-        if (currentFish.isEmpty()) {
-            val jsonString = context.assets.open("initial_fish.json").bufferedReader().use { it.readText() }
-            val fishList = Json.decodeFromString<List<FishEntity>>(jsonString)
-            fishDao.insertAll(fishList)
+    suspend fun preloadDataIfNeeded(): Result<Unit> {
+        return try {
+            val currentFish = fishDao.getAllFish().first()
+            if (currentFish.isEmpty()) {
+                val jsonString = context.assets.open("initial_fish.json")
+                    .bufferedReader()
+                    .use { it.readText() }
+                val fishList = Json.decodeFromString(ListSerializer(FishEntity.serializer()), jsonString)
+                fishDao.insertAll(fishList)
+            }
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
         }
     }
 

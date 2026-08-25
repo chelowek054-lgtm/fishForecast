@@ -16,8 +16,8 @@ class WeatherRepository @Inject constructor(
 ) {
     val weatherForecast: Flow<List<WeatherEntity>> = dao.getWeatherForecast()
 
-    suspend fun fetchWeather(lat: Double, lon: Double) {
-        try {
+    suspend fun fetchWeather(lat: Double, lon: Double): Result<Unit> {
+        return try {
             val response = api.getWeatherData(lat, lon)
             val entities = response.hourly.time.mapIndexed { index, time ->
                 WeatherEntity(
@@ -33,9 +33,9 @@ class WeatherRepository @Inject constructor(
             }
             dao.clearForecast()
             dao.insertForecast(entities)
+            Result.success(Unit)
         } catch (e: Exception) {
-            // Handle error (e.g., log or emit to UI)
-            e.printStackTrace()
+            Result.failure(e)
         }
     }
 
