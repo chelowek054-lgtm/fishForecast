@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.room.Room
 import com.example.fishforecast.data.local.AppDatabase
 import com.example.fishforecast.data.local.dao.FishDao
+import com.example.fishforecast.data.local.dao.MapRegionDao
 import com.example.fishforecast.data.local.dao.WeatherDao
 import dagger.Module
 import dagger.Provides
@@ -23,7 +24,7 @@ object DatabaseModule {
             context,
             AppDatabase::class.java,
             "fish_forecast_db"
-        ).build()
+        ).addMigrations(AppDatabase.MIGRATION_1_2).build()
     }
 
     @Provides
@@ -34,5 +35,10 @@ object DatabaseModule {
     @Provides
     fun provideWeatherDao(database: AppDatabase): WeatherDao {
         return database.weatherDao()
+    }
+
+    @Provides
+    fun provideMapRegionDao(database: AppDatabase): MapRegionDao {
+        return database.mapRegionDao()
     }
 }
