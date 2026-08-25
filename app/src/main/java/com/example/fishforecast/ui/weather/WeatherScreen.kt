@@ -18,6 +18,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.example.fishforecast.data.local.entities.WeatherEntity
+import com.example.fishforecast.domain.sensor.hPaToMmHg
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 
@@ -27,6 +28,7 @@ fun WeatherScreen(
     viewModel: WeatherViewModel = hiltViewModel()
 ) {
     val forecast by viewModel.forecast.collectAsState()
+    val localPressure by viewModel.localPressure.collectAsState()
     val isLoading = viewModel.isLoading.value
     val error = viewModel.error.value
 
@@ -69,6 +71,15 @@ fun WeatherScreen(
                 ) {
                     item {
                         CurrentWeatherHeader(forecast.firstOrNull())
+                    }
+                    if (viewModel.hasBarometer) {
+                        item {
+                            Spacer(modifier = Modifier.height(8.dp))
+                            LocalBarometerCard(
+                                localPressure = localPressure,
+                                forecastPressure = forecast.firstOrNull()?.pressure
+                            )
+                        }
                     }
                     item {
                         Spacer(modifier = Modifier.height(16.dp))
@@ -115,6 +126,52 @@ fun CurrentWeatherHeader(weather: WeatherEntity?) {
                     text = "Ветер: ${it.windSpeed} км/ч",
                     style = MaterialTheme.typography.bodyMedium
                 )
+            }
+        }
+    }
+}
+
+/**
+ * Локальный барометр против сетевого прогноза: расхождение показывает,
+ * насколько прогноз описывает именно ту точку, где стоит рыболов.
+ */
+@Composable
+fun LocalBarometerCard(
+    localPressure: Float?,
+    forecastPressure: Double?
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.secondaryContainer
+        )
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Text(
+                text = "Барометр устройства",
+                style = MaterialTheme.typography.labelLarge
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+
+            if (localPressure == null) {
+                Text(
+                    text = "Ожидание показаний датчика…",
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            } else {
+                Text(
+                    text = "${localPressure.toInt()} гПа " +
+                        "(${localPressure.hPaToMmHg().toInt()} мм рт. ст.)",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold
+                )
+                if (forecastPressure != null) {
+                    val delta = localPressure - forecastPressure.toFloat()
+                    Text(
+                        text = "Отклонение от прогноза: %+.1f гПа".format(delta),
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                }
             }
         }
     }

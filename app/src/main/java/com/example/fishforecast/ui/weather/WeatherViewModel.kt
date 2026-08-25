@@ -7,6 +7,7 @@ import androidx.lifecycle.viewModelScope
 import com.example.fishforecast.data.local.entities.WeatherEntity
 import com.example.fishforecast.data.repository.WeatherRepository
 import com.example.fishforecast.domain.location.LocationTracker
+import com.example.fishforecast.domain.sensor.PressureProvider
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -17,7 +18,8 @@ import javax.inject.Inject
 @HiltViewModel
 class WeatherViewModel @Inject constructor(
     private val repository: WeatherRepository,
-    private val locationTracker: LocationTracker
+    private val locationTracker: LocationTracker,
+    pressureProvider: PressureProvider
 ) : ViewModel() {
 
     val forecast: StateFlow<List<WeatherEntity>> = repository.weatherForecast
@@ -25,6 +27,16 @@ class WeatherViewModel @Inject constructor(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
             initialValue = emptyList()
+        )
+
+    val hasBarometer: Boolean = pressureProvider.isAvailable
+
+    /** Показания местного барометра в гПа; null, пока датчик молчит. */
+    val localPressure: StateFlow<Float?> = pressureProvider.pressureFlow()
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = null
         )
 
     private val _isLoading = mutableStateOf(false)
