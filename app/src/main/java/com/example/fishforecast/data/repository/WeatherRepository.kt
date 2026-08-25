@@ -40,7 +40,9 @@ class WeatherRepository @Inject constructor(
     }
 
     suspend fun cleanOldData() {
-        val now = LocalDateTime.now().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME)
+        // Open-Meteo отдаёт время без секунд, а сравнение в запросе строковое,
+        // поэтому формат отсечки должен совпадать с форматом хранения.
+        val now = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm"))
         dao.deleteOldForecast(now)
     }
 }

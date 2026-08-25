@@ -25,9 +25,9 @@
 *   [x] Сетевой слой (Retrofit + KotlinX Serialization).
 *   [x] Локальный кэш погоды (WeatherEntity + DAO).
 *   [x] Реактивный LocationTracker (FusedLocationProvider).
-*   [ ] **NEW:** Миграция на Type-Safe Navigation.
+*   [x] **NEW:** Миграция на Type-Safe Navigation.
 *   [ ] **NEW:** Датчик барометра (Local Pressure Provider).
-*   [ ] WorkManager Sync (Фоновое обновление раз в 6 часов).
+*   [x] WorkManager Sync (Фоновое обновление раз в 6 часов).
 
 ### ⏳ Фаза 3: Гео-визуализация (Offline Maps)
 *   [ ] Интеграция MapLibre/OSM.
@@ -51,5 +51,8 @@
 3.  **Data Quality:** Сравнение данных Open-Meteo с локальным барометром.
 
 ---
-**Текущий статус:** 🛰 Реализация Location & Weather logic. 
-**Следующий фокус:** Переход на Type-Safe навигацию и запуск фонового обновления.
+**Текущий статус:** 🛰 Location & Weather работают, прогноз обновляется в фоне.
+**Следующий фокус:** Барометр (Local Pressure Provider) и закрытие Фазы 2.
+
+> ⚠️ Открытый вопрос к Фазе 4: справочник рыб хранит пороги давления в мм рт. ст.,
+> а Open-Meteo отдаёт `pressure_msl` в гПа. Единицы нужно свести до расчёта Bite Score.

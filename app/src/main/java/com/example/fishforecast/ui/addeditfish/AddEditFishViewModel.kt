@@ -5,7 +5,9 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import androidx.navigation.toRoute
 import com.example.fishforecast.data.local.entities.FishEntity
+import com.example.fishforecast.ui.navigation.AddEditFishRoute
 import com.example.fishforecast.data.repository.FishRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -43,18 +45,17 @@ class AddEditFishViewModel @Inject constructor(
     private var currentFishId: Int? = null
 
     init {
-        savedStateHandle.get<Int>("fishId")?.let { fishId ->
-            if (fishId != -1) {
-                viewModelScope.launch {
-                    repository.getFishById(fishId)?.also { fish ->
-                        currentFishId = fish.id
-                        _fishName.value = fish.name
-                        _fishDescription.value = fish.description
-                        _minTemp.value = fish.minTemp.toString()
-                        _maxTemp.value = fish.maxTemp.toString()
-                        _minPressure.value = fish.minPressure.toString()
-                        _maxPressure.value = fish.maxPressure.toString()
-                    }
+        val fishId = savedStateHandle.toRoute<AddEditFishRoute>().fishId
+        if (fishId != AddEditFishRoute.NEW_FISH_ID) {
+            viewModelScope.launch {
+                repository.getFishById(fishId)?.also { fish ->
+                    currentFishId = fish.id
+                    _fishName.value = fish.name
+                    _fishDescription.value = fish.description
+                    _minTemp.value = fish.minTemp.toString()
+                    _maxTemp.value = fish.maxTemp.toString()
+                    _minPressure.value = fish.minPressure.toString()
+                    _maxPressure.value = fish.maxPressure.toString()
                 }
             }
         }
