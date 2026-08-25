@@ -4,7 +4,11 @@ import androidx.compose.runtime.State
 import androidx.compose.runtime.mutableStateOf
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.fishforecast.data.local.entities.FishEntity
+import com.example.fishforecast.data.local.entities.FishingSpotEntity
 import com.example.fishforecast.data.local.entities.MapRegionEntity
+import com.example.fishforecast.data.repository.FishRepository
+import com.example.fishforecast.data.repository.FishingSpotRepository
 import com.example.fishforecast.data.repository.OfflineMapRepository
 import com.example.fishforecast.data.repository.RegionDownloadState
 import com.example.fishforecast.domain.location.LocationTracker
@@ -19,7 +23,9 @@ import javax.inject.Inject
 @HiltViewModel
 class MapViewModel @Inject constructor(
     private val locationTracker: LocationTracker,
-    private val offlineMapRepository: OfflineMapRepository
+    private val offlineMapRepository: OfflineMapRepository,
+    private val fishingSpotRepository: FishingSpotRepository,
+    fishRepository: FishRepository
 ) : ViewModel() {
 
     /** Широта/долгота рыболова; null, пока позиция неизвестна. */
@@ -27,6 +33,21 @@ class MapViewModel @Inject constructor(
     val userLocation: State<Pair<Double, Double>?> = _userLocation
 
     val regions: StateFlow<List<MapRegionEntity>> = offlineMapRepository.regions
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = emptyList()
+        )
+
+    val spots: StateFlow<List<FishingSpotEntity>> = fishingSpotRepository.spots
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = emptyList()
+        )
+
+    /** Справочник нужен, чтобы привязать точку к рыбе, которая здесь берёт. */
+    val fishList: StateFlow<List<FishEntity>> = fishRepository.getAllFish()
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
@@ -69,6 +90,26 @@ class MapViewModel @Inject constructor(
 
     fun dismissDownloadState() {
         _downloadState.value = null
+    }
+
+    fun addSpot(name: String, latitude: Double, longitude: Double, fishId: Int?, note: String) {
+        viewModelScope.launch {
+            fishingSpotRepository.addSpot(
+                FishingSpotEntity(
+                    name = name,
+                    latitude = latitude,
+                    longitude = longitude,
+                    fishId = fishId,
+                    note = note
+                )
+            )
+        }
+    }
+
+    fun deleteSpot(spot: FishingSpotEntity) {
+        viewModelScope.launch {
+            fishingSpotRepository.deleteSpot(spot)
+        }
     }
 
     fun deleteRegion(region: MapRegionEntity) {

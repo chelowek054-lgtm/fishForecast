@@ -50,6 +50,8 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import com.example.fishforecast.data.local.entities.FishEntity
+import com.example.fishforecast.data.local.entities.FishingSpotEntity
 import com.example.fishforecast.data.local.entities.MapRegionEntity
 import com.example.fishforecast.data.repository.RegionDownloadState
 import org.maplibre.android.MapLibre
@@ -58,6 +60,11 @@ import org.maplibre.android.geometry.LatLng
 import org.maplibre.android.geometry.LatLngBounds
 import org.maplibre.android.maps.MapLibreMap
 import org.maplibre.android.maps.MapView
+import org.maplibre.android.maps.Style
+import org.maplibre.android.plugins.annotation.Circle
+import org.maplibre.android.plugins.annotation.CircleManager
+import org.maplibre.android.plugins.annotation.CircleOptions
+import org.maplibre.android.plugins.annotation.OnCircleClickListener
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -69,7 +76,12 @@ fun MapScreen(
     val downloadState by viewModel.downloadState
 
     var map by remember { mutableStateOf<MapLibreMap?>(null) }
+    var mapStyle by remember { mutableStateOf<Style?>(null) }
     var showSaveDialog by remember { mutableStateOf(false) }
+    var newSpotPoint by remember { mutableStateOf<LatLng?>(null) }
+    var selectedSpot by remember { mutableStateOf<FishingSpotEntity?>(null) }
+    val fishList by viewModel.fishList.collectAsState()
+    val spots by viewModel.spots.collectAsState()
 
     Scaffold(
         topBar = {
@@ -99,7 +111,13 @@ fun MapScreen(
             AndroidView(
                 factory = {
                     mapView.getMapAsync { readyMap ->
-                        readyMap.setStyle(MapConfig.STYLE_URL)
+                        readyMap.setStyle(MapConfig.STYLE_URL) { style ->
+                            mapStyle = style
+                        }
+                        readyMap.addOnMapLongClickListener { point ->
+                            newSpotPoint = point
+                            true
+                        }
                         map = readyMap
                     }
                     mapView
@@ -116,6 +134,14 @@ fun MapScreen(
                     CameraUpdateFactory.newLatLngZoom(LatLng(lat, lon), MapConfig.DEFAULT_ZOOM)
                 )
             }
+
+            SpotsLayer(
+                mapView = mapView,
+                map = map,
+                style = mapStyle,
+                spots = spots,
+                onSpotClick = { selectedSpot = it }
+            )
 
             DownloadStatusBanner(
                 state = downloadState,
@@ -158,6 +184,187 @@ fun MapScreen(
                 }
             }
         )
+    }
+
+    newSpotPoint?.let { point ->
+        AddSpotDialog(
+            point = point,
+            fishList = fishList,
+            onDismiss = { newSpotPoint = null },
+            onConfirm = { name, fishId, note ->
+                viewModel.addSpot(
+                    name = name,
+                    latitude = point.latitude,
+                    longitude = point.longitude,
+                    fishId = fishId,
+                    note = note
+                )
+                newSpotPoint = null
+            }
+        )
+    }
+
+    selectedSpot?.let { spot ->
+        SpotDetailsDialog(
+            spot = spot,
+            fishName = fishList.firstOrNull { it.id == spot.fishId }?.name,
+            onDismiss = { selectedSpot = null },
+            onDelete = {
+                viewModel.deleteSpot(spot)
+                selectedSpot = null
+            }
+        )
+    }
+}
+
+@Composable
+private fun AddSpotDialog(
+    point: LatLng,
+    fishList: List<FishEntity>,
+    onDismiss: () -> Unit,
+    onConfirm: (name: String, fishId: Int?, note: String) -> Unit
+) {
+    var name by remember { mutableStateOf("") }
+    var note by remember { mutableStateOf("") }
+    var fishId by remember { mutableStateOf<Int?>(null) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Новая точка") },
+        text = {
+            Column {
+                Text(
+                    text = "%.5f, %.5f".format(point.latitude, point.longitude),
+                    style = MaterialTheme.typography.bodySmall
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+                OutlinedTextField(
+                    value = name,
+                    onValueChange = { name = it },
+                    label = { Text("Название") },
+                    singleLine = true
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = note,
+                    onValueChange = { note = it },
+                    label = { Text("Заметка") }
+                )
+                if (fishList.isNotEmpty()) {
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Text("Кто здесь берёт:", style = MaterialTheme.typography.labelMedium)
+                    LazyColumn(modifier = Modifier.heightIn(max = 140.dp)) {
+                        items(fishList) { fish ->
+                            TextButton(onClick = { fishId = if (fishId == fish.id) null else fish.id }) {
+                                Text(
+                                    text = if (fishId == fish.id) "✓ ${fish.name}" else fish.name,
+                                    fontWeight = if (fishId == fish.id) FontWeight.Bold else FontWeight.Normal
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = { onConfirm(name.ifBlank { "Точка" }, fishId, note) }
+            ) {
+                Text("Сохранить")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Отмена") }
+        }
+    )
+}
+
+@Composable
+private fun SpotDetailsDialog(
+    spot: FishingSpotEntity,
+    fishName: String?,
+    onDismiss: () -> Unit,
+    onDelete: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(spot.name) },
+        text = {
+            Column {
+                Text(
+                    text = "%.5f, %.5f".format(spot.latitude, spot.longitude),
+                    style = MaterialTheme.typography.bodySmall
+                )
+                if (fishName != null) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text("Здесь берёт: $fishName")
+                }
+                if (spot.note.isNotBlank()) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(spot.note)
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDelete) {
+                Text("Удалить", color = MaterialTheme.colorScheme.error)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Закрыть") }
+        }
+    )
+}
+
+/**
+ * Слой секретных точек. CircleManager рисует их без растровых иконок —
+ * значит слой не тянет за собой ассеты и одинаково выглядит на любом стиле.
+ */
+@Composable
+private fun SpotsLayer(
+    mapView: MapView,
+    map: MapLibreMap?,
+    style: Style?,
+    spots: List<FishingSpotEntity>,
+    onSpotClick: (FishingSpotEntity) -> Unit
+) {
+    val readyMap = map ?: return
+    val readyStyle = style ?: return
+
+    val circleManager = remember(readyMap, readyStyle) {
+        CircleManager(mapView, readyMap, readyStyle)
+    }
+
+    // Аннотации живут в нативном слое, поэтому их надо снимать руками.
+    DisposableEffect(circleManager) {
+        onDispose { circleManager.onDestroy() }
+    }
+
+    DisposableEffect(circleManager, spots) {
+        circleManager.deleteAll()
+        val circleToSpot = mutableMapOf<Long, FishingSpotEntity>()
+
+        spots.forEach { spot ->
+            val circle: Circle = circleManager.create(
+                CircleOptions()
+                    .withLatLng(LatLng(spot.latitude, spot.longitude))
+                    .withCircleRadius(9f)
+                    .withCircleColor("#D32F2F")
+                    .withCircleStrokeWidth(2f)
+                    .withCircleStrokeColor("#FFFFFF")
+            )
+            circleToSpot[circle.id] = spot
+        }
+
+        val listener = object : OnCircleClickListener {
+            override fun onAnnotationClick(circle: Circle): Boolean {
+                circleToSpot[circle.id]?.let(onSpotClick)
+                return true
+            }
+        }
+        circleManager.addClickListener(listener)
+
+        onDispose { circleManager.removeClickListener(listener) }
     }
 }
 

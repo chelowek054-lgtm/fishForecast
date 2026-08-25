@@ -79,6 +79,7 @@ dependencies {
 
     // Maps
     implementation(libs.maplibre.android.sdk)
+    implementation(libs.maplibre.annotation.plugin)
 
     // Location
     implementation(libs.play.services.location)
