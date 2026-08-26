@@ -230,13 +230,14 @@ fun MapScreen(
             point = point,
             fishList = fishList,
             onDismiss = { newSpotPoint = null },
-            onConfirm = { name, fishId, note ->
+            onConfirm = { name, fishId, note, normalPressure ->
                 viewModel.addSpot(
                     name = name,
                     latitude = point.latitude,
                     longitude = point.longitude,
                     fishId = fishId,
-                    note = note
+                    note = note,
+                    normalPressureMmHg = normalPressure
                 )
                 newSpotPoint = null
             }
@@ -263,11 +264,12 @@ private fun AddSpotDialog(
     point: LatLng,
     fishList: List<FishEntity>,
     onDismiss: () -> Unit,
-    onConfirm: (name: String, fishId: Int?, note: String) -> Unit
+    onConfirm: (name: String, fishId: Int?, note: String, normalPressureMmHg: Double?) -> Unit
 ) {
     var name by remember { mutableStateOf("") }
     var note by remember { mutableStateOf("") }
     var fishId by remember { mutableStateOf<Int?>(null) }
+    var normalPressure by remember { mutableStateOf("") }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -291,6 +293,18 @@ private fun AddSpotDialog(
                     onValueChange = { note = it },
                     label = { Text("Заметка") }
                 )
+                Spacer(modifier = Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = normalPressure,
+                    onValueChange = { normalPressure = it.filter { char -> char.isDigit() } },
+                    label = { Text("Норма давления, мм рт. ст.") },
+                    singleLine = true
+                )
+                Text(
+                    text = "У каждого водоёма она своя: рыба реагирует на отклонение " +
+                        "от привычного фона, а не на само значение.",
+                    style = MaterialTheme.typography.bodySmall
+                )
                 if (fishList.isNotEmpty()) {
                     Spacer(modifier = Modifier.height(12.dp))
                     Text("Кто здесь берёт:", style = MaterialTheme.typography.labelMedium)
@@ -309,7 +323,14 @@ private fun AddSpotDialog(
         },
         confirmButton = {
             TextButton(
-                onClick = { onConfirm(name.ifBlank { "Точка" }, fishId, note) }
+                onClick = {
+                    onConfirm(
+                        name.ifBlank { "Точка" },
+                        fishId,
+                        note,
+                        normalPressure.toDoubleOrNull()
+                    )
+                }
             ) {
                 Text("Сохранить")
             }

@@ -26,6 +26,7 @@ class WeatherRepository @Inject constructor(
                     humidity = response.hourly.humidities[index],
                     pressure = response.hourly.pressures[index],
                     windSpeed = response.hourly.windSpeeds[index],
+                    windDirection = response.hourly.windDirections[index],
                     weatherCode = response.hourly.weatherCodes[index],
                     latitude = lat,
                     longitude = lon

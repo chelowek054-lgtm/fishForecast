@@ -71,22 +71,93 @@ class CalculateFishActivityUseCaseTest {
     }
 
     @Test
-    fun `резкий скачок давления за три часа снижает оценку`() {
-        // Первые часы — 750 мм, дальше резкий рост до 758 мм.
+    fun `уход давления от нормы снижает оценку`() {
+        // Норма водоёма 750, давление уходит вверх до 758.
         val forecast = listOf(
-            hour(0),
-            hour(1),
-            hour(2),
+            hour(0), hour(1), hour(2),
             hour(3, pressureHpa = 758.0 * 1.333224),
             hour(4, pressureHpa = 758.0 * 1.333224)
         )
 
-        val result = useCase(pike, forecast)
+        val result = useCase(pike, forecast, normalPressureMmHg = 750.0)
         val jumpHour = result[3]
 
         assertTrue(jumpHour.score < result[2].score)
         assertTrue(
-            jumpHour.factors.first { it.name == "Тенденция" }.comment.contains("Растёт")
+            jumpHour.factors.first { it.name == "Тенденция" }.comment.contains("Уходит вверх")
+        )
+    }
+
+    @Test
+    fun `возврат к норме оценивается лучше ухода от неё`() {
+        // Одинаковый по величине скачок в 6 мм: сначала к норме, потом от неё.
+        val toNormal = listOf(
+            hour(0, pressureHpa = 756.0 * 1.333224),
+            hour(1, pressureHpa = 756.0 * 1.333224),
+            hour(2, pressureHpa = 756.0 * 1.333224),
+            hour(3, pressureHpa = 750.0 * 1.333224)
+        )
+        val fromNormal = listOf(
+            hour(0, pressureHpa = 750.0 * 1.333224),
+            hour(1, pressureHpa = 750.0 * 1.333224),
+            hour(2, pressureHpa = 750.0 * 1.333224),
+            hour(3, pressureHpa = 744.0 * 1.333224)
+        )
+
+        val returning = useCase(pike, toNormal, normalPressureMmHg = 750.0)[3]
+        val leaving = useCase(pike, fromNormal, normalPressureMmHg = 750.0)[3]
+
+        assertTrue(
+            "возврат к норме (${returning.score}) должен быть выше ухода (${leaving.score})",
+            returning.score > leaving.score
+        )
+        assertTrue(returning.factors.first { it.name == "Тенденция" }.comment.contains("норме"))
+    }
+
+    @Test
+    fun `остывание после жары добавляет кислорода`() {
+        val cooling = listOf(
+            hour(0, temperature = 30.0), hour(1, temperature = 29.0),
+            hour(2, temperature = 28.0), hour(3, temperature = 25.0)
+        )
+        val heating = listOf(
+            hour(0, temperature = 25.0), hour(1, temperature = 26.0),
+            hour(2, temperature = 27.0), hour(3, temperature = 30.0)
+        )
+
+        val coolingOxygen = useCase(pike, cooling)[3].factors.first { it.name == "Кислород" }
+        val heatingOxygen = useCase(pike, heating)[3].factors.first { it.name == "Кислород" }
+
+        assertTrue(
+            "остывание (${coolingOxygen.value}) должно давать больше кислорода, чем прогрев (${heatingOxygen.value})",
+            coolingOxygen.value > heatingOxygen.value
+        )
+        assertTrue(coolingOxygen.comment.contains("остывает"))
+    }
+
+    @Test
+    fun `в тёплой воде амуру лучше чем карпу`() {
+        // Случай из разбора: 28 °C — амур кормится, карпу нечем дышать.
+        val carp = pike.copy(id = 2, name = "Карп", minTemp = 15f, maxTemp = 28f)
+        val grassCarp = pike.copy(id = 3, name = "Белый амур", minTemp = 25f, maxTemp = 30f)
+        val warm = (0..5).map { hour(it, temperature = 28.0) }
+
+        val carpScore = useCase(carp, warm).last().score
+        val grassCarpScore = useCase(grassCarp, warm).last().score
+
+        assertTrue(
+            "амур ($grassCarpScore) должен быть активнее карпа ($carpScore) в тёплой воде",
+            grassCarpScore > carpScore
+        )
+    }
+
+    @Test
+    fun `без нормы водоёма ориентиром служит диапазон рыбы`() {
+        // Щуке привычны 740–760, середина — 750; давление ровно там.
+        val result = useCase(pike, (0..5).map { hour(it) })
+
+        assertTrue(
+            result.last().factors.first { it.name == "Давление" }.comment.contains("норма водоёма")
         )
     }
 

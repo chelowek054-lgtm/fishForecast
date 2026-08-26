@@ -11,6 +11,8 @@ data class WeatherEntity(
     val humidity: Double,
     val pressure: Double,
     val windSpeed: Double,
+    /** Откуда дует, градусы. Нужен для оценки прогрева и перемешивания воды. */
+    val windDirection: Double = 0.0,
     val weatherCode: Int,
     val latitude: Double,
     val longitude: Double,

@@ -71,6 +71,30 @@ fun BiteScreen(
                 }
             }
 
+            if (state.spots.isNotEmpty()) {
+                Text("Водоём:", style = MaterialTheme.typography.labelMedium)
+                Row(
+                    modifier = Modifier.horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    state.spots.forEach { spot ->
+                        FilterChip(
+                            selected = spot.id == state.selectedSpot?.id,
+                            onClick = {
+                                viewModel.selectSpot(spot.takeIf { it.id != state.selectedSpot?.id })
+                            },
+                            label = { Text(spot.name) }
+                        )
+                    }
+                }
+                state.selectedSpot?.normalPressureMmHg?.let { normal ->
+                    Text(
+                        text = "Норма давления водоёма: ${normal.toInt()} мм рт. ст.",
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                }
+            }
+
             if (state.weatherMissing) {
                 Text("Нет прогноза погоды. Откройте вкладку «Погода», чтобы загрузить его.")
                 return@Column

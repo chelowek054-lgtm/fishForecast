@@ -10,25 +10,48 @@ import kotlin.math.roundToInt
 /**
  * Считает активность конкретной рыбы по почасовому прогнозу.
  *
+ * Модель опирается на три связанных фактора: давление, кислород и
+ * температуру. Давление действует на плавательный пузырь, поэтому рыба
+ * реагирует на отклонение от привычного ей фона и на то, куда это
+ * отклонение движется. Кислород обратно связан с температурой воды:
+ * прогрелась — стало нечем дышать, остыла — рыба ожила. Поэтому важна не
+ * только сама температура, но и её ход.
+ *
  * Справочник рыб задан в мм рт. ст., а Open-Meteo отдаёт гПа, поэтому весь
  * расчёт ведётся в мм рт. ст., а конвертация происходит на входе — иначе
  * пороги рыбы и данные погоды сравнивались бы в разных единицах.
  */
 class CalculateFishActivityUseCase @Inject constructor() {
 
-    operator fun invoke(fish: FishEntity, forecast: List<WeatherEntity>): List<BiteForecast> {
+    /**
+     * [normalPressureMmHg] — норма давления конкретного водоёма. Общей цифры
+     * не существует, и когда норма не выяснена, ориентиром служит середина
+     * привычного рыбе диапазона.
+     */
+    operator fun invoke(
+        fish: FishEntity,
+        forecast: List<WeatherEntity>,
+        normalPressureMmHg: Double? = null
+    ): List<BiteForecast> {
         val sorted = forecast.sortedBy { it.time }
+        val normal = normalPressureMmHg
+            ?: ((fish.minPressure + fish.maxPressure) / 2.0)
 
         return sorted.mapIndexed { index, hour ->
-            val pressureMmHg = hour.pressure.hPaToMmHg()
-
             val temperature = temperatureFactor(hour.temperature, fish)
-            val pressure = pressureFactor(pressureMmHg, fish)
-            val trend = pressureTrendFactor(sorted, index)
+            val pressure = pressureFactor(hour.pressure.hPaToMmHg(), fish, normal)
+            val trend = pressureTrendFactor(sorted, index, normal)
+            val oxygen = oxygenFactor(sorted, index, hour, fish)
             val wind = windFactor(hour.windSpeed)
 
-            val factors = listOf(temperature, pressure, trend, wind)
-            val score = (factors.sumOf { it.value * it.weight } * 100).roundToInt().coerceIn(0, 100)
+            val factors = listOf(temperature, oxygen, pressure, trend, wind)
+
+            // Ограничители перемножаются: непригодную для рыбы воду не
+            // компенсирует ни давление, ни ветер. Условия клёва складываются
+            // с весами и лишь масштабируют то, что осталось возможным.
+            val habitat = factors.filter { it.limiting }.fold(1.0) { acc, f -> acc * f.value }
+            val conditions = factors.filterNot { it.limiting }.sumOf { it.value * it.weight }
+            val score = (habitat * conditions * 100).roundToInt().coerceIn(0, 100)
 
             BiteForecast(
                 time = hour.time,
@@ -46,7 +69,8 @@ class CalculateFishActivityUseCase @Inject constructor() {
         return BiteFactor(
             name = "Температура",
             value = value,
-            weight = WEIGHT_TEMPERATURE,
+            weight = 0.0,
+            limiting = true,
             comment = when {
                 distance == 0.0 -> "${temperature.roundToInt()}°C — в комфортном диапазоне"
                 temperature < fish.minTemp -> "${temperature.roundToInt()}°C — холоднее комфорта"
@@ -55,33 +79,39 @@ class CalculateFishActivityUseCase @Inject constructor() {
         )
     }
 
-    private fun pressureFactor(pressureMmHg: Double, fish: FishEntity): BiteFactor {
-        val distance = distanceOutside(
-            value = pressureMmHg,
-            min = fish.minPressure.toDouble(),
-            max = fish.maxPressure.toDouble()
-        )
-        val value = falloff(distance, PRESSURE_TOLERANCE)
+    /** Отклонение от нормы водоёма важнее абсолютного значения. */
+    private fun pressureFactor(
+        pressureMmHg: Double,
+        fish: FishEntity,
+        normal: Double
+    ): BiteFactor {
+        val deviation = abs(pressureMmHg - normal)
+        val value = falloff(deviation, PRESSURE_TOLERANCE)
 
         return BiteFactor(
             name = "Давление",
             value = value,
             weight = WEIGHT_PRESSURE,
-            comment = "${pressureMmHg.roundToInt()} мм рт. ст." + when {
-                distance == 0.0 -> " — привычное для рыбы"
-                pressureMmHg < fish.minPressure -> " — ниже привычного"
-                else -> " — выше привычного"
+            comment = "${pressureMmHg.roundToInt()} мм рт. ст. " + when {
+                deviation <= AT_NORMAL_MMHG -> "— норма водоёма"
+                pressureMmHg < normal -> "— ниже нормы на ${deviation.roundToInt()}"
+                else -> "— выше нормы на ${deviation.roundToInt()}"
             }
         )
     }
 
     /**
-     * Рыба реагирует не столько на само давление, сколько на его изменение:
-     * при резком скачке она уходит на глубину и перестаёт брать. Сравнение
-     * идёт с отметкой трёхчасовой давности; пока истории нет, фактор не
-     * штрафует — иначе первые часы прогноза выглядели бы хуже, чем есть.
+     * Куда движется давление относительно нормы. Возврат к норме рыба
+     * встречает оживлением, уход в сторону — наоборот; поэтому одинаковый по
+     * величине скачок оценивается по-разному в зависимости от направления.
+     * Пока истории нет, фактор не штрафует — иначе первые часы прогноза
+     * выглядели бы хуже, чем есть.
      */
-    private fun pressureTrendFactor(forecast: List<WeatherEntity>, index: Int): BiteFactor {
+    private fun pressureTrendFactor(
+        forecast: List<WeatherEntity>,
+        index: Int,
+        normal: Double
+    ): BiteFactor {
         val previousIndex = index - TREND_WINDOW_HOURS
         if (previousIndex < 0) {
             return BiteFactor(
@@ -94,12 +124,16 @@ class CalculateFishActivityUseCase @Inject constructor() {
 
         val current = forecast[index].pressure.hPaToMmHg()
         val previous = forecast[previousIndex].pressure.hPaToMmHg()
-        val delta = current - previous
-        val magnitude = abs(delta)
+        val change = abs(current - previous)
+        val deviationNow = abs(current - normal)
+        val deviationBefore = abs(previous - normal)
+        val movingToNormal = deviationNow < deviationBefore
 
         val value = when {
-            magnitude <= STABLE_PRESSURE_MMHG -> 1.0
-            magnitude <= NOTICEABLE_PRESSURE_MMHG -> 0.6
+            change <= STABLE_PRESSURE_MMHG && deviationNow <= AT_NORMAL_MMHG -> 1.0
+            change <= STABLE_PRESSURE_MMHG -> 0.8
+            movingToNormal -> 0.9
+            change <= NOTICEABLE_PRESSURE_MMHG -> 0.5
             else -> 0.2
         }
 
@@ -108,9 +142,62 @@ class CalculateFishActivityUseCase @Inject constructor() {
             value = value,
             weight = WEIGHT_TREND,
             comment = when {
-                magnitude <= STABLE_PRESSURE_MMHG -> "Давление стабильно за 3 часа"
-                delta > 0 -> "Растёт на ${magnitude.roundToInt()} мм за 3 часа"
-                else -> "Падает на ${magnitude.roundToInt()} мм за 3 часа"
+                change <= STABLE_PRESSURE_MMHG -> "Давление стабильно за 3 часа"
+                movingToNormal -> "Возвращается к норме (${change.roundToInt()} мм за 3 часа)"
+                current > previous -> "Уходит вверх от нормы на ${change.roundToInt()} мм"
+                else -> "Уходит вниз от нормы на ${change.roundToInt()} мм"
+            }
+        )
+    }
+
+    /**
+     * Кислород напрямую не измеряется, поэтому оценивается косвенно: тёплая
+     * вода удерживает его хуже, а похолодание после жары насыщает воду —
+     * именно тогда рыба и оживает.
+     *
+     * Потребность зависит от вида: в одной и той же прогретой воде
+     * теплолюбивой рыбе ещё комфортно, а холодолюбивой уже нечем дышать.
+     * Отсчёт идёт от верхней границы её комфорта.
+     */
+    private fun oxygenFactor(
+        forecast: List<WeatherEntity>,
+        index: Int,
+        hour: WeatherEntity,
+        fish: FishEntity
+    ): BiteFactor {
+        val warmWaterStarts = fish.maxTemp - OXYGEN_MARGIN
+        val warmthPenalty = falloff(
+            distance = (hour.temperature - warmWaterStarts).coerceAtLeast(0.0),
+            tolerance = HEAT_TOLERANCE
+        )
+
+        val previousIndex = index - TREND_WINDOW_HOURS
+        val cooling = if (previousIndex >= 0) {
+            hour.temperature - forecast[previousIndex].temperature
+        } else {
+            0.0
+        }
+
+        // Остывание добавляет кислорода, дальнейший прогрев — отнимает.
+        val coolingBonus = when {
+            cooling <= -NOTICEABLE_COOLING -> COOLING_BONUS
+            cooling >= NOTICEABLE_COOLING -> -COOLING_BONUS
+            else -> 0.0
+        }
+
+        val value = (warmthPenalty + coolingBonus).coerceIn(0.0, 1.0)
+
+        return BiteFactor(
+            name = "Кислород",
+            value = value,
+            weight = 0.0,
+            limiting = true,
+            comment = when {
+                cooling <= -NOTICEABLE_COOLING -> "Вода остывает — кислорода прибавляется"
+                hour.temperature > warmWaterStarts ->
+                    "Для этой рыбы вода тёплая, кислорода меньше"
+                cooling >= NOTICEABLE_COOLING -> "Продолжает греться — кислорода меньше"
+                else -> "Кислорода достаточно"
             }
         )
     }
@@ -128,7 +215,7 @@ class CalculateFishActivityUseCase @Inject constructor() {
             weight = WEIGHT_WIND,
             comment = "${windSpeedKmh.roundToInt()} км/ч" + when {
                 windSpeedKmh <= LIGHT_WIND_KMH -> " — рябь на воде, это в плюс"
-                windSpeedKmh <= STRONG_WIND_KMH -> " — заметный ветер"
+                windSpeedKmh <= STRONG_WIND_KMH -> " — заметный ветер, вода перемешивается"
                 else -> " — сильный ветер, рыбалка трудная"
             }
         )
@@ -146,20 +233,33 @@ class CalculateFishActivityUseCase @Inject constructor() {
         (1.0 - distance / tolerance).coerceIn(0.0, 1.0)
 
     private companion object {
-        const val WEIGHT_TEMPERATURE = 0.35
-        const val WEIGHT_PRESSURE = 0.30
-        const val WEIGHT_TREND = 0.25
-        const val WEIGHT_WIND = 0.10
+        // Веса условий клёва в сумме дают единицу: они распределяют то, что
+        // осталось после ограничителей среды.
+        const val WEIGHT_PRESSURE = 0.45
+        const val WEIGHT_TREND = 0.35
+        const val WEIGHT_WIND = 0.20
 
         /** За сколько градусов от комфорта активность падает до нуля. */
         const val TEMPERATURE_TOLERANCE = 8.0
 
-        /** То же для давления, в мм рт. ст. */
+        /** Отклонение от нормы водоёма, при котором активность падает до нуля. */
         const val PRESSURE_TOLERANCE = 12.0
+
+        /** Отклонение, которое рыба ещё считает нормой. */
+        const val AT_NORMAL_MMHG = 2.0
 
         const val TREND_WINDOW_HOURS = 3
         const val STABLE_PRESSURE_MMHG = 1.0
         const val NOTICEABLE_PRESSURE_MMHG = 3.0
+
+        /**
+         * За сколько градусов до верхней границы комфорта рыба начинает
+         * испытывать нехватку кислорода в прогретой воде.
+         */
+        const val OXYGEN_MARGIN = 4.0
+        const val HEAT_TOLERANCE = 12.0
+        const val NOTICEABLE_COOLING = 2.0
+        const val COOLING_BONUS = 0.3
 
         const val LIGHT_WIND_KMH = 15.0
         const val STRONG_WIND_KMH = 30.0

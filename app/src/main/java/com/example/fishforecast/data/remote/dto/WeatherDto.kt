@@ -20,6 +20,8 @@ data class HourlyWeatherDataDto(
     val pressures: List<Double>,
     @SerialName("wind_speed_10m")
     val windSpeeds: List<Double>,
+    @SerialName("wind_direction_10m")
+    val windDirections: List<Double>,
     @SerialName("weather_code")
     val weatherCodes: List<Int>
 )

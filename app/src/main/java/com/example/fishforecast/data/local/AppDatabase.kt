@@ -23,7 +23,7 @@ import com.example.fishforecast.data.local.entities.WeatherEntity
         FishingSpotEntity::class,
         CatchEntity::class
     ],
-    version = 4,
+    version = 5,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -103,6 +103,18 @@ abstract class AppDatabase : RoomDatabase() {
                 )
                 db.execSQL("CREATE INDEX IF NOT EXISTS `index_catches_fishId` ON `catches` (`fishId`)")
                 db.execSQL("CREATE INDEX IF NOT EXISTS `index_catches_spotId` ON `catches` (`spotId`)")
+            }
+        }
+
+        /**
+         * Направление ветра и норма давления водоёма: без них нельзя отличить
+         * движение давления к норме от ухода в сторону, а прогрев воды —
+         * от её перемешивания.
+         */
+        val MIGRATION_4_5 = object : Migration(4, 5) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `weather_forecast` ADD COLUMN `windDirection` REAL NOT NULL DEFAULT 0.0")
+                db.execSQL("ALTER TABLE `fishing_spots` ADD COLUMN `normalPressureMmHg` REAL")
             }
         }
     }

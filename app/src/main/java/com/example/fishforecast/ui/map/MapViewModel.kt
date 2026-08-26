@@ -92,7 +92,14 @@ class MapViewModel @Inject constructor(
         _downloadState.value = null
     }
 
-    fun addSpot(name: String, latitude: Double, longitude: Double, fishId: Int?, note: String) {
+    fun addSpot(
+        name: String,
+        latitude: Double,
+        longitude: Double,
+        fishId: Int?,
+        note: String,
+        normalPressureMmHg: Double? = null
+    ) {
         viewModelScope.launch {
             fishingSpotRepository.addSpot(
                 FishingSpotEntity(
@@ -100,7 +107,8 @@ class MapViewModel @Inject constructor(
                     latitude = latitude,
                     longitude = longitude,
                     fishId = fishId,
-                    note = note
+                    note = note,
+                    normalPressureMmHg = normalPressureMmHg
                 )
             )
         }

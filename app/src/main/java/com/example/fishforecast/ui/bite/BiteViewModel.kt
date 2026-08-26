@@ -3,7 +3,9 @@ package com.example.fishforecast.ui.bite
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.fishforecast.data.local.entities.FishEntity
+import com.example.fishforecast.data.local.entities.FishingSpotEntity
 import com.example.fishforecast.data.repository.FishRepository
+import com.example.fishforecast.data.repository.FishingSpotRepository
 import com.example.fishforecast.data.repository.WeatherRepository
 import com.example.fishforecast.domain.bite.BiteForecast
 import com.example.fishforecast.domain.bite.CalculateFishActivityUseCase
@@ -21,6 +23,9 @@ import javax.inject.Inject
 data class BiteUiState(
     val fishList: List<FishEntity> = emptyList(),
     val selectedFish: FishEntity? = null,
+    val spots: List<FishingSpotEntity> = emptyList(),
+    /** Водоём задаёт норму давления; без него ориентир берётся от рыбы. */
+    val selectedSpot: FishingSpotEntity? = null,
     val forecast: List<BiteForecast> = emptyList(),
     /** Прогноза нет — считать нечего, и это не ошибка. */
     val weatherMissing: Boolean = false
@@ -30,16 +35,20 @@ data class BiteUiState(
 class BiteViewModel @Inject constructor(
     fishRepository: FishRepository,
     weatherRepository: WeatherRepository,
+    spotRepository: FishingSpotRepository,
     calculateFishActivity: CalculateFishActivityUseCase
 ) : ViewModel() {
 
     private val selectedFishId = MutableStateFlow<Int?>(null)
+    private val selectedSpotId = MutableStateFlow<Int?>(null)
 
     val state: StateFlow<BiteUiState> = combine(
         fishRepository.getAllFish(),
         weatherRepository.weatherForecast,
-        selectedFishId
-    ) { fishList, weather, selectedId ->
+        spotRepository.spots,
+        selectedFishId,
+        selectedSpotId
+    ) { fishList, weather, spots, selectedId, spotId ->
         // Пока рыболов не выбрал рыбу, показываем первую из справочника:
         // экран должен отвечать на вопрос «ехать или нет» сразу.
         val selected = fishList.firstOrNull { it.id == selectedId } ?: fishList.firstOrNull()
@@ -47,13 +56,18 @@ class BiteViewModel @Inject constructor(
         // Считаем по всему прогнозу — трёхчасовой тенденции нужна история,
         // но показываем только то, что впереди: прошедшие часы решению
         // «ехать или нет» не помогают.
-        val calculated = selected?.let { calculateFishActivity(it, weather) }.orEmpty()
+        val spot = spots.firstOrNull { it.id == spotId }
+        val calculated = selected
+            ?.let { calculateFishActivity(it, weather, spot?.normalPressureMmHg) }
+            .orEmpty()
         // Час усекается: текущий час ещё идёт, и выбрасывать его нельзя.
         val fromNow = LocalDateTime.now().truncatedTo(ChronoUnit.HOURS).format(HOUR_FORMAT)
 
         BiteUiState(
             fishList = fishList,
             selectedFish = selected,
+            spots = spots,
+            selectedSpot = spot,
             forecast = calculated.filter { it.time >= fromNow },
             weatherMissing = weather.isEmpty()
         )
@@ -65,6 +79,10 @@ class BiteViewModel @Inject constructor(
 
     fun selectFish(fish: FishEntity) {
         selectedFishId.value = fish.id
+    }
+
+    fun selectSpot(spot: FishingSpotEntity?) {
+        selectedSpotId.value = spot?.id
     }
 
     private companion object {
