@@ -61,6 +61,7 @@ import com.example.fishforecast.data.local.entities.FishingSpotEntity
 import com.example.fishforecast.data.local.entities.SavedMapEntity
 import com.example.fishforecast.data.repository.RegionDownloadState
 import com.example.fishforecast.domain.share.GpxWriter
+import com.example.fishforecast.ui.maps.formatDistance
 import org.maplibre.android.camera.CameraUpdateFactory
 import org.maplibre.android.geometry.LatLng
 import org.maplibre.android.geometry.LatLngBounds
@@ -243,7 +244,32 @@ fun MapScreen(
 
     if (showSaveDialog) {
         val readyMap = map
+        val visibleBounds = readyMap?.projection?.visibleRegion?.latLngBounds
+        val zoomRange = readyMap?.let { MapConfig.offlineZoomRange(it.cameraPosition.zoom) }
+
         SaveRegionDialog(
+            // Размер и объём показываются заранее: на сильном приближении в
+            // рамку попадает пара сотен метров, а на мелком — область, которая
+            // не влезет в лимит MapLibre. Без подсказки и то и другое
+            // выясняется только после запуска загрузки.
+            areaDescription = visibleBounds?.let { bounds ->
+                val width = (bounds.longitudeEast - bounds.longitudeWest) *
+                    KM_PER_DEGREE * kotlin.math.cos(Math.toRadians(bounds.latitudeNorth))
+                val height = (bounds.latitudeNorth - bounds.latitudeSouth) * KM_PER_DEGREE
+                "${formatDistance(width)} × ${formatDistance(height)}"
+            },
+            tileCount = if (visibleBounds != null && zoomRange != null) {
+                estimateTileCount(
+                    north = visibleBounds.latitudeNorth,
+                    south = visibleBounds.latitudeSouth,
+                    east = visibleBounds.longitudeEast,
+                    west = visibleBounds.longitudeWest,
+                    minZoom = zoomRange.start.toInt(),
+                    maxZoom = zoomRange.endInclusive.toInt()
+                )
+            } else {
+                0
+            },
             onDismiss = { showSaveDialog = false },
             onConfirm = { name, normalPressure ->
                 showSaveDialog = false
@@ -476,11 +502,14 @@ private fun SavedMapEntity.toBounds(): LatLngBounds =
 
 @Composable
 private fun SaveRegionDialog(
+    areaDescription: String?,
+    tileCount: Long,
     onDismiss: () -> Unit,
     onConfirm: (name: String, normalPressureMmHg: Double?) -> Unit
 ) {
     var name by remember { mutableStateOf("") }
     var normalPressure by remember { mutableStateOf("") }
+    val tooLarge = tileCount > TILE_LIMIT
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -488,6 +517,21 @@ private fun SaveRegionDialog(
         text = {
             Column {
                 Text("Скачается то, что сейчас видно на экране, вместе с более крупными масштабами.")
+                areaDescription?.let { size ->
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = "Размер района: $size",
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                }
+                if (tooLarge) {
+                    Text(
+                        text = "Область слишком большая: примерно $tileCount тайлов при " +
+                            "пределе $TILE_LIMIT. Приблизьте карту и сохраните участок поменьше.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                }
                 Spacer(modifier = Modifier.height(12.dp))
                 OutlinedTextField(
                     value = name,
@@ -511,6 +555,7 @@ private fun SaveRegionDialog(
         },
         confirmButton = {
             TextButton(
+                enabled = !tooLarge,
                 onClick = {
                     onConfirm(name.ifBlank { "Мой район" }, normalPressure.toDoubleOrNull())
                 }
@@ -651,3 +696,6 @@ private fun rememberMapViewWithLifecycle(): MapView {
 
     return mapView
 }
+
+/** Длина градуса широты в километрах — для оценки размера рамки. */
+private const val KM_PER_DEGREE = 111.32

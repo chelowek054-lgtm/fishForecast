@@ -49,7 +49,6 @@ import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
-import kotlin.math.abs
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -257,7 +256,7 @@ private fun SavedMapCard(
 
             Spacer(modifier = Modifier.height(4.dp))
             Text(
-                text = "Район примерно ${map.widthKm.asKm()} × ${map.heightKm.asKm()} км",
+                text = "Район примерно ${formatDistance(map.widthKm)} × ${formatDistance(map.heightKm)}",
                 style = MaterialTheme.typography.bodyMedium
             )
             Text(
@@ -344,8 +343,6 @@ private fun MapSettings(
         }
     }
 }
-
-private fun Double.asKm(): String = "%.0f".format(abs(this))
 
 private fun Long.asMegabytes(): String = "%.1f".format(this / 1024.0 / 1024.0)
 

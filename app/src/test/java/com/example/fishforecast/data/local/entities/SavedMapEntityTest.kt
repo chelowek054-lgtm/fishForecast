@@ -7,43 +7,53 @@ import org.junit.Test
 
 class SavedMapEntityTest {
 
+    /** Прямоугольник вокруг Москвы: примерно 0.2° по широте и долготе. */
     private val map = SavedMapEntity(
         id = 1,
-        name = "Озеро",
-        offlineRegionId = 1L,
-        north = 56.0,
-        south = 55.0,
-        east = 38.0,
-        west = 37.0,
-        minZoom = 12.0,
+        name = "Район",
+        offlineRegionId = 1,
+        north = 55.85,
+        south = 55.65,
+        east = 37.75,
+        west = 37.55,
+        minZoom = 10.0,
         maxZoom = 14.0
     )
 
     @Test
-    fun `центр берётся из середины границ`() {
-        assertEquals(55.5, map.centerLatitude, 0.0001)
-        assertEquals(37.5, map.centerLongitude, 0.0001)
+    fun `центр района лежит посередине границ`() {
+        // По центру запрашивается погода, поэтому промах сместил бы прогноз.
+        assertEquals(55.75, map.centerLatitude, 0.0001)
+        assertEquals(37.65, map.centerLongitude, 0.0001)
     }
 
     @Test
     fun `точка внутри границ принадлежит карте`() {
-        assertTrue(map.contains(55.5, 37.5))
-        assertTrue("границы включаются", map.contains(56.0, 38.0))
+        assertTrue(map.contains(latitude = 55.75, longitude = 37.65))
+        assertTrue("угол тоже внутри", map.contains(latitude = 55.85, longitude = 37.75))
     }
 
     @Test
     fun `точка за границами карте не принадлежит`() {
-        assertFalse(map.contains(54.9, 37.5))
-        assertFalse(map.contains(55.5, 39.0))
+        assertFalse("севернее", map.contains(latitude = 55.95, longitude = 37.65))
+        assertFalse("западнее", map.contains(latitude = 55.75, longitude = 37.40))
+    }
+
+    @Test
+    fun `охват по широте считается в километрах`() {
+        // 0.2° широты — это чуть больше 22 км в любой точке планеты.
+        assertEquals(22.3, map.heightKm, 0.3)
     }
 
     @Test
     fun `градус долготы короче градуса широты вдали от экватора`() {
-        // На 55-й параллели градус долготы примерно вдвое короче.
+        // Меридианы сходятся к полюсам, поэтому одинаковый размах в градусах
+        // даёт разную ширину: на широте Москвы примерно вдвое меньше.
+        val equator = map.copy(north = 0.1, south = -0.1)
+
         assertTrue(
-            "ширина ${map.widthKm} должна быть меньше высоты ${map.heightKm}",
-            map.widthKm < map.heightKm
+            "у Москвы ${map.widthKm} км должно быть заметно меньше, чем ${equator.widthKm} км на экваторе",
+            map.widthKm < equator.widthKm * 0.7
         )
-        assertEquals(111.32, map.heightKm, 0.01)
     }
 }

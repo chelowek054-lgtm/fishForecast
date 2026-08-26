@@ -5,6 +5,7 @@ import com.example.fishforecast.data.local.dao.SavedMapDao
 import com.example.fishforecast.data.local.entities.FishingSpotEntity
 import com.example.fishforecast.data.local.entities.SavedMapEntity
 import com.example.fishforecast.data.local.entities.WeatherEntity
+import com.example.fishforecast.domain.bite.resolveNormalPressure
 import com.example.fishforecast.ui.map.BaseLayer
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
@@ -84,7 +85,10 @@ class FishingContextRepository @Inject constructor(
 
     /** Норма точки уточняет норму карты; без обеих остаётся null. */
     fun normalPressureFor(map: SavedMapEntity?, spot: FishingSpotEntity?): Double? =
-        spot?.normalPressureMmHg ?: map?.normalPressureMmHg
+        resolveNormalPressure(
+            mapNormalMmHg = map?.normalPressureMmHg,
+            spotNormalMmHg = spot?.normalPressureMmHg
+        )
 
     suspend fun currentMap(): SavedMapEntity? = activeMap.first()
 
