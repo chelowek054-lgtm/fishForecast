@@ -48,14 +48,31 @@ class OfflineMapRepository @Inject constructor(
         maxZoom: Double,
         normalPressureMmHg: Double? = null
     ): Flow<RegionDownloadState> = callbackFlow {
-        val definition = OfflineTilePyramidRegionDefinition(
-            MapConfig.STYLE_URL,
-            bounds,
-            minZoom,
-            maxZoom,
-            application.resources.displayMetrics.density
-        )
+        // MapLibre отвечает на негодное определение области java.lang.Error,
+        // а не исключением, — без перехвата это мгновенный краш приложения
+        // прямо посреди рыбалки.
+        val definition = runCatching {
+            require(bounds.latitudeNorth > bounds.latitudeSouth) { "Пустая рамка по широте" }
+            require(minZoom <= maxZoom) { "Масштабы перепутаны: $minZoom > $maxZoom" }
 
+            OfflineTilePyramidRegionDefinition(
+                MapConfig.STYLE_URL,
+                bounds,
+                minZoom,
+                maxZoom,
+                application.resources.displayMetrics.density
+            )
+        }.getOrElse { error ->
+            trySend(
+                RegionDownloadState.Failed(
+                    "Не удалось описать область: ${error.message ?: "неверные границы"}"
+                )
+            )
+            close()
+            return@callbackFlow
+        }
+
+        runCatching {
         offlineManager.createOfflineRegion(
             definition,
             name.toByteArray(),
@@ -124,6 +141,10 @@ class OfflineMapRepository @Inject constructor(
                 }
             }
         )
+        }.onFailure { error ->
+            trySend(RegionDownloadState.Failed(error.message ?: "Не удалось начать загрузку"))
+            close()
+        }
 
         awaitClose { }
     }

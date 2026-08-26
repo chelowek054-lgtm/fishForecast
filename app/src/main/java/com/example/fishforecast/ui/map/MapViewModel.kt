@@ -83,12 +83,12 @@ class MapViewModel @Inject constructor(
         normalPressureMmHg: Double? = null
     ) {
         viewModelScope.launch {
-            val minZoom = currentZoom.coerceAtLeast(MapConfig.MIN_OFFLINE_ZOOM)
+            val zoomRange = MapConfig.offlineZoomRange(currentZoom)
             offlineMapRepository.downloadRegion(
                 name = name,
                 bounds = bounds,
-                minZoom = minZoom,
-                maxZoom = MapConfig.MAX_OFFLINE_ZOOM,
+                minZoom = zoomRange.start,
+                maxZoom = zoomRange.endInclusive,
                 normalPressureMmHg = normalPressureMmHg
             ).collect { state ->
                 _downloadState.value = state
