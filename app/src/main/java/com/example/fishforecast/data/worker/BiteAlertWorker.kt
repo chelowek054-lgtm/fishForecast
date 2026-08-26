@@ -21,7 +21,7 @@ import androidx.work.WorkerParameters
 import com.example.fishforecast.MainActivity
 import com.example.fishforecast.R
 import com.example.fishforecast.data.repository.FishRepository
-import com.example.fishforecast.data.repository.WeatherRepository
+import com.example.fishforecast.data.repository.FishingContextRepository
 import com.example.fishforecast.domain.bite.FindBiteWindowUseCase
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
@@ -39,19 +39,21 @@ class BiteAlertWorker @AssistedInject constructor(
     @Assisted private val context: Context,
     @Assisted params: WorkerParameters,
     private val fishRepository: FishRepository,
-    private val weatherRepository: WeatherRepository,
+    private val fishingContext: FishingContextRepository,
     private val findBiteWindow: FindBiteWindowUseCase
 ) : CoroutineWorker(context, params) {
 
     override suspend fun doWork(): Result {
+        val map = fishingContext.currentMap() ?: return Result.success()
         val fishList = fishRepository.getAllFish().first()
-        val forecast = weatherRepository.weatherForecast.first()
+        val forecast = fishingContext.activeForecast.first()
         if (fishList.isEmpty() || forecast.isEmpty()) return Result.success()
 
         val window = findBiteWindow(
             fishList = fishList,
             forecast = forecast,
-            from = LocalDateTime.now()
+            from = LocalDateTime.now(),
+            normalPressureMmHg = map.normalPressureMmHg
         ) ?: return Result.success()
 
         notify(

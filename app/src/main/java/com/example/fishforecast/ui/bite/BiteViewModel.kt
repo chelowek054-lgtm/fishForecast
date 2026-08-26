@@ -4,9 +4,9 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.fishforecast.data.local.entities.FishEntity
 import com.example.fishforecast.data.local.entities.FishingSpotEntity
+import com.example.fishforecast.data.local.entities.SavedMapEntity
 import com.example.fishforecast.data.repository.FishRepository
-import com.example.fishforecast.data.repository.FishingSpotRepository
-import com.example.fishforecast.data.repository.WeatherRepository
+import com.example.fishforecast.data.repository.FishingContextRepository
 import com.example.fishforecast.domain.bite.BiteForecast
 import com.example.fishforecast.domain.bite.CalculateFishActivityUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -24,8 +24,9 @@ data class BiteUiState(
     val fishList: List<FishEntity> = emptyList(),
     val selectedFish: FishEntity? = null,
     val spots: List<FishingSpotEntity> = emptyList(),
-    /** Водоём задаёт норму давления; без него ориентир берётся от рыбы. */
+    /** Точка уточняет норму давления карты; без неё берётся норма района. */
     val selectedSpot: FishingSpotEntity? = null,
+    val activeMap: SavedMapEntity? = null,
     val forecast: List<BiteForecast> = emptyList(),
     /** Прогноза нет — считать нечего, и это не ошибка. */
     val weatherMissing: Boolean = false
@@ -33,9 +34,8 @@ data class BiteUiState(
 
 @HiltViewModel
 class BiteViewModel @Inject constructor(
+    private val fishingContext: FishingContextRepository,
     fishRepository: FishRepository,
-    weatherRepository: WeatherRepository,
-    spotRepository: FishingSpotRepository,
     calculateFishActivity: CalculateFishActivityUseCase
 ) : ViewModel() {
 
@@ -44,11 +44,11 @@ class BiteViewModel @Inject constructor(
 
     val state: StateFlow<BiteUiState> = combine(
         fishRepository.getAllFish(),
-        weatherRepository.weatherForecast,
-        spotRepository.spots,
-        selectedFishId,
-        selectedSpotId
-    ) { fishList, weather, spots, selectedId, spotId ->
+        fishingContext.activeForecast,
+        fishingContext.activeSpots,
+        fishingContext.activeMap,
+        combine(selectedFishId, selectedSpotId) { fishId, spotId -> fishId to spotId }
+    ) { fishList, weather, spots, map, (selectedId, spotId) ->
         // Пока рыболов не выбрал рыбу, показываем первую из справочника:
         // экран должен отвечать на вопрос «ехать или нет» сразу.
         val selected = fishList.firstOrNull { it.id == selectedId } ?: fishList.firstOrNull()
@@ -57,8 +57,9 @@ class BiteViewModel @Inject constructor(
         // но показываем только то, что впереди: прошедшие часы решению
         // «ехать или нет» не помогают.
         val spot = spots.firstOrNull { it.id == spotId }
+        val normalPressure = fishingContext.normalPressureFor(map, spot)
         val calculated = selected
-            ?.let { calculateFishActivity(it, weather, spot?.normalPressureMmHg) }
+            ?.let { calculateFishActivity(it, weather, normalPressure) }
             .orEmpty()
         // Час усекается: текущий час ещё идёт, и выбрасывать его нельзя.
         val fromNow = LocalDateTime.now().truncatedTo(ChronoUnit.HOURS).format(HOUR_FORMAT)
@@ -68,6 +69,7 @@ class BiteViewModel @Inject constructor(
             selectedFish = selected,
             spots = spots,
             selectedSpot = spot,
+            activeMap = map,
             forecast = calculated.filter { it.time >= fromNow },
             weatherMissing = weather.isEmpty()
         )

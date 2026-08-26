@@ -1,12 +1,18 @@
 package com.example.fishforecast.data.local.entities
 
 import androidx.room.Entity
-import androidx.room.PrimaryKey
 
-@Entity(tableName = "weather_forecast")
+/**
+ * Час прогноза для конкретной сохранённой карты.
+ *
+ * Ключ составной: у каждой карты свой прогноз, иначе переключение района
+ * затирало бы данные предыдущего — а без сети вернуть их будет неоткуда.
+ */
+@Entity(tableName = "weather_forecast", primaryKeys = ["mapId", "time"])
 data class WeatherEntity(
-    @PrimaryKey
-    val time: String, // ISO8601 string
+    val mapId: Int,
+    /** ISO8601 без секунд, как отдаёт Open-Meteo. */
+    val time: String,
     val temperature: Double,
     val humidity: Double,
     val pressure: Double,

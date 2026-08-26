@@ -19,15 +19,18 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.example.fishforecast.data.local.entities.WeatherEntity
 import com.example.fishforecast.domain.sensor.hPaToMmHg
+import com.example.fishforecast.ui.common.NoActiveMapMessage
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun WeatherScreen(
+    onOpenMap: () -> Unit = {},
     viewModel: WeatherViewModel = hiltViewModel()
 ) {
     val forecast by viewModel.forecast.collectAsState()
+    val activeMap by viewModel.activeMap.collectAsState()
     val localPressure by viewModel.localPressure.collectAsState()
     val isLoading = viewModel.isLoading.value
     val error = viewModel.error.value
@@ -41,7 +44,18 @@ fun WeatherScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Прогноз погоды") },
+                title = {
+                    Column {
+                        Text("Прогноз погоды")
+                        // Рыболову важно видеть, для какого района цифры.
+                        activeMap?.let { map ->
+                            Text(
+                                text = map.name,
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                        }
+                    }
+                },
                 actions = {
                     IconButton(onClick = { viewModel.loadWeatherInfo() }) {
                         Icon(Icons.Default.Refresh, contentDescription = "Обновить")
@@ -55,7 +69,12 @@ fun WeatherScreen(
                 .fillMaxSize()
                 .padding(paddingValues)
         ) {
-            if (isLoading && forecast.isEmpty()) {
+            if (activeMap == null) {
+                NoActiveMapMessage(
+                    explanation = "Погода запрашивается по центру выбранного района.",
+                    onOpenMap = onOpenMap
+                )
+            } else if (isLoading && forecast.isEmpty()) {
                 CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
             } else if (error != null && forecast.isEmpty()) {
                 Text(

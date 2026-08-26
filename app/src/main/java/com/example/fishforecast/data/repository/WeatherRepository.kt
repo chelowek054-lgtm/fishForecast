@@ -14,13 +14,15 @@ class WeatherRepository @Inject constructor(
     private val api: WeatherApi,
     private val dao: WeatherDao
 ) {
-    val weatherForecast: Flow<List<WeatherEntity>> = dao.getWeatherForecast()
+    /** Прогноз конкретной карты: у каждой свой, чтобы работать без сети. */
+    fun forecastForMap(mapId: Int): Flow<List<WeatherEntity>> = dao.getForecastForMap(mapId)
 
-    suspend fun fetchWeather(lat: Double, lon: Double): Result<Unit> {
+    suspend fun fetchWeather(mapId: Int, lat: Double, lon: Double): Result<Unit> {
         return try {
             val response = api.getWeatherData(lat, lon)
             val entities = response.hourly.time.mapIndexed { index, time ->
                 WeatherEntity(
+                    mapId = mapId,
                     time = time,
                     temperature = response.hourly.temperatures[index],
                     humidity = response.hourly.humidities[index],
@@ -32,7 +34,7 @@ class WeatherRepository @Inject constructor(
                     longitude = lon
                 )
             }
-            dao.clearForecast()
+            dao.clearForecast(mapId)
             dao.insertForecast(entities)
             Result.success(Unit)
         } catch (e: Exception) {
@@ -40,10 +42,10 @@ class WeatherRepository @Inject constructor(
         }
     }
 
-    suspend fun cleanOldData() {
+    suspend fun cleanOldData(mapId: Int) {
         // Open-Meteo отдаёт время без секунд, а сравнение в запросе строковое,
         // поэтому формат отсечки должен совпадать с форматом хранения.
         val now = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm"))
-        dao.deleteOldForecast(now)
+        dao.deleteOldForecast(mapId, now)
     }
 }

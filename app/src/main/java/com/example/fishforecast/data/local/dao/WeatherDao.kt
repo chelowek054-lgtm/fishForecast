@@ -9,15 +9,16 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface WeatherDao {
-    @Query("SELECT * FROM weather_forecast ORDER BY time ASC")
-    fun getWeatherForecast(): Flow<List<WeatherEntity>>
+
+    @Query("SELECT * FROM weather_forecast WHERE mapId = :mapId ORDER BY time ASC")
+    fun getForecastForMap(mapId: Int): Flow<List<WeatherEntity>>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertForecast(forecast: List<WeatherEntity>)
 
-    @Query("DELETE FROM weather_forecast WHERE time < :currentTime")
-    suspend fun deleteOldForecast(currentTime: String)
+    @Query("DELETE FROM weather_forecast WHERE mapId = :mapId AND time < :currentTime")
+    suspend fun deleteOldForecast(mapId: Int, currentTime: String)
 
-    @Query("DELETE FROM weather_forecast")
-    suspend fun clearForecast()
+    @Query("DELETE FROM weather_forecast WHERE mapId = :mapId")
+    suspend fun clearForecast(mapId: Int)
 }

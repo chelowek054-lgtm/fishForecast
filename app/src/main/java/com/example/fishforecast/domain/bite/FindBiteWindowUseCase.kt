@@ -27,13 +27,14 @@ class FindBiteWindowUseCase @Inject constructor(
         forecast: List<WeatherEntity>,
         from: LocalDateTime,
         lookaheadHours: Long = DEFAULT_LOOKAHEAD_HOURS,
-        minimumScore: Int = DEFAULT_MINIMUM_SCORE
+        minimumScore: Int = DEFAULT_MINIMUM_SCORE,
+        normalPressureMmHg: Double? = null
     ): BiteWindow? {
         val until = from.plusHours(lookaheadHours)
 
         return fishList
             .flatMap { fish ->
-                calculateFishActivity(fish, forecast)
+                calculateFishActivity(fish, forecast, normalPressureMmHg)
                     .filter { it.score >= minimumScore }
                     .filter { hour ->
                         val time = hour.time.toLocalDateTimeOrNull() ?: return@filter false

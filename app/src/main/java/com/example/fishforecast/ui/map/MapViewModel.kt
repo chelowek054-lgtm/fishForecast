@@ -6,8 +6,9 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.fishforecast.data.local.entities.FishEntity
 import com.example.fishforecast.data.local.entities.FishingSpotEntity
-import com.example.fishforecast.data.local.entities.MapRegionEntity
+import com.example.fishforecast.data.local.entities.SavedMapEntity
 import com.example.fishforecast.data.repository.FishRepository
+import com.example.fishforecast.data.repository.FishingContextRepository
 import com.example.fishforecast.data.repository.FishingSpotRepository
 import com.example.fishforecast.data.repository.OfflineMapRepository
 import com.example.fishforecast.data.repository.RegionDownloadState
@@ -25,6 +26,7 @@ class MapViewModel @Inject constructor(
     private val locationTracker: LocationTracker,
     private val offlineMapRepository: OfflineMapRepository,
     private val fishingSpotRepository: FishingSpotRepository,
+    private val fishingContext: FishingContextRepository,
     fishRepository: FishRepository
 ) : ViewModel() {
 
@@ -32,11 +34,11 @@ class MapViewModel @Inject constructor(
     private val _userLocation = mutableStateOf<Pair<Double, Double>?>(null)
     val userLocation: State<Pair<Double, Double>?> = _userLocation
 
-    val regions: StateFlow<List<MapRegionEntity>> = offlineMapRepository.regions
+    val activeMap: StateFlow<SavedMapEntity?> = fishingContext.activeMap
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
-            initialValue = emptyList()
+            initialValue = null
         )
 
     val spots: StateFlow<List<FishingSpotEntity>> = fishingSpotRepository.spots
@@ -74,16 +76,27 @@ class MapViewModel @Inject constructor(
      * от текущего вида, верхняя — из конфига: тайлы крупнее нужны на воде,
      * но именно они дают основной объём.
      */
-    fun saveVisibleRegion(name: String, bounds: LatLngBounds, currentZoom: Double) {
+    fun saveVisibleRegion(
+        name: String,
+        bounds: LatLngBounds,
+        currentZoom: Double,
+        normalPressureMmHg: Double? = null
+    ) {
         viewModelScope.launch {
             val minZoom = currentZoom.coerceAtLeast(MapConfig.MIN_OFFLINE_ZOOM)
             offlineMapRepository.downloadRegion(
                 name = name,
                 bounds = bounds,
                 minZoom = minZoom,
-                maxZoom = MapConfig.MAX_OFFLINE_ZOOM
+                maxZoom = MapConfig.MAX_OFFLINE_ZOOM,
+                normalPressureMmHg = normalPressureMmHg
             ).collect { state ->
                 _downloadState.value = state
+                // Только что сохранённый район сразу становится рабочим:
+                // ради него рыболов и нажимал кнопку.
+                if (state is RegionDownloadState.Done) {
+                    fishingContext.activateLatestMap()
+                }
             }
         }
     }
@@ -120,7 +133,7 @@ class MapViewModel @Inject constructor(
         }
     }
 
-    fun deleteRegion(region: MapRegionEntity) {
+    fun deleteRegion(region: SavedMapEntity) {
         viewModelScope.launch {
             offlineMapRepository.deleteRegion(region)
         }

@@ -21,7 +21,7 @@ import javax.inject.Singleton
 class CatchRepository @Inject constructor(
     private val application: Application,
     private val dao: CatchDao,
-    private val weatherRepository: WeatherRepository,
+    private val fishingContext: FishingContextRepository,
     private val calculateFishActivity: CalculateFishActivityUseCase
 ) {
     val catches: Flow<List<CatchEntity>> = dao.getCatches()
@@ -33,10 +33,14 @@ class CatchRepository @Inject constructor(
      */
     suspend fun addCatch(entity: CatchEntity, fish: FishEntity?) {
         val hour = currentForecastHour()
+        // Норма берётся у активной карты: улов записывается там, где рыболов
+        // сейчас ловит, и сверять прогноз потом нужно с той же нормой.
+        val normalPressure = fishingContext.currentMap()?.normalPressureMmHg
 
         val biteScore = if (fish != null && hour != null) {
-            val forecast = weatherRepository.weatherForecast.first()
-            calculateFishActivity(fish, forecast).firstOrNull { it.time == hour.time }?.score
+            val forecast = fishingContext.activeForecast.first()
+            calculateFishActivity(fish, forecast, normalPressure)
+                .firstOrNull { it.time == hour.time }?.score
         } else {
             null
         }
@@ -68,7 +72,7 @@ class CatchRepository @Inject constructor(
      * погоды — ровно того, ради чего запись и делается.
      */
     private suspend fun currentForecastHour() =
-        weatherRepository.weatherForecast.first()
+        fishingContext.activeForecast.first()
             .firstOrNull { it.time == currentHour() }
 
     private fun currentHour(): String =

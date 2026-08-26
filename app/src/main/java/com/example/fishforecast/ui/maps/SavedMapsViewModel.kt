@@ -1,4 +1,4 @@
-package com.example.fishforecast.ui.library
+package com.example.fishforecast.ui.maps
 
 import android.net.Uri
 import androidx.compose.runtime.State
@@ -6,8 +6,9 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.fishforecast.data.local.entities.FishingSpotEntity
-import com.example.fishforecast.data.local.entities.MapRegionEntity
+import com.example.fishforecast.data.local.entities.SavedMapEntity
 import com.example.fishforecast.data.repository.FishRepository
+import com.example.fishforecast.data.repository.FishingContextRepository
 import com.example.fishforecast.data.repository.FishingSpotRepository
 import com.example.fishforecast.data.repository.MapLibraryRepository
 import com.example.fishforecast.data.repository.OfflineMapRepository
@@ -27,23 +28,27 @@ import java.io.File
 import javax.inject.Inject
 
 /** Что показать пользователю после обмена файлами. */
-sealed interface LibraryMessage {
-    data class Info(val text: String) : LibraryMessage
-    data class Error(val text: String) : LibraryMessage
+sealed interface SavedMapsMessage {
+    data class Info(val text: String) : SavedMapsMessage
+    data class Error(val text: String) : SavedMapsMessage
     /** Файл готов к отправке — экран открывает системный выбор приложения. */
-    data class MapsReady(val file: File) : LibraryMessage
+    data class MapsReady(val file: File) : SavedMapsMessage
 }
 
 @HiltViewModel
-class LibraryViewModel @Inject constructor(
+class SavedMapsViewModel @Inject constructor(
     private val mapLibraryRepository: MapLibraryRepository,
     private val spotRepository: FishingSpotRepository,
     private val fishRepository: FishRepository,
-    offlineMapRepository: OfflineMapRepository
+    private val fishingContext: FishingContextRepository,
+    private val offlineMapRepository: OfflineMapRepository
 ) : ViewModel() {
 
-    val regions: StateFlow<List<MapRegionEntity>> = offlineMapRepository.regions
+    val maps: StateFlow<List<SavedMapEntity>> = fishingContext.savedMaps
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val activeMap: StateFlow<SavedMapEntity?> = fishingContext.activeMap
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
     val spots: StateFlow<List<FishingSpotEntity>> = spotRepository.spots
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
@@ -56,14 +61,30 @@ class LibraryViewModel @Inject constructor(
      * пока пользователь выбирает файл, экран успевает пересобраться, и
      * сообщение-состояние терялось бы, не дойдя до снекбара.
      */
-    private val _events = Channel<LibraryMessage>(Channel.BUFFERED)
+    private val _events = Channel<SavedMapsMessage>(Channel.BUFFERED)
     val events = _events.receiveAsFlow()
+
+    fun selectMap(map: SavedMapEntity) {
+        viewModelScope.launch { fishingContext.setActiveMap(map.id) }
+    }
+
+    fun renameMap(map: SavedMapEntity, name: String) {
+        viewModelScope.launch { fishingContext.renameMap(map.id, name.ifBlank { map.name }) }
+    }
+
+    fun setNormalPressure(map: SavedMapEntity, value: Double?) {
+        viewModelScope.launch { fishingContext.setNormalPressure(map.id, value) }
+    }
+
+    fun deleteMap(map: SavedMapEntity) {
+        viewModelScope.launch { offlineMapRepository.deleteRegion(map) }
+    }
 
     fun exportMaps() {
         withBusy {
             mapLibraryRepository.exportMaps().fold(
-                onSuccess = { LibraryMessage.MapsReady(it) },
-                onFailure = { LibraryMessage.Error("Не удалось выгрузить карты: ${it.message}") }
+                onSuccess = { SavedMapsMessage.MapsReady(it) },
+                onFailure = { SavedMapsMessage.Error("Не удалось выгрузить карты: ${it.message}") }
             )
         }
     }
@@ -73,12 +94,12 @@ class LibraryViewModel @Inject constructor(
             mapLibraryRepository.importMaps(uri).fold(
                 onSuccess = { added ->
                     if (added > 0) {
-                        LibraryMessage.Info("Добавлено карт: $added")
+                        SavedMapsMessage.Info("Добавлено карт: $added")
                     } else {
-                        LibraryMessage.Info("Новых карт в файле не нашлось")
+                        SavedMapsMessage.Info("Новых карт в файле не нашлось")
                     }
                 },
-                onFailure = { LibraryMessage.Error("Не удалось загрузить карты: ${it.message}") }
+                onFailure = { SavedMapsMessage.Error("Не удалось загрузить карты: ${it.message}") }
             )
         }
     }
@@ -95,14 +116,14 @@ class LibraryViewModel @Inject constructor(
             }.fold(
                 onSuccess = { count ->
                     if (count > 0) {
-                        LibraryMessage.Info("Загружено точек: $count")
+                        SavedMapsMessage.Info("Загружено точек: $count")
                     } else {
-                        LibraryMessage.Info("В файле нет точек с координатами")
+                        SavedMapsMessage.Info("В файле нет точек с координатами")
                     }
                 },
                 // Текст ошибки парсера («Unexpected token…») рыболову ничего
                 // не объясняет, поэтому наружу идёт понятная причина.
-                onFailure = { LibraryMessage.Error("Не удалось прочитать GPX: файл повреждён или это не GPX") }
+                onFailure = { SavedMapsMessage.Error("Не удалось прочитать GPX: файл повреждён или это не GPX") }
             )
         }
     }
@@ -113,7 +134,7 @@ class LibraryViewModel @Inject constructor(
         return GpxWriter.write(spots.value, fishNames)
     }
 
-    private fun withBusy(block: suspend () -> LibraryMessage) {
+    private fun withBusy(block: suspend () -> SavedMapsMessage) {
         viewModelScope.launch {
             _busy.value = true
             _events.send(block())

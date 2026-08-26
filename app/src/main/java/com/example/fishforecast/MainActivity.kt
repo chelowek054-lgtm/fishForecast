@@ -38,7 +38,7 @@ import com.example.fishforecast.ui.fishlist.FishListScreen
 import com.example.fishforecast.ui.navigation.AddEditFishRoute
 import com.example.fishforecast.ui.bite.BiteScreen
 import com.example.fishforecast.ui.journal.JournalScreen
-import com.example.fishforecast.ui.library.LibraryScreen
+import com.example.fishforecast.ui.maps.SavedMapsScreen
 import com.example.fishforecast.ui.map.MapScreen
 import com.example.fishforecast.ui.navigation.BiteRoute
 import com.example.fishforecast.ui.navigation.FishListRoute
@@ -71,11 +71,12 @@ private data class BottomNavItem(
     val icon: ImageVector
 )
 
+/** Карта в центре: с неё начинается любой сценарий — она задаёт контекст. */
 private val bottomNavItems = listOf(
     BottomNavItem(FishListRoute, FishListRoute::class, "Рыбы", Icons.AutoMirrored.Filled.List),
-    BottomNavItem(WeatherRoute, WeatherRoute::class, "Погода", Icons.Default.Cloud),
     BottomNavItem(BiteRoute, BiteRoute::class, "Клёв", Icons.Default.Insights),
     BottomNavItem(MapRoute, MapRoute::class, "Карта", Icons.Default.Map),
+    BottomNavItem(WeatherRoute, WeatherRoute::class, "Погода", Icons.Default.Cloud),
     BottomNavItem(JournalRoute, JournalRoute::class, "Журнал", Icons.AutoMirrored.Filled.MenuBook)
 )
 
@@ -149,10 +150,10 @@ fun FishForecastAppNavigation() {
                 )
             }
             composable<WeatherRoute> {
-                WeatherScreen()
+                WeatherScreen(onOpenMap = { navController.navigate(MapRoute) })
             }
             composable<BiteRoute> {
-                BiteScreen()
+                BiteScreen(onOpenMap = { navController.navigate(MapRoute) })
             }
             composable<MapRoute> {
                 MapScreen(onOpenLibrary = { navController.navigate(LibraryRoute) })
@@ -161,7 +162,7 @@ fun FishForecastAppNavigation() {
                 JournalScreen()
             }
             composable<LibraryRoute> {
-                LibraryScreen()
+                SavedMapsScreen(onOpenMap = { navController.navigate(MapRoute) })
             }
             composable<AddEditFishRoute> {
                 AddEditFishScreen(

@@ -2,8 +2,8 @@ package com.example.fishforecast.data.repository
 
 import android.app.Application
 import android.net.Uri
-import com.example.fishforecast.data.local.dao.MapRegionDao
-import com.example.fishforecast.data.local.entities.MapRegionEntity
+import com.example.fishforecast.data.local.dao.SavedMapDao
+import com.example.fishforecast.data.local.entities.SavedMapEntity
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
@@ -25,7 +25,7 @@ import kotlin.coroutines.resume
 @Singleton
 class MapLibraryRepository @Inject constructor(
     private val application: Application,
-    private val dao: MapRegionDao
+    private val dao: SavedMapDao
 ) {
     private val offlineManager: OfflineManager
         get() = OfflineManager.getInstance(application)
@@ -132,11 +132,11 @@ class MapLibraryRepository @Inject constructor(
         })
     }
 
-    private fun OfflineRegion.toEntity(sizeBytes: Long): MapRegionEntity {
+    private fun OfflineRegion.toEntity(sizeBytes: Long): SavedMapEntity {
         val definition = definition as? OfflineTilePyramidRegionDefinition
         val bounds = definition?.bounds
 
-        return MapRegionEntity(
+        return SavedMapEntity(
             name = metadata.decodeToString().ifBlank { "Импортированная карта" },
             offlineRegionId = id,
             north = bounds?.latitudeNorth ?: 0.0,

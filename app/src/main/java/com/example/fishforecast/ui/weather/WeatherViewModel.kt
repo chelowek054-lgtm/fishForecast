@@ -4,9 +4,9 @@ import androidx.compose.runtime.State
 import androidx.compose.runtime.mutableStateOf
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.fishforecast.data.local.entities.SavedMapEntity
 import com.example.fishforecast.data.local.entities.WeatherEntity
-import com.example.fishforecast.data.repository.WeatherRepository
-import com.example.fishforecast.domain.location.LocationTracker
+import com.example.fishforecast.data.repository.FishingContextRepository
 import com.example.fishforecast.domain.sensor.PressureProvider
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.SharingStarted
@@ -17,16 +17,23 @@ import javax.inject.Inject
 
 @HiltViewModel
 class WeatherViewModel @Inject constructor(
-    private val repository: WeatherRepository,
-    private val locationTracker: LocationTracker,
+    private val fishingContext: FishingContextRepository,
     pressureProvider: PressureProvider
 ) : ViewModel() {
 
-    val forecast: StateFlow<List<WeatherEntity>> = repository.weatherForecast
+    /** Прогноз выбранного района, а не места, где сейчас телефон. */
+    val forecast: StateFlow<List<WeatherEntity>> = fishingContext.activeForecast
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
             initialValue = emptyList()
+        )
+
+    val activeMap: StateFlow<SavedMapEntity?> = fishingContext.activeMap
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = null
         )
 
     val hasBarometer: Boolean = pressureProvider.isAvailable
@@ -49,16 +56,11 @@ class WeatherViewModel @Inject constructor(
         viewModelScope.launch {
             _isLoading.value = true
             _error.value = null
-            
-            val location = locationTracker.getCurrentLocation()
-            if (location != null) {
-                repository.fetchWeather(location.latitude, location.longitude)
-                    .onFailure {
-                        _error.value = "Не удалось загрузить прогноз: ${it.message ?: "нет сети"}"
-                    }
-            } else {
-                _error.value = "Не удалось получить местоположение. Проверьте GPS и разрешения."
+
+            fishingContext.refreshWeather().onFailure {
+                _error.value = "Не удалось загрузить прогноз: ${it.message ?: "нет сети"}"
             }
+
             _isLoading.value = false
         }
     }

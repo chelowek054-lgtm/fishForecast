@@ -33,11 +33,13 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.example.fishforecast.domain.bite.BiteForecast
+import com.example.fishforecast.ui.common.NoActiveMapMessage
 import com.example.fishforecast.domain.bite.BiteLevel
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun BiteScreen(
+    onOpenMap: () -> Unit = {},
     viewModel: BiteViewModel = hiltViewModel()
 ) {
     val state by viewModel.state.collectAsState()
@@ -53,6 +55,15 @@ fun BiteScreen(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
+            if (state.activeMap == null) {
+                NoActiveMapMessage(
+                    explanation = "Клёв считается для выбранного района: от него зависят " +
+                        "погода и норма давления.",
+                    onOpenMap = onOpenMap
+                )
+                return@Column
+            }
+
             if (state.fishList.isEmpty()) {
                 Text("Справочник рыб пуст — добавьте рыбу, чтобы считать активность.")
                 return@Column
@@ -72,7 +83,7 @@ fun BiteScreen(
             }
 
             if (state.spots.isNotEmpty()) {
-                Text("Водоём:", style = MaterialTheme.typography.labelMedium)
+                Text("Точка на карте:", style = MaterialTheme.typography.labelMedium)
                 Row(
                     modifier = Modifier.horizontalScroll(rememberScrollState()),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -87,12 +98,15 @@ fun BiteScreen(
                         )
                     }
                 }
-                state.selectedSpot?.normalPressureMmHg?.let { normal ->
-                    Text(
-                        text = "Норма давления водоёма: ${normal.toInt()} мм рт. ст.",
-                        style = MaterialTheme.typography.bodySmall
-                    )
-                }
+            }
+
+            val normal = state.selectedSpot?.normalPressureMmHg ?: state.activeMap?.normalPressureMmHg
+            if (normal != null) {
+                Text(
+                    text = "Норма давления: ${normal.toInt()} мм рт. ст." +
+                        if (state.selectedSpot?.normalPressureMmHg != null) " (у точки)" else " (у карты)",
+                    style = MaterialTheme.typography.bodySmall
+                )
             }
 
             if (state.weatherMissing) {

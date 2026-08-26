@@ -30,6 +30,7 @@ class FindBiteWindowUseCaseTest {
     private val comfortablePressureHpa = 750.0 * 1.333224
 
     private fun hour(index: Int, temperature: Double = 13.0) = WeatherEntity(
+        mapId = 1,
         time = "2026-08-26T%02d:00".format(index),
         temperature = temperature,
         humidity = 60.0,

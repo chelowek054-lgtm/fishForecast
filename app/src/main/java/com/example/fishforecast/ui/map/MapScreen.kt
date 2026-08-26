@@ -56,7 +56,7 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.example.fishforecast.data.local.entities.FishEntity
 import com.example.fishforecast.data.local.entities.FishingSpotEntity
-import com.example.fishforecast.data.local.entities.MapRegionEntity
+import com.example.fishforecast.data.local.entities.SavedMapEntity
 import com.example.fishforecast.data.repository.RegionDownloadState
 import com.example.fishforecast.domain.share.GpxWriter
 import org.maplibre.android.camera.CameraUpdateFactory
@@ -77,7 +77,7 @@ fun MapScreen(
     viewModel: MapViewModel = hiltViewModel()
 ) {
     val userLocation by viewModel.userLocation
-    val regions by viewModel.regions.collectAsState()
+    val activeMap by viewModel.activeMap.collectAsState()
     val downloadState by viewModel.downloadState
 
     var map by remember { mutableStateOf<MapLibreMap?>(null) }
@@ -190,21 +190,21 @@ fun MapScreen(
                     .padding(16.dp)
             )
 
-            if (regions.isNotEmpty()) {
-                SavedRegionsPanel(
-                    regions = regions,
-                    onDelete = { viewModel.deleteRegion(it) },
-                    onOpen = { region ->
+            ActiveMapBanner(
+                map = activeMap,
+                onOpenList = onOpenLibrary,
+                onShowOnMap = {
+                    activeMap?.let { current ->
                         map?.animateCamera(
-                            CameraUpdateFactory.newLatLngBounds(region.toBounds(), 32)
+                            CameraUpdateFactory.newLatLngBounds(current.toBounds(), 32)
                         )
-                    },
-                    modifier = Modifier
-                        .align(Alignment.BottomStart)
-                        // Справа место под плавающие кнопки, иначе список уезжает под них.
-                        .padding(start = 16.dp, end = 88.dp, bottom = 16.dp)
-                )
-            }
+                    }
+                },
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    // Справа место под плавающие кнопки, иначе плашка уезжает под них.
+                    .padding(start = 16.dp, end = 88.dp, bottom = 16.dp)
+            )
         }
     }
 
@@ -212,13 +212,14 @@ fun MapScreen(
         val readyMap = map
         SaveRegionDialog(
             onDismiss = { showSaveDialog = false },
-            onConfirm = { name ->
+            onConfirm = { name, normalPressure ->
                 showSaveDialog = false
                 if (readyMap != null) {
                     viewModel.saveVisibleRegion(
                         name = name,
                         bounds = readyMap.projection.visibleRegion.latLngBounds,
-                        currentZoom = readyMap.cameraPosition.zoom
+                        currentZoom = readyMap.cameraPosition.zoom,
+                        normalPressureMmHg = normalPressure
                     )
                 }
             }
@@ -434,7 +435,7 @@ private fun SpotsLayer(
     }
 }
 
-private fun MapRegionEntity.toBounds(): LatLngBounds =
+private fun SavedMapEntity.toBounds(): LatLngBounds =
     LatLngBounds.Builder()
         .include(LatLng(north, east))
         .include(LatLng(south, west))
@@ -443,9 +444,10 @@ private fun MapRegionEntity.toBounds(): LatLngBounds =
 @Composable
 private fun SaveRegionDialog(
     onDismiss: () -> Unit,
-    onConfirm: (String) -> Unit
+    onConfirm: (name: String, normalPressureMmHg: Double?) -> Unit
 ) {
     var name by remember { mutableStateOf("") }
+    var normalPressure by remember { mutableStateOf("") }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -457,14 +459,28 @@ private fun SaveRegionDialog(
                 OutlinedTextField(
                     value = name,
                     onValueChange = { name = it },
-                    label = { Text("Название") },
+                    label = { Text("Название района") },
                     singleLine = true
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = normalPressure,
+                    onValueChange = { input -> normalPressure = input.filter { it.isDigit() } },
+                    label = { Text("Норма давления, мм рт. ст.") },
+                    singleLine = true
+                )
+                Text(
+                    text = "Необязательно, но именно от неё считается клёв: у каждого " +
+                        "водоёма свой привычный фон. Позже можно задать в списке карт.",
+                    style = MaterialTheme.typography.bodySmall
                 )
             }
         },
         confirmButton = {
             TextButton(
-                onClick = { onConfirm(name.ifBlank { "Без названия" }) }
+                onClick = {
+                    onConfirm(name.ifBlank { "Мой район" }, normalPressure.toDoubleOrNull())
+                }
             ) {
                 Text("Скачать")
             }
@@ -512,11 +528,15 @@ private fun DownloadStatusBanner(
     }
 }
 
+/**
+ * Какой район сейчас активен: от него зависят погода и клёв, поэтому это
+ * первое, что рыболов должен видеть на карте.
+ */
 @Composable
-private fun SavedRegionsPanel(
-    regions: List<MapRegionEntity>,
-    onDelete: (MapRegionEntity) -> Unit,
-    onOpen: (MapRegionEntity) -> Unit,
+private fun ActiveMapBanner(
+    map: SavedMapEntity?,
+    onOpenList: () -> Unit,
+    onShowOnMap: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     Card(
@@ -524,37 +544,29 @@ private fun SavedRegionsPanel(
         elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
     ) {
         Column(modifier = Modifier.padding(12.dp)) {
-            Text(
-                text = "Офлайн-области",
-                style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.Bold
-            )
-            LazyColumn(
-                modifier = Modifier.heightIn(max = 160.dp),
-                verticalArrangement = Arrangement.spacedBy(4.dp)
-            ) {
-                items(regions) { region ->
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column(
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            TextButton(onClick = { onOpen(region) }) {
-                                Text(region.name)
-                            }
-                            if (region.sizeBytes > 0) {
-                                Text(
-                                    text = "${region.sizeBytes / 1024} КБ",
-                                    style = MaterialTheme.typography.bodySmall
-                                )
-                            }
-                        }
-                        IconButton(onClick = { onDelete(region) }) {
-                            Icon(Icons.Default.Delete, contentDescription = "Удалить область")
-                        }
-                    }
+            if (map == null) {
+                Text(
+                    text = "Район не выбран",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    text = "Сохраните область — по ней пойдут погода и расчёт клёва.",
+                    style = MaterialTheme.typography.bodySmall
+                )
+            } else {
+                Text(
+                    text = map.name,
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    text = "Активный район · ${map.sizeBytes / 1024 / 1024} МБ",
+                    style = MaterialTheme.typography.bodySmall
+                )
+                Row {
+                    TextButton(onClick = onShowOnMap) { Text("Показать") }
+                    TextButton(onClick = onOpenList) { Text("Все карты") }
                 }
             }
         }

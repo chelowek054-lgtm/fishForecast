@@ -6,7 +6,7 @@ import com.example.fishforecast.data.local.AppDatabase
 import com.example.fishforecast.data.local.dao.CatchDao
 import com.example.fishforecast.data.local.dao.FishDao
 import com.example.fishforecast.data.local.dao.FishingSpotDao
-import com.example.fishforecast.data.local.dao.MapRegionDao
+import com.example.fishforecast.data.local.dao.SavedMapDao
 import com.example.fishforecast.data.local.dao.WeatherDao
 import dagger.Module
 import dagger.Provides
@@ -26,7 +26,7 @@ object DatabaseModule {
             context,
             AppDatabase::class.java,
             "fish_forecast_db"
-        ).addMigrations(AppDatabase.MIGRATION_1_2, AppDatabase.MIGRATION_2_3, AppDatabase.MIGRATION_3_4, AppDatabase.MIGRATION_4_5).build()
+        ).addMigrations(AppDatabase.MIGRATION_1_2, AppDatabase.MIGRATION_2_3, AppDatabase.MIGRATION_3_4, AppDatabase.MIGRATION_4_5, AppDatabase.MIGRATION_5_6).build()
     }
 
     @Provides
@@ -40,8 +40,8 @@ object DatabaseModule {
     }
 
     @Provides
-    fun provideMapRegionDao(database: AppDatabase): MapRegionDao {
-        return database.mapRegionDao()
+    fun provideSavedMapDao(database: AppDatabase): SavedMapDao {
+        return database.savedMapDao()
     }
 
     @Provides

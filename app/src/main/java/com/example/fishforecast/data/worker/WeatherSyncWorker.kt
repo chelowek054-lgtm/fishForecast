@@ -9,8 +9,8 @@ import androidx.work.NetworkType
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
+import com.example.fishforecast.data.repository.FishingContextRepository
 import com.example.fishforecast.data.repository.WeatherRepository
-import com.example.fishforecast.domain.location.LocationTracker
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
 import java.util.concurrent.TimeUnit
@@ -24,15 +24,17 @@ class WeatherSyncWorker @AssistedInject constructor(
     @Assisted context: Context,
     @Assisted params: WorkerParameters,
     private val repository: WeatherRepository,
-    private val locationTracker: LocationTracker
+    private val fishingContext: FishingContextRepository
 ) : CoroutineWorker(context, params) {
 
     override suspend fun doWork(): Result {
-        val location = locationTracker.getCurrentLocation() ?: return Result.retry()
+        // Прогноз обновляется для выбранного района, а не для того места, где
+        // рыболов оказался с телефоном.
+        val map = fishingContext.currentMap() ?: return Result.success()
 
-        return repository.fetchWeather(location.latitude, location.longitude).fold(
+        return fishingContext.refreshWeather().fold(
             onSuccess = {
-                repository.cleanOldData()
+                repository.cleanOldData(map.id)
                 Result.success()
             },
             onFailure = { Result.retry() }

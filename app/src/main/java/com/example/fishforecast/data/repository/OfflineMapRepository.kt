@@ -1,8 +1,8 @@
 package com.example.fishforecast.data.repository
 
 import android.app.Application
-import com.example.fishforecast.data.local.dao.MapRegionDao
-import com.example.fishforecast.data.local.entities.MapRegionEntity
+import com.example.fishforecast.data.local.dao.SavedMapDao
+import com.example.fishforecast.data.local.entities.SavedMapEntity
 import com.example.fishforecast.ui.map.MapConfig
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
@@ -29,9 +29,9 @@ sealed interface RegionDownloadState {
 @Singleton
 class OfflineMapRepository @Inject constructor(
     private val application: Application,
-    private val dao: MapRegionDao
+    private val dao: SavedMapDao
 ) {
-    val regions: Flow<List<MapRegionEntity>> = dao.getRegions()
+    val regions: Flow<List<SavedMapEntity>> = dao.getRegions()
 
     private val offlineManager: OfflineManager
         get() = OfflineManager.getInstance(application)
@@ -45,7 +45,8 @@ class OfflineMapRepository @Inject constructor(
         name: String,
         bounds: LatLngBounds,
         minZoom: Double,
-        maxZoom: Double
+        maxZoom: Double,
+        normalPressureMmHg: Double? = null
     ): Flow<RegionDownloadState> = callbackFlow {
         val definition = OfflineTilePyramidRegionDefinition(
             MapConfig.STYLE_URL,
@@ -101,7 +102,7 @@ class OfflineMapRepository @Inject constructor(
                     // она останется в списке и её можно будет удалить.
                     launch {
                         dao.insertRegion(
-                            MapRegionEntity(
+                            SavedMapEntity(
                                 name = name,
                                 offlineRegionId = offlineRegion.id,
                                 north = bounds.latitudeNorth,
@@ -109,7 +110,8 @@ class OfflineMapRepository @Inject constructor(
                                 east = bounds.longitudeEast,
                                 west = bounds.longitudeWest,
                                 minZoom = minZoom,
-                                maxZoom = maxZoom
+                                maxZoom = maxZoom,
+                                normalPressureMmHg = normalPressureMmHg
                             )
                         )
                     }
@@ -127,7 +129,7 @@ class OfflineMapRepository @Inject constructor(
     }
 
     /** Удаляет и запись, и скачанные тайлы — иначе база MapLibre растёт молча. */
-    suspend fun deleteRegion(region: MapRegionEntity) {
+    suspend fun deleteRegion(region: SavedMapEntity) {
         dao.deleteRegion(region)
         deleteOfflineTiles(region.offlineRegionId)
     }
