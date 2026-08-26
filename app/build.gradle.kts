@@ -1,5 +1,3 @@
-import java.util.Properties
-
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
@@ -7,15 +5,6 @@ plugins {
     alias(libs.plugins.hilt.android)
     alias(libs.plugins.ksp)
     alias(libs.plugins.kotlin.serialization)
-}
-
-// Ключи спутниковых провайдеров живут в local.properties: этот файл не
-// попадает в git, поэтому ключ не утекает в историю репозитория.
-val localProperties = Properties().apply {
-    val file = rootProject.file("local.properties")
-    if (file.exists()) {
-        file.inputStream().use { stream -> load(stream) }
-    }
 }
 
 android {
@@ -30,17 +19,6 @@ android {
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-
-        buildConfigField(
-            "String",
-            "MAPTILER_KEY",
-            "\"${localProperties.getProperty("MAPTILER_KEY", "").trim()}\""
-        )
-        buildConfigField(
-            "String",
-            "MAPBOX_TOKEN",
-            "\"${localProperties.getProperty("MAPBOX_TOKEN", "").trim()}\""
-        )
     }
 
     buildTypes {
@@ -62,7 +40,6 @@ android {
     }
     buildFeatures {
         compose = true
-        buildConfig = true
     }
     buildToolsVersion = "36.1.0"
 }

@@ -594,14 +594,8 @@ private fun ActiveMapBanner(
                 if (baseLayer == BaseLayer.SATELLITE) {
                     // Офлайн сохраняется схема, поэтому про снимки честно
                     // предупреждаем заранее, а не показываем пустой экран.
-                    // Заодно видно, какой источник работает: без ключа это
-                    // Sentinel-2 с разрешением 10 м, и это не поломка.
                     Text(
-                        text = if (MapConfig.hasDetailedSatellite) {
-                            "Снимки ${MapConfig.satelliteProviderName} · из сети"
-                        } else {
-                            "Sentinel-2, 10 м/пиксель · детальнее — по ключу провайдера"
-                        },
+                        text = "Снимки грузятся из сети",
                         style = MaterialTheme.typography.bodySmall
                     )
                 }

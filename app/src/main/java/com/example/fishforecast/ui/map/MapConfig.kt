@@ -1,7 +1,5 @@
 package com.example.fishforecast.ui.map
 
-import com.example.fishforecast.BuildConfig
-
 /** Что рисуется под точками: схема или снимок со спутника. */
 enum class BaseLayer {
     SCHEME,
@@ -41,85 +39,8 @@ object MapConfig {
      */
     const val MAX_SATELLITE_ZOOM = 14
 
-    /**
-     * Детальные снимки берутся у провайдера по ключу — только они дают
-     * разрешение около метра. Ключ лежит в local.properties и не попадает
-     * в репозиторий; без него остаётся Sentinel-2, который работает всегда.
-     *
-     * Предзагрузка платных тайлов в офлайн запрещена условиями обоих
-     * провайдеров, поэтому детальный слой доступен только при сети.
-     */
-    private val detailedSatellite: DetailedSatellite? = when {
-        BuildConfig.MAPTILER_KEY.isNotBlank() -> DetailedSatellite(
-            name = "MapTiler",
-            tileUrl = "https://api.maptiler.com/tiles/satellite-v2/{z}/{x}/{y}.jpg" +
-                "?key=${BuildConfig.MAPTILER_KEY}",
-            maxZoom = 20,
-            attribution = "© MapTiler © OpenStreetMap contributors"
-        )
-
-        BuildConfig.MAPBOX_TOKEN.isNotBlank() -> DetailedSatellite(
-            name = "Mapbox",
-            tileUrl = "https://api.mapbox.com/v4/mapbox.satellite/{z}/{x}/{y}@2x.jpg90" +
-                "?access_token=${BuildConfig.MAPBOX_TOKEN}",
-            maxZoom = 20,
-            attribution = "© Mapbox © Maxar"
-        )
-
-        else -> null
-    }
-
-    /** Есть ли детальный источник: от этого зависит подпись на экране. */
-    val hasDetailedSatellite: Boolean get() = detailedSatellite != null
-
-    val satelliteProviderName: String get() = detailedSatellite?.name ?: "Sentinel-2"
-
-    /** Стиль снимков: детальный, если ключ задан, иначе открытый Sentinel-2. */
-    val satelliteStyleJson: String
-        get() = detailedSatellite?.let { provider ->
-            rasterStyle(
-                sourceId = "satellite",
-                tileUrl = provider.tileUrl,
-                maxZoom = provider.maxZoom,
-                attribution = provider.attribution
-            )
-        } ?: sentinelStyleJson
-
-    private data class DetailedSatellite(
-        val name: String,
-        val tileUrl: String,
-        val maxZoom: Int,
-        val attribution: String
-    )
-
-    private fun rasterStyle(
-        sourceId: String,
-        tileUrl: String,
-        maxZoom: Int,
-        attribution: String
-    ): String = """
-        {
-          "version": 8,
-          "sources": {
-            "$sourceId": {
-              "type": "raster",
-              "tiles": ["$tileUrl"],
-              "tileSize": 256,
-              "maxzoom": $maxZoom,
-              "attribution": "$attribution"
-            }
-          },
-          "layers": [
-            {
-              "id": "$sourceId",
-              "type": "raster",
-              "source": "$sourceId"
-            }
-          ]
-        }
-    """.trimIndent()
-
-    private val sentinelStyleJson: String = """
+    /** Стиль снимков. Источник открытый, поэтому ключи не нужны. */
+    val satelliteStyleJson: String = """
         {
           "version": 8,
           "sources": {

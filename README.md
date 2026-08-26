@@ -26,42 +26,17 @@ ANDROID_HOME="C:/Users/ИМЯ/AppData/Local/Android/Sdk" ./gradlew :app:assemble
 ./gradlew :app:testDebugUnitTest
 ```
 
-## Ключи карт
+## Карты
 
-Скопируйте шаблон и заполните его — файл `local.properties` в `.gitignore`,
-ключи в репозиторий не попадают:
+Ключи и регистрация не нужны — оба источника открытые.
 
-```bash
-cp local.properties.example local.properties
-```
-
-### Схема карты
-
-Работает сразу, ключ не нужен: OpenFreeMap (данные OpenStreetMap).
-Адрес стиля — константа `STYLE_URL` в
-[`ui/map/MapConfig.kt`](app/src/main/java/com/example/fishforecast/ui/map/MapConfig.kt).
-
-### Спутниковые снимки
-
-| Источник | Разрешение | Ключ | Офлайн |
+| Слой | Источник | Разрешение | Офлайн |
 |---|---|---|---|
-| Sentinel-2 cloudless (EOX) | 10 м/пиксель, до 14-го масштаба | не нужен | разрешён лицензией |
-| MapTiler Satellite | около метра, до 20-го масштаба | `MAPTILER_KEY` | запрещён тарифом |
-| Mapbox Satellite | около метра, до 20-го масштаба | `MAPBOX_TOKEN` | запрещён тарифом |
+| Схема | OpenFreeMap (данные OpenStreetMap) | векторная | да |
+| Спутник | Sentinel-2 cloudless (EOX) | 10 м/пиксель, до 14-го масштаба | нет, только при сети |
 
-Без ключа приложение показывает Sentinel-2 и объясняет это на экране карты —
-отсутствие ключа не ломает работу. Достаточно **одного** ключа из двух:
-
-```properties
-MAPTILER_KEY=ваш_ключ
-```
-
-Ключи берутся на [cloud.maptiler.com](https://cloud.maptiler.com) (регистрация без карты,
-на карте остаётся логотип MapTiler) или [account.mapbox.com](https://account.mapbox.com)
-(50 000 загрузок в месяц, коммерческое использование разрешено тарифом).
-
-После правки `local.properties` пересоберите приложение: ключ подставляется на этапе
-сборки через `buildConfigField`.
+Адреса источников — константы в
+[`ui/map/MapConfig.kt`](app/src/main/java/com/example/fishforecast/ui/map/MapConfig.kt).
 
 ## Перед публикацией
 
