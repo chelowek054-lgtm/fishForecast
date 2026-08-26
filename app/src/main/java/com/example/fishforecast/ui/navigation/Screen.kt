@@ -15,6 +15,9 @@ object BiteRoute
 object MapRoute
 
 @Serializable
+object JournalRoute
+
+@Serializable
 object LibraryRoute
 
 @Serializable

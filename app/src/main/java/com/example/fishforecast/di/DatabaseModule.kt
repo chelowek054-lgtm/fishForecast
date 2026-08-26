@@ -3,6 +3,7 @@ package com.example.fishforecast.di
 import android.content.Context
 import androidx.room.Room
 import com.example.fishforecast.data.local.AppDatabase
+import com.example.fishforecast.data.local.dao.CatchDao
 import com.example.fishforecast.data.local.dao.FishDao
 import com.example.fishforecast.data.local.dao.FishingSpotDao
 import com.example.fishforecast.data.local.dao.MapRegionDao
@@ -25,7 +26,7 @@ object DatabaseModule {
             context,
             AppDatabase::class.java,
             "fish_forecast_db"
-        ).addMigrations(AppDatabase.MIGRATION_1_2, AppDatabase.MIGRATION_2_3).build()
+        ).addMigrations(AppDatabase.MIGRATION_1_2, AppDatabase.MIGRATION_2_3, AppDatabase.MIGRATION_3_4).build()
     }
 
     @Provides
@@ -46,5 +47,10 @@ object DatabaseModule {
     @Provides
     fun provideFishingSpotDao(database: AppDatabase): FishingSpotDao {
         return database.fishingSpotDao()
+    }
+
+    @Provides
+    fun provideCatchDao(database: AppDatabase): CatchDao {
+        return database.catchDao()
     }
 }

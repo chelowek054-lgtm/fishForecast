@@ -16,6 +16,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.MyLocation
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.AlertDialog
@@ -72,6 +73,7 @@ import org.maplibre.android.plugins.annotation.OnCircleClickListener
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MapScreen(
+    onOpenLibrary: () -> Unit = {},
     viewModel: MapViewModel = hiltViewModel()
 ) {
     val userLocation by viewModel.userLocation
@@ -94,6 +96,9 @@ fun MapScreen(
             TopAppBar(
                 title = { Text("Карта") },
                 actions = {
+                    IconButton(onClick = onOpenLibrary) {
+                        Icon(Icons.Default.Folder, contentDescription = "Хранилище файлов")
+                    }
                     IconButton(onClick = { showShareMenu = true }) {
                         Icon(Icons.Default.Share, contentDescription = "Поделиться")
                     }

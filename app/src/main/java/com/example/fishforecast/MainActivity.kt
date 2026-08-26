@@ -13,6 +13,7 @@ import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.Cloud
 import androidx.compose.material.icons.filled.Insights
 import androidx.compose.material.icons.filled.Folder
+import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material.icons.filled.Map
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
@@ -35,10 +36,12 @@ import com.example.fishforecast.ui.addeditfish.AddEditFishScreen
 import com.example.fishforecast.ui.fishlist.FishListScreen
 import com.example.fishforecast.ui.navigation.AddEditFishRoute
 import com.example.fishforecast.ui.bite.BiteScreen
+import com.example.fishforecast.ui.journal.JournalScreen
 import com.example.fishforecast.ui.library.LibraryScreen
 import com.example.fishforecast.ui.map.MapScreen
 import com.example.fishforecast.ui.navigation.BiteRoute
 import com.example.fishforecast.ui.navigation.FishListRoute
+import com.example.fishforecast.ui.navigation.JournalRoute
 import com.example.fishforecast.ui.navigation.LibraryRoute
 import com.example.fishforecast.ui.navigation.MapRoute
 import com.example.fishforecast.ui.navigation.WeatherRoute
@@ -72,7 +75,7 @@ private val bottomNavItems = listOf(
     BottomNavItem(WeatherRoute, WeatherRoute::class, "Погода", Icons.Default.Cloud),
     BottomNavItem(BiteRoute, BiteRoute::class, "Клёв", Icons.Default.Insights),
     BottomNavItem(MapRoute, MapRoute::class, "Карта", Icons.Default.Map),
-    BottomNavItem(LibraryRoute, LibraryRoute::class, "Файлы", Icons.Default.Folder)
+    BottomNavItem(JournalRoute, JournalRoute::class, "Журнал", Icons.AutoMirrored.Filled.MenuBook)
 )
 
 @Composable
@@ -148,7 +151,10 @@ fun FishForecastAppNavigation() {
                 BiteScreen()
             }
             composable<MapRoute> {
-                MapScreen()
+                MapScreen(onOpenLibrary = { navController.navigate(LibraryRoute) })
+            }
+            composable<JournalRoute> {
+                JournalScreen()
             }
             composable<LibraryRoute> {
                 LibraryScreen()

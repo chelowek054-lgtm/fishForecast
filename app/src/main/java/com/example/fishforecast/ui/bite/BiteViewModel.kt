@@ -14,6 +14,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import java.time.LocalDateTime
+import java.time.temporal.ChronoUnit
 import java.time.format.DateTimeFormatter
 import javax.inject.Inject
 
@@ -47,7 +48,8 @@ class BiteViewModel @Inject constructor(
         // но показываем только то, что впереди: прошедшие часы решению
         // «ехать или нет» не помогают.
         val calculated = selected?.let { calculateFishActivity(it, weather) }.orEmpty()
-        val fromNow = LocalDateTime.now().format(HOUR_FORMAT)
+        // Час усекается: текущий час ещё идёт, и выбрасывать его нельзя.
+        val fromNow = LocalDateTime.now().truncatedTo(ChronoUnit.HOURS).format(HOUR_FORMAT)
 
         BiteUiState(
             fishList = fishList,

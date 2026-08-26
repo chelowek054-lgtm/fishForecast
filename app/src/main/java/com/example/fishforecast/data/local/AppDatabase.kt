@@ -4,10 +4,12 @@ import androidx.room.Database
 import androidx.room.RoomDatabase
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
+import com.example.fishforecast.data.local.dao.CatchDao
 import com.example.fishforecast.data.local.dao.FishDao
 import com.example.fishforecast.data.local.dao.FishingSpotDao
 import com.example.fishforecast.data.local.dao.MapRegionDao
 import com.example.fishforecast.data.local.dao.WeatherDao
+import com.example.fishforecast.data.local.entities.CatchEntity
 import com.example.fishforecast.data.local.entities.FishEntity
 import com.example.fishforecast.data.local.entities.FishingSpotEntity
 import com.example.fishforecast.data.local.entities.MapRegionEntity
@@ -18,9 +20,10 @@ import com.example.fishforecast.data.local.entities.WeatherEntity
         FishEntity::class,
         WeatherEntity::class,
         MapRegionEntity::class,
-        FishingSpotEntity::class
+        FishingSpotEntity::class,
+        CatchEntity::class
     ],
-    version = 3,
+    version = 4,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -28,6 +31,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun weatherDao(): WeatherDao
     abstract fun mapRegionDao(): MapRegionDao
     abstract fun fishingSpotDao(): FishingSpotDao
+    abstract fun catchDao(): CatchDao
 
     companion object {
         /** Офлайн-области (Фаза 3). Справочник рыб пересоздавать нельзя — он правится вручную. */
@@ -71,6 +75,34 @@ abstract class AppDatabase : RoomDatabase() {
                     """.trimIndent()
                 )
                 db.execSQL("CREATE INDEX IF NOT EXISTS `index_fishing_spots_fishId` ON `fishing_spots` (`fishId`)")
+            }
+        }
+
+        /** Журнал трофеев (Фаза 5). */
+        val MIGRATION_3_4 = object : Migration(3, 4) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `catches` (
+                        `id` INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+                        `fishId` INTEGER,
+                        `spotId` INTEGER,
+                        `photoPath` TEXT,
+                        `weightGrams` INTEGER,
+                        `lengthCm` INTEGER,
+                        `note` TEXT NOT NULL,
+                        `caughtAt` INTEGER NOT NULL,
+                        `temperature` REAL,
+                        `pressureMmHg` REAL,
+                        `windSpeed` REAL,
+                        `biteScore` INTEGER,
+                        FOREIGN KEY(`fishId`) REFERENCES `fish`(`id`) ON UPDATE NO ACTION ON DELETE SET NULL,
+                        FOREIGN KEY(`spotId`) REFERENCES `fishing_spots`(`id`) ON UPDATE NO ACTION ON DELETE SET NULL
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_catches_fishId` ON `catches` (`fishId`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_catches_spotId` ON `catches` (`spotId`)")
             }
         }
     }
