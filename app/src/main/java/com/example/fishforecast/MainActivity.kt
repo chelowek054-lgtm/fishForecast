@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.Cloud
+import androidx.compose.material.icons.filled.Insights
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Map
 import androidx.compose.material3.Icon
@@ -33,8 +34,10 @@ import androidx.navigation.compose.rememberNavController
 import com.example.fishforecast.ui.addeditfish.AddEditFishScreen
 import com.example.fishforecast.ui.fishlist.FishListScreen
 import com.example.fishforecast.ui.navigation.AddEditFishRoute
+import com.example.fishforecast.ui.bite.BiteScreen
 import com.example.fishforecast.ui.library.LibraryScreen
 import com.example.fishforecast.ui.map.MapScreen
+import com.example.fishforecast.ui.navigation.BiteRoute
 import com.example.fishforecast.ui.navigation.FishListRoute
 import com.example.fishforecast.ui.navigation.LibraryRoute
 import com.example.fishforecast.ui.navigation.MapRoute
@@ -67,8 +70,9 @@ private data class BottomNavItem(
 private val bottomNavItems = listOf(
     BottomNavItem(FishListRoute, FishListRoute::class, "Рыбы", Icons.AutoMirrored.Filled.List),
     BottomNavItem(WeatherRoute, WeatherRoute::class, "Погода", Icons.Default.Cloud),
+    BottomNavItem(BiteRoute, BiteRoute::class, "Клёв", Icons.Default.Insights),
     BottomNavItem(MapRoute, MapRoute::class, "Карта", Icons.Default.Map),
-    BottomNavItem(LibraryRoute, LibraryRoute::class, "Хранилище", Icons.Default.Folder)
+    BottomNavItem(LibraryRoute, LibraryRoute::class, "Файлы", Icons.Default.Folder)
 )
 
 @Composable
@@ -139,6 +143,9 @@ fun FishForecastAppNavigation() {
             }
             composable<WeatherRoute> {
                 WeatherScreen()
+            }
+            composable<BiteRoute> {
+                BiteScreen()
             }
             composable<MapRoute> {
                 MapScreen()

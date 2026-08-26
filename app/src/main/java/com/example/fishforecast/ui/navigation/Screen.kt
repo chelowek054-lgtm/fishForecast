@@ -9,6 +9,9 @@ object FishListRoute
 object WeatherRoute
 
 @Serializable
+object BiteRoute
+
+@Serializable
 object MapRoute
 
 @Serializable
