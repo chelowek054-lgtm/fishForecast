@@ -45,6 +45,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -176,12 +177,18 @@ fun MapScreen(
                 modifier = Modifier.fillMaxSize()
             )
 
-            // Стиль переустанавливается при смене слоя. Аннотации живут в
-            // стиле, поэтому слой точек пересоздаётся следом — он завязан на
-            // объект Style, а не на карту.
+            // Стиль переустанавливается при смене слоя. Аннотации живут
+            // внутри стиля, поэтому сначала снимается слой точек и только
+            // потом меняется стиль: иначе менеджер аннотаций переживает свой
+            // Style и обращается к освобождённой памяти в рендер-треде.
             LaunchedEffect(map, baseLayer) {
                 val readyMap = map ?: return@LaunchedEffect
+
                 mapStyle = null
+                // Ждём кадр: за него композиция успевает убрать слой точек и
+                // вызвать его onDispose.
+                withFrameNanos { }
+
                 val builder = when (baseLayer) {
                     BaseLayer.SCHEME -> Style.Builder().fromUri(MapConfig.STYLE_URL)
                     BaseLayer.SATELLITE -> Style.Builder().fromJson(MapConfig.satelliteStyleJson)
@@ -627,7 +634,10 @@ private fun rememberMapViewWithLifecycle(): MapView {
                 Lifecycle.Event.ON_RESUME -> mapView.onResume()
                 Lifecycle.Event.ON_PAUSE -> mapView.onPause()
                 Lifecycle.Event.ON_STOP -> mapView.onStop()
-                Lifecycle.Event.ON_DESTROY -> mapView.onDestroy()
+                // ON_DESTROY намеренно не обрабатывается: уничтожение идёт
+                // ниже, в onDispose. Иначе onDestroy вызывается дважды —
+                // нативные ресурсы освобождаются повторно, и рендер-тред
+                // падает с SIGSEGV.
                 else -> Unit
             }
         }
@@ -635,7 +645,6 @@ private fun rememberMapViewWithLifecycle(): MapView {
 
         onDispose {
             lifecycle.removeObserver(observer)
-            mapView.onStop()
             mapView.onDestroy()
         }
     }
