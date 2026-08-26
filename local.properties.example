@@ -4,4 +4,5 @@
 #   cp local.properties.example local.properties
 #
 # Путь к Android SDK. Android Studio прописывает его сам при первом открытии.
-sdk.dir=C\:\Users\ИМЯ\AppData\Local\Android\Sdk
+# Прямые слэши работают и на Windows, а обратные пришлось бы экранировать.
+sdk.dir=C:/Users/ИМЯ/AppData/Local/Android/Sdk
