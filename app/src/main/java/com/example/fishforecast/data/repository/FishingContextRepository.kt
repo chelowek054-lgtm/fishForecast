@@ -5,6 +5,7 @@ import com.example.fishforecast.data.local.dao.SavedMapDao
 import com.example.fishforecast.data.local.entities.FishingSpotEntity
 import com.example.fishforecast.data.local.entities.SavedMapEntity
 import com.example.fishforecast.data.local.entities.WeatherEntity
+import com.example.fishforecast.ui.map.BaseLayer
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
@@ -61,6 +62,13 @@ class FishingContextRepository @Inject constructor(
             }
         }
     }
+
+    /** Схема по умолчанию: она векторная и работает офлайн. */
+    val baseLayer: Flow<BaseLayer> = activeMapStore.baseLayer.map { saved ->
+        BaseLayer.entries.firstOrNull { it.name == saved } ?: BaseLayer.SCHEME
+    }
+
+    suspend fun setBaseLayer(layer: BaseLayer) = activeMapStore.setBaseLayer(layer.name)
 
     suspend fun setActiveMap(id: Int) = activeMapStore.setActiveMapId(id)
 

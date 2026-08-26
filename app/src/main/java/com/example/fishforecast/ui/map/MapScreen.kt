@@ -17,6 +17,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Folder
+import androidx.compose.material.icons.filled.Layers
 import androidx.compose.material.icons.filled.MyLocation
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.AlertDialog
@@ -78,6 +79,7 @@ fun MapScreen(
 ) {
     val userLocation by viewModel.userLocation
     val activeMap by viewModel.activeMap.collectAsState()
+    val baseLayer by viewModel.baseLayer.collectAsState()
     val downloadState by viewModel.downloadState
 
     var map by remember { mutableStateOf<MapLibreMap?>(null) }
@@ -96,6 +98,19 @@ fun MapScreen(
             TopAppBar(
                 title = { Text("Карта") },
                 actions = {
+                    IconButton(
+                        onClick = {
+                            viewModel.selectBaseLayer(
+                                if (baseLayer == BaseLayer.SCHEME) {
+                                    BaseLayer.SATELLITE
+                                } else {
+                                    BaseLayer.SCHEME
+                                }
+                            )
+                        }
+                    ) {
+                        Icon(Icons.Default.Layers, contentDescription = "Слой: ${baseLayer.title}")
+                    }
                     IconButton(onClick = onOpenLibrary) {
                         Icon(Icons.Default.Folder, contentDescription = "Хранилище файлов")
                     }
@@ -150,9 +165,6 @@ fun MapScreen(
             AndroidView(
                 factory = {
                     mapView.getMapAsync { readyMap ->
-                        readyMap.setStyle(MapConfig.STYLE_URL) { style ->
-                            mapStyle = style
-                        }
                         readyMap.addOnMapLongClickListener { point ->
                             newSpotPoint = point
                             true
@@ -163,6 +175,19 @@ fun MapScreen(
                 },
                 modifier = Modifier.fillMaxSize()
             )
+
+            // Стиль переустанавливается при смене слоя. Аннотации живут в
+            // стиле, поэтому слой точек пересоздаётся следом — он завязан на
+            // объект Style, а не на карту.
+            LaunchedEffect(map, baseLayer) {
+                val readyMap = map ?: return@LaunchedEffect
+                mapStyle = null
+                val builder = when (baseLayer) {
+                    BaseLayer.SCHEME -> Style.Builder().fromUri(MapConfig.STYLE_URL)
+                    BaseLayer.SATELLITE -> Style.Builder().fromJson(MapConfig.satelliteStyleJson)
+                }
+                readyMap.setStyle(builder) { style -> mapStyle = style }
+            }
 
             // Камера ждёт и готовую карту, и координаты: что придёт последним,
             // то и запускает центрирование.
@@ -192,6 +217,7 @@ fun MapScreen(
 
             ActiveMapBanner(
                 map = activeMap,
+                baseLayer = baseLayer,
                 onOpenList = onOpenLibrary,
                 onShowOnMap = {
                     activeMap?.let { current ->
@@ -535,6 +561,7 @@ private fun DownloadStatusBanner(
 @Composable
 private fun ActiveMapBanner(
     map: SavedMapEntity?,
+    baseLayer: BaseLayer,
     onOpenList: () -> Unit,
     onShowOnMap: () -> Unit,
     modifier: Modifier = Modifier
@@ -561,9 +588,17 @@ private fun ActiveMapBanner(
                     fontWeight = FontWeight.Bold
                 )
                 Text(
-                    text = "Активный район · ${map.sizeBytes / 1024 / 1024} МБ",
+                    text = "Активный район · ${map.sizeBytes / 1024 / 1024} МБ · ${baseLayer.title}",
                     style = MaterialTheme.typography.bodySmall
                 )
+                if (baseLayer == BaseLayer.SATELLITE) {
+                    // Офлайн сохраняется схема, поэтому про снимки честно
+                    // предупреждаем заранее, а не показываем пустой экран.
+                    Text(
+                        text = "Снимки грузятся из сети",
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                }
                 Row {
                     TextButton(onClick = onShowOnMap) { Text("Показать") }
                     TextButton(onClick = onOpenList) { Text("Все карты") }

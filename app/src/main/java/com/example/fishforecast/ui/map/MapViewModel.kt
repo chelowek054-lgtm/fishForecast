@@ -34,6 +34,13 @@ class MapViewModel @Inject constructor(
     private val _userLocation = mutableStateOf<Pair<Double, Double>?>(null)
     val userLocation: State<Pair<Double, Double>?> = _userLocation
 
+    val baseLayer: StateFlow<BaseLayer> = fishingContext.baseLayer
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = BaseLayer.SCHEME
+        )
+
     val activeMap: StateFlow<SavedMapEntity?> = fishingContext.activeMap
         .stateIn(
             scope = viewModelScope,
@@ -99,6 +106,10 @@ class MapViewModel @Inject constructor(
                 }
             }
         }
+    }
+
+    fun selectBaseLayer(layer: BaseLayer) {
+        viewModelScope.launch { fishingContext.setBaseLayer(layer) }
     }
 
     fun dismissDownloadState() {

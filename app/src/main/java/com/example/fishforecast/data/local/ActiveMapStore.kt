@@ -3,6 +3,7 @@ package com.example.fishforecast.data.local
 import android.content.Context
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
+import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
@@ -24,6 +25,15 @@ class ActiveMapStore @Inject constructor(
         preferences[ACTIVE_MAP_ID]
     }
 
+    /** Схема или спутник — выбор рыболова, а не свойство района. */
+    val baseLayer: Flow<String?> = context.settings.data.map { preferences ->
+        preferences[BASE_LAYER]
+    }
+
+    suspend fun setBaseLayer(name: String) {
+        context.settings.edit { preferences -> preferences[BASE_LAYER] = name }
+    }
+
     suspend fun setActiveMapId(id: Int?) {
         context.settings.edit { preferences ->
             if (id == null) {
@@ -36,5 +46,6 @@ class ActiveMapStore @Inject constructor(
 
     private companion object {
         val ACTIVE_MAP_ID = intPreferencesKey("active_map_id")
+        val BASE_LAYER = stringPreferencesKey("base_layer")
     }
 }

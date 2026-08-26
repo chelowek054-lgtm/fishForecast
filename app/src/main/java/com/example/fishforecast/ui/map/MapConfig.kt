@@ -1,5 +1,17 @@
 package com.example.fishforecast.ui.map
 
+/** Что рисуется под точками: схема или снимок со спутника. */
+enum class BaseLayer {
+    SCHEME,
+    SATELLITE;
+
+    val title: String
+        get() = when (this) {
+            SCHEME -> "Схема"
+            SATELLITE -> "Спутник"
+        }
+}
+
 /**
  * Источник карты — единственное место, которое нужно поменять при переходе
  * на собственный эндпоинт тайлов: скачивание офлайн-областей подхватит
@@ -15,6 +27,40 @@ package com.example.fishforecast.ui.map
  */
 object MapConfig {
     const val STYLE_URL = "https://tiles.openfreemap.org/styles/liberty"
+
+    /**
+     * Спутниковый слой — Sentinel-2 cloudless (EOX), безоблачная мозаика
+     * с открытой лицензией CC BY. Разрешение снимков 10 м на пиксель,
+     * поэтому дальше 14-го масштаба тайлов просто нет — это ровно наш
+     * потолок для офлайн-областей.
+     *
+     * Стиль задаётся JSON, а не ссылкой: сервис отдаёт тайлы, но не
+     * готовый style-документ. Атрибуция обязательна по лицензии.
+     */
+    const val MAX_SATELLITE_ZOOM = 14
+    val satelliteStyleJson: String = """
+        {
+          "version": 8,
+          "sources": {
+            "s2cloudless": {
+              "type": "raster",
+              "tiles": [
+                "https://tiles.maps.eox.at/wmts/1.0.0/s2cloudless-2024_3857/default/g/{z}/{y}/{x}.jpg"
+              ],
+              "tileSize": 256,
+              "maxzoom": $MAX_SATELLITE_ZOOM,
+              "attribution": "Sentinel-2 cloudless 2024 by EOX (CC BY 4.0)"
+            }
+          },
+          "layers": [
+            {
+              "id": "s2cloudless",
+              "type": "raster",
+              "source": "s2cloudless"
+            }
+          ]
+        }
+    """.trimIndent()
 
     /** Границы масштабов, в которых имеет смысл сохранять область. */
     const val MIN_OFFLINE_ZOOM = 8.0
