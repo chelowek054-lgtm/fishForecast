@@ -34,12 +34,12 @@ android {
         buildConfigField(
             "String",
             "MAPTILER_KEY",
-            "\"${localProperties.getProperty("MAPTILER_KEY", "")}\""
+            "\"${localProperties.getProperty("MAPTILER_KEY", "").trim()}\""
         )
         buildConfigField(
             "String",
             "MAPBOX_TOKEN",
-            "\"${localProperties.getProperty("MAPBOX_TOKEN", "")}\""
+            "\"${localProperties.getProperty("MAPBOX_TOKEN", "").trim()}\""
         )
     }
 
