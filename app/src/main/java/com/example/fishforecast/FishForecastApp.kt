@@ -3,6 +3,7 @@ package com.example.fishforecast
 import android.app.Application
 import androidx.hilt.work.HiltWorkerFactory
 import androidx.work.Configuration
+import com.example.fishforecast.data.worker.BiteAlertWorker
 import com.example.fishforecast.data.worker.WeatherSyncWorker
 import org.maplibre.android.MapLibre
 import dagger.hilt.android.HiltAndroidApp
@@ -27,5 +28,6 @@ class FishForecastApp : Application(), Configuration.Provider {
         MapLibre.getInstance(this)
 
         WeatherSyncWorker.schedule(this)
+        BiteAlertWorker.schedule(this)
     }
 }
