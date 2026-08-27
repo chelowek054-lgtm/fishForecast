@@ -80,6 +80,8 @@ fun MapScreen(
     viewModel: MapViewModel = hiltViewModel()
 ) {
     val userLocation by viewModel.userLocation
+    val focusRequests by viewModel.focusRequests
+    val locationError by viewModel.locationError
     val activeMap by viewModel.activeMap.collectAsState()
     val baseLayer by viewModel.baseLayer.collectAsState()
     val downloadState by viewModel.downloadState
@@ -197,15 +199,24 @@ fun MapScreen(
                 readyMap.setStyle(builder) { style -> mapStyle = style }
             }
 
-            // Камера ждёт и готовую карту, и координаты: что придёт последним,
-            // то и запускает центрирование.
-            LaunchedEffect(map, userLocation) {
+            // Камера едет на каждый запрос, а не на каждую новую координату:
+            // повторное нажатие кнопки со стоянки должно возвращать карту к
+            // рыболову, даже если он не сдвинулся с места.
+            LaunchedEffect(map, focusRequests) {
+                if (focusRequests == 0) return@LaunchedEffect
                 val readyMap = map ?: return@LaunchedEffect
                 val (lat, lon) = userLocation ?: return@LaunchedEffect
                 readyMap.animateCamera(
                     CameraUpdateFactory.newLatLngZoom(LatLng(lat, lon), MapConfig.DEFAULT_ZOOM)
                 )
             }
+
+            UserLocationLayer(
+                mapView = mapView,
+                map = map,
+                style = mapStyle,
+                location = userLocation
+            )
 
             SpotsLayer(
                 mapView = mapView,
@@ -214,6 +225,16 @@ fun MapScreen(
                 spots = spots,
                 onSpotClick = { selectedSpot = it }
             )
+
+            locationError?.let { message ->
+                LocationErrorBanner(
+                    message = message,
+                    onDismiss = { viewModel.dismissLocationError() },
+                    modifier = Modifier
+                        .align(Alignment.TopCenter)
+                        .padding(16.dp)
+                )
+            }
 
             DownloadStatusBanner(
                 state = downloadState,
@@ -440,6 +461,83 @@ private fun SpotDetailsDialog(
             }
         }
     )
+}
+
+/**
+ * Метка «я здесь»: точка с ореолом поверх карты.
+ *
+ * Рисуется тем же CircleManager, что и точки ловли, — свой стиль и ассеты
+ * ей не нужны, а значит метка одинаково видна на схеме и на спутнике.
+ */
+@Composable
+private fun UserLocationLayer(
+    mapView: MapView,
+    map: MapLibreMap?,
+    style: Style?,
+    location: Pair<Double, Double>?
+) {
+    val readyMap = map ?: return
+    val readyStyle = style ?: return
+
+    val circleManager = remember(readyMap, readyStyle) {
+        CircleManager(mapView, readyMap, readyStyle)
+    }
+
+    // Аннотации живут в нативном слое и переживают свой Style, если их не
+    // снять руками, — тогда рендер-тред обращается к освобождённой памяти.
+    DisposableEffect(circleManager) {
+        onDispose { circleManager.onDestroy() }
+    }
+
+    DisposableEffect(circleManager, location) {
+        circleManager.deleteAll()
+        location?.let { (lat, lon) ->
+            val point = LatLng(lat, lon)
+            circleManager.create(
+                CircleOptions()
+                    .withLatLng(point)
+                    .withCircleRadius(18f)
+                    .withCircleColor("#1E88E5")
+                    .withCircleOpacity(0.18f)
+            )
+            circleManager.create(
+                CircleOptions()
+                    .withLatLng(point)
+                    .withCircleRadius(7f)
+                    .withCircleColor("#1E88E5")
+                    .withCircleStrokeWidth(2.5f)
+                    .withCircleStrokeColor("#FFFFFF")
+            )
+        }
+        onDispose { }
+    }
+}
+
+/** Молчаливый отказ геолокации выглядит как сломанная кнопка. */
+@Composable
+private fun LocationErrorBanner(
+    message: String,
+    onDismiss: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Card(
+        modifier = modifier,
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.errorContainer
+        )
+    ) {
+        Row(
+            modifier = Modifier.padding(start = 16.dp, top = 8.dp, bottom = 8.dp, end = 8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = message,
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.weight(1f)
+            )
+            TextButton(onClick = onDismiss) { Text("Понятно") }
+        }
+    }
 }
 
 /**

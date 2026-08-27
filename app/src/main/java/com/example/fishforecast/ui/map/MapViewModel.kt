@@ -1,6 +1,7 @@
 package com.example.fishforecast.ui.map
 
 import androidx.compose.runtime.State
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -33,6 +34,18 @@ class MapViewModel @Inject constructor(
     /** Широта/долгота рыболова; null, пока позиция неизвестна. */
     private val _userLocation = mutableStateOf<Pair<Double, Double>?>(null)
     val userLocation: State<Pair<Double, Double>?> = _userLocation
+
+    /**
+     * Счётчик запросов «покажи, где я». Одних координат мало: рыболов
+     * отводит карту в сторону и жмёт кнопку снова, а позиция при этом не
+     * изменилась — центрировать надо по факту нажатия.
+     */
+    private val _focusRequests = mutableIntStateOf(0)
+    val focusRequests: State<Int> = _focusRequests
+
+    /** Почему не удалось определить позицию; null — всё в порядке. */
+    private val _locationError = mutableStateOf<String?>(null)
+    val locationError: State<String?> = _locationError
 
     val baseLayer: StateFlow<BaseLayer> = fishingContext.baseLayer
         .stateIn(
@@ -72,10 +85,20 @@ class MapViewModel @Inject constructor(
 
     fun locateUser() {
         viewModelScope.launch {
-            locationTracker.getCurrentLocation()?.let { location ->
-                _userLocation.value = location.latitude to location.longitude
+            val location = locationTracker.getCurrentLocation()
+            if (location == null) {
+                _locationError.value =
+                    "Не удалось определить местоположение: включите GPS и разрешите доступ"
+                return@launch
             }
+            _userLocation.value = location.latitude to location.longitude
+            _locationError.value = null
+            _focusRequests.intValue++
         }
+    }
+
+    fun dismissLocationError() {
+        _locationError.value = null
     }
 
     /**
