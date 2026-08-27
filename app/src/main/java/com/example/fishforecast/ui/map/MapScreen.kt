@@ -14,7 +14,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Draw
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Layers
@@ -26,6 +28,7 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
@@ -60,6 +63,11 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.example.fishforecast.data.local.entities.FishEntity
 import com.example.fishforecast.data.local.entities.FishingSpotEntity
 import com.example.fishforecast.data.local.entities.SpotPlacement
+import com.example.fishforecast.data.local.entities.SectorEntity
+import com.example.fishforecast.data.local.entities.ZoneEntity
+import com.example.fishforecast.data.local.entities.ZoneKind
+import com.example.fishforecast.domain.share.GeoPoint
+import com.example.fishforecast.domain.share.decodeOutline
 import com.example.fishforecast.data.local.entities.SavedMapEntity
 import com.example.fishforecast.data.repository.RegionDownloadState
 import com.example.fishforecast.domain.share.GpxWriter
@@ -73,6 +81,10 @@ import org.maplibre.android.maps.Style
 import org.maplibre.android.plugins.annotation.Circle
 import org.maplibre.android.plugins.annotation.CircleManager
 import org.maplibre.android.plugins.annotation.CircleOptions
+import org.maplibre.android.plugins.annotation.FillManager
+import org.maplibre.android.plugins.annotation.FillOptions
+import org.maplibre.android.plugins.annotation.LineManager
+import org.maplibre.android.plugins.annotation.LineOptions
 import org.maplibre.android.plugins.annotation.OnCircleClickListener
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -85,6 +97,11 @@ fun MapScreen(
     val focusRequests by viewModel.focusRequests
     val locationError by viewModel.locationError
     val activeMap by viewModel.activeMap.collectAsState()
+    val zones by viewModel.zones.collectAsState()
+    val sectors by viewModel.sectors.collectAsState()
+    val outline by viewModel.outline
+    val drawing by viewModel.drawing
+    var showZoneDialog by remember { mutableStateOf(false) }
     val baseLayer by viewModel.baseLayer.collectAsState()
     val downloadState by viewModel.downloadState
 
@@ -157,6 +174,19 @@ fun MapScreen(
         },
         floatingActionButton = {
             Column(horizontalAlignment = Alignment.End) {
+                if (activeMap != null) {
+                    SmallFloatingActionButton(
+                        onClick = {
+                            if (drawing) viewModel.cancelDrawing() else viewModel.startDrawing()
+                        }
+                    ) {
+                        Icon(
+                            imageVector = if (drawing) Icons.Default.Close else Icons.Default.Draw,
+                            contentDescription = if (drawing) "Отменить обводку" else "Обвести зону"
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(12.dp))
+                }
                 SmallFloatingActionButton(onClick = { viewModel.locateUser() }) {
                     Icon(Icons.Default.MyLocation, contentDescription = "Моё местоположение")
                 }
@@ -192,6 +222,12 @@ fun MapScreen(
                         readyMap.addOnMapLongClickListener { point ->
                             newSpotPoint = point
                             true
+                        }
+                        // Обводка ставит вершины обычным нажатием: длинное
+                        // уже занято точкой ловли, и держать палец на каждой
+                        // вершине контура было бы мучением.
+                        readyMap.addOnMapClickListener { point ->
+                            viewModel.addOutlinePoint(point.latitude, point.longitude)
                         }
                         map = readyMap
                     }
@@ -238,6 +274,15 @@ fun MapScreen(
                 location = userLocation
             )
 
+            ZonesLayer(
+                mapView = mapView,
+                map = map,
+                style = mapStyle,
+                zones = zones,
+                sectors = sectors,
+                outline = outline
+            )
+
             SpotsLayer(
                 mapView = mapView,
                 map = map,
@@ -250,6 +295,17 @@ fun MapScreen(
                 LocationErrorBanner(
                     message = message,
                     onDismiss = { viewModel.dismissLocationError() },
+                    modifier = Modifier
+                        .align(Alignment.TopCenter)
+                        .padding(16.dp)
+                )
+            }
+
+            if (drawing) {
+                DrawingPanel(
+                    pointCount = outline.size,
+                    onUndo = { viewModel.undoOutlinePoint() },
+                    onFinish = { showZoneDialog = true },
                     modifier = Modifier
                         .align(Alignment.TopCenter)
                         .padding(16.dp)
@@ -321,6 +377,18 @@ fun MapScreen(
                         currentZoom = readyMap.cameraPosition.zoom
                     )
                 }
+            }
+        )
+    }
+
+    if (showZoneDialog) {
+        SaveZoneDialog(
+            pointCount = outline.size,
+            parentZone = viewModel.enclosingZone(),
+            onDismiss = { showZoneDialog = false },
+            onConfirm = { name, kind, asSector ->
+                showZoneDialog = false
+                viewModel.saveOutline(name, kind, asSector)
             }
         )
     }
@@ -474,6 +542,202 @@ private fun SpotDetailsDialog(
                 }
                 TextButton(onClick = onDismiss) { Text("Закрыть") }
             }
+        }
+    )
+}
+
+/**
+ * Зоны и секторы поверх карты.
+ *
+ * Заливка полупрозрачная: под ней должно быть видно берег и рельеф, ради
+ * которых контур и рисовался. Секторы обводятся линией — их читают как
+ * разметку внутри зоны, а не как отдельные пятна.
+ */
+@Composable
+private fun ZonesLayer(
+    mapView: MapView,
+    map: MapLibreMap?,
+    style: Style?,
+    zones: List<ZoneEntity>,
+    sectors: List<SectorEntity>,
+    outline: List<GeoPoint>
+) {
+    val readyMap = map ?: return
+    val readyStyle = style ?: return
+
+    val fillManager = remember(readyMap, readyStyle) {
+        FillManager(mapView, readyMap, readyStyle)
+    }
+    val lineManager = remember(readyMap, readyStyle) {
+        LineManager(mapView, readyMap, readyStyle)
+    }
+
+    // Аннотации живут в нативном слое и переживают свой Style, если их не
+    // снять руками, — тогда рендер-тред обращается к освобождённой памяти.
+    DisposableEffect(fillManager, lineManager) {
+        onDispose {
+            fillManager.onDestroy()
+            lineManager.onDestroy()
+        }
+    }
+
+    DisposableEffect(fillManager, lineManager, zones, sectors, outline) {
+        fillManager.deleteAll()
+        lineManager.deleteAll()
+
+        zones.forEach { zone ->
+            val points = zone.outline.decodeOutline().map { LatLng(it.latitude, it.longitude) }
+            if (points.size < 3) return@forEach
+            val water = zone.kind == ZoneKind.WATER.name
+            val color = if (water) "#1E88E5" else "#8D6E63"
+            fillManager.create(
+                FillOptions()
+                    .withLatLngs(listOf(points))
+                    .withFillColor(color)
+                    .withFillOpacity(0.18f)
+            )
+            lineManager.create(
+                LineOptions()
+                    .withLatLngs(points + points.first())
+                    .withLineColor(color)
+                    .withLineWidth(2f)
+            )
+        }
+
+        sectors.forEach { sector ->
+            val points = sector.outline.decodeOutline().map { LatLng(it.latitude, it.longitude) }
+            if (points.size < 3) return@forEach
+            lineManager.create(
+                LineOptions()
+                    .withLatLngs(points + points.first())
+                    .withLineColor("#FBC02D")
+                    .withLineWidth(1.5f)
+            )
+        }
+
+        // Контур в работе показывается ломаной: пока он не замкнут, это ещё
+        // не зона, и заливать его нечестно.
+        if (outline.size >= 2) {
+            lineManager.create(
+                LineOptions()
+                    .withLatLngs(outline.map { LatLng(it.latitude, it.longitude) })
+                    .withLineColor("#D32F2F")
+                    .withLineWidth(2.5f)
+            )
+        }
+
+        onDispose { }
+    }
+}
+
+/** Панель обводки: сколько вершин поставлено и что с ними можно сделать. */
+@Composable
+private fun DrawingPanel(
+    pointCount: Int,
+    onUndo: () -> Unit,
+    onFinish: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Card(modifier = modifier) {
+        Column(modifier = Modifier.padding(12.dp)) {
+            Text(
+                text = "Нажимайте по карте, обводя границу",
+                style = MaterialTheme.typography.bodyMedium
+            )
+            Text(
+                text = "Вершин: $pointCount" + if (pointCount < 3) " — нужно хотя бы три" else "",
+                style = MaterialTheme.typography.bodySmall
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                TextButton(onClick = onUndo, enabled = pointCount > 0) { Text("Убрать последнюю") }
+                TextButton(onClick = onFinish, enabled = pointCount >= 3) { Text("Замкнуть") }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SaveZoneDialog(
+    pointCount: Int,
+    parentZone: ZoneEntity?,
+    onDismiss: () -> Unit,
+    onConfirm: (name: String, kind: ZoneKind, asSector: Boolean) -> Unit
+) {
+    var name by remember { mutableStateOf("") }
+    var kind by remember { mutableStateOf(ZoneKind.WATER) }
+    // Контур внутри чужой зоны почти всегда сектор: на водоёмах места
+    // нумеруют внутри участков, а не поверх них.
+    var asSector by remember { mutableStateOf(parentZone != null) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(if (asSector) "Новый сектор" else "Новая зона") },
+        text = {
+            Column {
+                Text(
+                    text = "Обведено вершин: $pointCount",
+                    style = MaterialTheme.typography.bodySmall
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = name,
+                    onValueChange = { name = it },
+                    label = { Text(if (asSector) "Номер или имя сектора" else "Название зоны") },
+                    singleLine = true
+                )
+
+                parentZone?.let { zone ->
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        FilterChip(
+                            selected = asSector,
+                            onClick = { asSector = true },
+                            label = { Text("Сектор «${zone.name}»") }
+                        )
+                        FilterChip(
+                            selected = !asSector,
+                            onClick = { asSector = false },
+                            label = { Text("Отдельная зона") }
+                        )
+                    }
+                }
+
+                if (!asSector) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        ZoneKind.entries.forEach { option ->
+                            FilterChip(
+                                selected = kind == option,
+                                onClick = { kind = option },
+                                label = {
+                                    Text(if (option == ZoneKind.WATER) "Вода" else "Берег")
+                                }
+                            )
+                        }
+                    }
+                    Text(
+                        text = "Вода — залив, яма, тростник. Берег — подход и места, " +
+                            "где можно встать.",
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = {
+                    onConfirm(
+                        name.ifBlank { if (asSector) "Сектор" else "Зона" },
+                        kind,
+                        asSector
+                    )
+                }
+            ) {
+                Text("Сохранить")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Отмена") }
         }
     )
 }
