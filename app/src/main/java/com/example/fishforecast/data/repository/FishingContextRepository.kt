@@ -7,6 +7,7 @@ import com.example.fishforecast.data.local.entities.FishingSpotEntity
 import com.example.fishforecast.data.local.entities.SavedMapEntity
 import com.example.fishforecast.data.local.entities.WeatherEntity
 import com.example.fishforecast.domain.bite.resolveNormalPressure
+import com.example.fishforecast.domain.bite.standardPressureMmHg
 import com.example.fishforecast.ui.map.BaseLayer
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
@@ -105,11 +106,15 @@ class FishingContextRepository @Inject constructor(
         savedMapDao.updateWaterMeasurement(id, temperatureC, measuredAt)
     }
 
-    /** Норма точки уточняет норму карты; без обеих остаётся null. */
+    /**
+     * Норма точки уточняет норму карты, а если рыболов не задавал ни той,
+     * ни другой — берётся посчитанная по истории наблюдений.
+     */
     fun normalPressureFor(map: SavedMapEntity?, spot: FishingSpotEntity?): Double? =
         resolveNormalPressure(
             mapNormalMmHg = map?.normalPressureMmHg,
-            spotNormalMmHg = spot?.normalPressureMmHg
+            spotNormalMmHg = spot?.normalPressureMmHg,
+            baselineMmHg = map?.baselinePressureMmHg
         )
 
     suspend fun currentMap(): SavedMapEntity? = activeMap.first()
@@ -119,10 +124,50 @@ class FishingContextRepository @Inject constructor(
         val map = currentMap()
             ?: return Result.failure(IllegalStateException("Сначала сохраните карту района"))
 
-        return weatherRepository.fetchWeather(
+        val result = weatherRepository.fetchWeather(
             mapId = map.id,
             lat = map.centerLatitude,
             lon = map.centerLongitude
         )
+
+        // Норму считаем один раз: это многолетнее среднее места, оно не
+        // меняется от обновления к обновлению. Если истории не хватило или
+        // сети нет — остаётся прикидка по высоте, которая пришла вместе с
+        // прогнозом.
+        if (map.baselinePressureMmHg == null) {
+            val fromHistory = refreshNormalPressure(map.id).isSuccess
+            if (!fromHistory) {
+                result.getOrNull()?.let { elevation ->
+                    savedMapDao.updateBaselinePressure(
+                        id = map.id,
+                        baselineMmHg = standardPressureMmHg(elevation),
+                        elevationM = elevation
+                    )
+                }
+            }
+        }
+
+        return result.map { }
+    }
+
+    /**
+     * Пересчитывает норму давления по истории наблюдений. Молча ничего не
+     * делает, если сети нет: прикидка по высоте уже стоит, а без неё карта
+     * работает как раньше.
+     */
+    suspend fun refreshNormalPressure(mapId: Int): Result<Double> {
+        val map = savedMapDao.getRegionById(mapId)
+            ?: return Result.failure(IllegalStateException("Карта не найдена"))
+
+        return weatherRepository.fetchNormalPressure(
+            lat = map.centerLatitude,
+            lon = map.centerLongitude
+        ).onSuccess { estimate ->
+            savedMapDao.updateBaselinePressure(
+                id = map.id,
+                baselineMmHg = estimate.normalMmHg,
+                elevationM = estimate.elevationM ?: map.elevationM
+            )
+        }.map { it.normalMmHg }
     }
 }

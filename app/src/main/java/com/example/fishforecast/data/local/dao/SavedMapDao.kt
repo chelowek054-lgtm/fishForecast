@@ -36,6 +36,12 @@ interface SavedMapDao {
     @Query("UPDATE saved_maps SET waterTempC = :temperature, waterTempAt = :measuredAt WHERE id = :id")
     suspend fun updateWaterMeasurement(id: Int, temperature: Double?, measuredAt: String?)
 
+    @Query(
+        "UPDATE saved_maps SET baselinePressureMmHg = :baselineMmHg, elevationM = :elevationM " +
+            "WHERE id = :id"
+    )
+    suspend fun updateBaselinePressure(id: Int, baselineMmHg: Double?, elevationM: Double?)
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertRegion(region: SavedMapEntity): Long
 

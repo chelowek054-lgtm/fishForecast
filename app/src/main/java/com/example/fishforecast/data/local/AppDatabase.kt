@@ -28,7 +28,7 @@ import com.example.fishforecast.data.local.entities.WeatherEntity
         DailySunEntity::class,
         PressureLogEntity::class
     ],
-    version = 11,
+    version = 12,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -301,6 +301,19 @@ abstract class AppDatabase : RoomDatabase() {
                     )
                     """.trimIndent()
                 )
+            }
+        }
+
+        /**
+         * Норма давления считается сама. Она и раньше была свойством места,
+         * просто её ждали от рыболова: он вводил цифру со своего барометра.
+         * Многолетнее среднее места считается по истории наблюдений, а без
+         * сети — по высоте над уровнем моря.
+         */
+        val MIGRATION_11_12 = object : Migration(11, 12) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `saved_maps` ADD COLUMN `baselinePressureMmHg` REAL")
+                db.execSQL("ALTER TABLE `saved_maps` ADD COLUMN `elevationM` REAL")
             }
         }
     }

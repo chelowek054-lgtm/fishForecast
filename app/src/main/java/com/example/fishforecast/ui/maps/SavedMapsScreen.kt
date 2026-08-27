@@ -123,6 +123,7 @@ fun SavedMapsScreen(
                     onRename = { viewModel.renameMap(map, it) },
                     onNormalPressureChange = { viewModel.setNormalPressure(map, it) },
                     onDepthsChange = { shallow, deep -> viewModel.setDepths(map, shallow, deep) },
+                    onRecalculateNormal = { viewModel.recalculateNormalPressure(map) },
                     onWaterMeasured = { viewModel.measureWater(map, it) },
                     onDelete = { viewModel.deleteMap(map) }
                 )
@@ -232,6 +233,7 @@ private fun SavedMapCard(
     onRename: (String) -> Unit,
     onNormalPressureChange: (Double?) -> Unit,
     onDepthsChange: (Double?, Double?) -> Unit,
+    onRecalculateNormal: () -> Unit,
     onWaterMeasured: (Double?) -> Unit,
     onDelete: () -> Unit
 ) {
@@ -268,9 +270,17 @@ private fun SavedMapCard(
                     DATE_FORMAT.format(Date(map.createdAt)),
                 style = MaterialTheme.typography.bodySmall
             )
-            map.normalPressureMmHg?.let { normal ->
+            // Норма считается сама, поэтому важно не столько число, сколько
+            // откуда оно взялось: своё значение рыболова старше расчёта.
+            val normal = map.normalPressureMmHg ?: map.baselinePressureMmHg
+            normal?.let { value ->
                 Text(
-                    text = "Норма давления: ${normal.toInt()} мм рт. ст.",
+                    text = "Норма давления: ${value.toInt()} мм рт. ст. · " +
+                        if (map.normalPressureMmHg != null) {
+                            "задана вами"
+                        } else {
+                            "среднее по наблюдениям"
+                        },
                     style = MaterialTheme.typography.bodySmall
                 )
             }
@@ -300,6 +310,7 @@ private fun SavedMapCard(
                     onRename = onRename,
                     onNormalPressureChange = onNormalPressureChange,
                     onDepthsChange = onDepthsChange,
+                    onRecalculateNormal = onRecalculateNormal,
                     onWaterMeasured = onWaterMeasured,
                     onDelete = onDelete
                 )
@@ -314,6 +325,7 @@ private fun MapSettings(
     onRename: (String) -> Unit,
     onNormalPressureChange: (Double?) -> Unit,
     onDepthsChange: (Double?, Double?) -> Unit,
+    onRecalculateNormal: () -> Unit,
     onWaterMeasured: (Double?) -> Unit,
     onDelete: () -> Unit
 ) {
@@ -343,10 +355,16 @@ private fun MapSettings(
         modifier = Modifier.fillMaxWidth()
     )
     Text(
-        text = "У каждого водоёма она своя: рыба реагирует на отклонение от привычного " +
-            "фона, а не на само значение.",
+        text = map.baselinePressureMmHg?.let { baseline ->
+            "Можно не заполнять: по наблюдениям за место выходит " +
+                "${baseline.toInt()} мм рт. ст. Своё значение старше расчёта."
+        } ?: "Можно не заполнять: приложение посчитает норму места само, " +
+            "как только появится сеть.",
         style = MaterialTheme.typography.bodySmall
     )
+    TextButton(onClick = onRecalculateNormal) {
+        Text("Пересчитать по наблюдениям")
+    }
 
     Spacer(modifier = Modifier.height(8.dp))
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {

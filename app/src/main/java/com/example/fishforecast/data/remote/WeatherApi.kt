@@ -1,5 +1,6 @@
 package com.example.fishforecast.data.remote
 
+import com.example.fishforecast.data.remote.dto.PressureHistoryDto
 import com.example.fishforecast.data.remote.dto.WeatherDto
 import retrofit2.http.GET
 import retrofit2.http.Query
@@ -34,6 +35,21 @@ interface WeatherApi {
         @Query("past_days") pastDays: Int = PAST_DAYS
     ): WeatherDto
 
+    /**
+     * Только давление, но на всю доступную историю.
+     *
+     * Норма водоёма — это его многолетнее среднее, и ждать её от рыболова
+     * незачем: он вводил цифру со своего барометра, а её можно посчитать.
+     * Модель хранит около семидесяти суток; дальний край приходит пустым,
+     * и это учтено при усреднении.
+     */
+    @GET("v1/forecast?hourly=surface_pressure&forecast_days=1&timezone=auto")
+    suspend fun getPressureHistory(
+        @Query("latitude") lat: Double,
+        @Query("longitude") long: Double,
+        @Query("past_days") pastDays: Int = HISTORY_DAYS
+    ): PressureHistoryDto
+
     companion object {
         const val BASE_URL = "https://api.open-meteo.com/"
 
@@ -43,5 +59,8 @@ interface WeatherApi {
          * ошибка уже не заметна.
          */
         const val PAST_DAYS = 7
+
+        /** Максимум, который принимает Open-Meteo. */
+        const val HISTORY_DAYS = 92
     }
 }

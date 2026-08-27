@@ -80,6 +80,26 @@ class SavedMapsViewModel @Inject constructor(
         viewModelScope.launch { fishingContext.setDepths(map.id, shallowM, deepM) }
     }
 
+    /**
+     * Пересчёт нормы по истории наблюдений. Нужен, когда рыболов стёр своё
+     * значение или хочет обновить расчёт: обычно норма считается один раз
+     * сама и больше не трогается.
+     */
+    fun recalculateNormalPressure(map: SavedMapEntity) {
+        viewModelScope.launch {
+            fishingContext.refreshNormalPressure(map.id).fold(
+                onSuccess = {
+                    _events.send(
+                        SavedMapsMessage.Info("Норма по наблюдениям: ${it.toInt()} мм рт. ст.")
+                    )
+                },
+                onFailure = {
+                    _events.send(SavedMapsMessage.Error("Не удалось посчитать норму: нужна сеть"))
+                }
+            )
+        }
+    }
+
     /** Замер термометром: факт всегда главнее расчёта. */
     fun measureWater(map: SavedMapEntity, temperatureC: Double?) {
         viewModelScope.launch { fishingContext.measureWater(map.id, temperatureC) }

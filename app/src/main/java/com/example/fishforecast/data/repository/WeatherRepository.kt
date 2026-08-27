@@ -4,12 +4,24 @@ import com.example.fishforecast.data.local.dao.WeatherDao
 import com.example.fishforecast.data.local.entities.DailySunEntity
 import com.example.fishforecast.data.local.entities.WeatherEntity
 import com.example.fishforecast.data.remote.WeatherApi
+import com.example.fishforecast.domain.bite.averagePressureMmHg
+import com.example.fishforecast.domain.bite.standardPressureMmHg
 import kotlinx.coroutines.flow.Flow
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 import javax.inject.Inject
 import javax.inject.Singleton
+
+/**
+ * Оценка нормы давления: сама цифра и то, откуда она взялась. Рыболову
+ * важно отличать среднее по наблюдениям от прикидки по высоте.
+ */
+data class NormalPressureEstimate(
+    val normalMmHg: Double,
+    val elevationM: Double?,
+    val fromHistory: Boolean
+)
 
 @Singleton
 class WeatherRepository @Inject constructor(
@@ -21,7 +33,35 @@ class WeatherRepository @Inject constructor(
 
     fun sunTimesForMap(mapId: Int): Flow<List<DailySunEntity>> = dao.getSunTimesForMap(mapId)
 
-    suspend fun fetchWeather(mapId: Int, lat: Double, lon: Double): Result<Unit> {
+    /**
+     * Норма давления места по истории наблюдений.
+     *
+     * Возвращает и высоту: если ряд оказался короче двух недель, среднее
+     * описывает погоду недели, а не норму, — тогда цифру даёт стандартная
+     * атмосфера на этой высоте.
+     */
+    suspend fun fetchNormalPressure(lat: Double, lon: Double): Result<NormalPressureEstimate> {
+        return try {
+            val response = api.getPressureHistory(lat, lon)
+            val measured = averagePressureMmHg(response.hourly.pressures)
+            val elevation = response.elevation
+            val value = measured
+                ?: elevation?.let { standardPressureMmHg(it) }
+                ?: return Result.failure(IllegalStateException("Нет ни истории, ни высоты"))
+
+            Result.success(
+                NormalPressureEstimate(
+                    normalMmHg = value,
+                    elevationM = elevation,
+                    fromHistory = measured != null
+                )
+            )
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun fetchWeather(mapId: Int, lat: Double, lon: Double): Result<Double?> {
         return try {
             val response = api.getWeatherData(lat, lon)
             val hourly = response.hourly
@@ -57,7 +97,7 @@ class WeatherRepository @Inject constructor(
                     }
                 )
             }
-            Result.success(Unit)
+            Result.success(response.elevation)
         } catch (e: Exception) {
             Result.failure(e)
         }

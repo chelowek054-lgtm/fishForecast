@@ -100,7 +100,7 @@ fun WeatherScreen(
     val sunTimes by viewModel.sunTimes.collectAsState()
     val water by viewModel.water.collectAsState()
     val pressureLog by viewModel.pressureLog.collectAsState()
-    val normalPressure by viewModel.normalPressureMmHg.collectAsState()
+    val normalPressure by viewModel.normalPressure.collectAsState()
     val isLoading = viewModel.isLoading.value
     val error = viewModel.error.value
 
@@ -184,7 +184,7 @@ fun WeatherScreen(
                             weather = current,
                             yesterday = yesterday,
                             sun = todaySun,
-                            normalPressureMmHg = normalPressure,
+                            normalPressure = normalPressure,
                             trend = pressureTrend(upcoming.take(TREND_WINDOW_HOURS))
                         )
                     }
@@ -255,10 +255,16 @@ fun WeatherScreen(
                         item {
                             ChartSection(
                                 title = "Давление, мм рт. ст.",
-                                subtitle = normalPressure?.let {
-                                    "Пунктиром — норма района: ${it.roundToInt()} мм"
-                                } ?: "Норму района можно задать в списке карт — " +
-                                    "от неё считается клёв"
+                                subtitle = normalPressure?.let { normal ->
+                                    "Пунктиром — норма района: %d мм (%s)".format(
+                                        normal.valueMmHg.roundToInt(),
+                                        if (normal.manual) {
+                                            "задана вами"
+                                        } else {
+                                            "среднее по наблюдениям"
+                                        }
+                                    )
+                                } ?: "Норма появится после первого обновления с сетью"
                             ) {
                                 LineChart(
                                     points = upcoming.map { hour ->
@@ -270,7 +276,7 @@ fun WeatherScreen(
                                     valueSuffix = "",
                                     lineColor = MaterialTheme.colorScheme.tertiary,
                                     highlightIndex = 0,
-                                    referenceValue = normalPressure,
+                                    referenceValue = normalPressure?.valueMmHg,
                                     referenceLabel = "норма"
                                 )
                             }
@@ -282,7 +288,7 @@ fun WeatherScreen(
                             LocalBarometerCard(
                                 localPressure = localPressure,
                                 forecastPressureHpa = current?.pressure,
-                                normalPressureMmHg = normalPressure,
+                                normalPressureMmHg = normalPressure?.valueMmHg,
                                 dayAgoPressureHpa = pressureLog.pressureDayAgo()
                             )
                         }
@@ -307,7 +313,7 @@ private fun CurrentWeatherCard(
     weather: WeatherEntity?,
     yesterday: WeatherEntity?,
     sun: DailySunEntity?,
-    normalPressureMmHg: Double?,
+    normalPressure: NormalPressureInfo?,
     trend: com.example.fishforecast.domain.weather.PressureTrend?
 ) {
     if (weather == null) return
@@ -363,7 +369,7 @@ private fun CurrentWeatherCard(
                 WeatherFact(
                     title = "Давление",
                     value = "${pressureMmHg.roundToInt()} мм",
-                    detail = pressureDetail(pressureMmHg, normalPressureMmHg, trend)
+                    detail = pressureDetail(pressureMmHg, normalPressure?.valueMmHg, trend)
                 )
                 WeatherFact(
                     title = "Ветер",

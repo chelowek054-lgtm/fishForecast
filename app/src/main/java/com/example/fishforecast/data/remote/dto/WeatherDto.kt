@@ -3,8 +3,27 @@ package com.example.fishforecast.data.remote.dto
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
+/**
+ * Ответ на запрос истории давления. Высота приходит в том же ответе —
+ * по ней считается запасная оценка нормы, когда истории не хватило.
+ */
+@Serializable
+data class PressureHistoryDto(
+    val elevation: Double? = null,
+    val hourly: HourlyPressureDto
+)
+
+@Serializable
+data class HourlyPressureDto(
+    val time: List<String>,
+    @SerialName("surface_pressure")
+    val pressures: List<Double?>
+)
+
 @Serializable
 data class WeatherDto(
+    /** Высота точки над уровнем моря, м — по ней оценивается норма давления. */
+    val elevation: Double? = null,
     @SerialName("hourly")
     val hourly: HourlyWeatherDataDto,
     @SerialName("daily")
