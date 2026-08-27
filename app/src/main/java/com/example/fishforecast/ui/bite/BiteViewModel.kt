@@ -58,7 +58,7 @@ class BiteViewModel @Inject constructor(
         // но показываем только то, что впереди: прошедшие часы решению
         // «ехать или нет» не помогают.
         val spot = spots.firstOrNull { it.id == spotId }
-        val normalPressure = fishingContext.normalPressureFor(map, spot)
+        val normalPressure = fishingContext.normalPressureFor(map)
         // Вода считается по тому же прогнозу вместе с прошедшими сутками:
         // без истории инерционная модель не разгоняется.
         val water = calculateWaterState(weather, map)

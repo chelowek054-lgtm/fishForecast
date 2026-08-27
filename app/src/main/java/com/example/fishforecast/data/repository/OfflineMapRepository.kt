@@ -46,7 +46,6 @@ class OfflineMapRepository @Inject constructor(
         bounds: LatLngBounds,
         minZoom: Double,
         maxZoom: Double,
-        normalPressureMmHg: Double? = null
     ): Flow<RegionDownloadState> = callbackFlow {
         // MapLibre отвечает на негодное определение области java.lang.Error,
         // а не исключением, — без перехвата это мгновенный краш приложения
@@ -127,8 +126,7 @@ class OfflineMapRepository @Inject constructor(
                                 east = bounds.longitudeEast,
                                 west = bounds.longitudeWest,
                                 minZoom = minZoom,
-                                maxZoom = maxZoom,
-                                normalPressureMmHg = normalPressureMmHg
+                                maxZoom = maxZoom
                             )
                         )
                     }

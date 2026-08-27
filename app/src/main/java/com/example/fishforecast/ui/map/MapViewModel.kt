@@ -109,8 +109,7 @@ class MapViewModel @Inject constructor(
     fun saveVisibleRegion(
         name: String,
         bounds: LatLngBounds,
-        currentZoom: Double,
-        normalPressureMmHg: Double? = null
+        currentZoom: Double
     ) {
         viewModelScope.launch {
             val zoomRange = MapConfig.offlineZoomRange(currentZoom)
@@ -118,8 +117,7 @@ class MapViewModel @Inject constructor(
                 name = name,
                 bounds = bounds,
                 minZoom = zoomRange.start,
-                maxZoom = zoomRange.endInclusive,
-                normalPressureMmHg = normalPressureMmHg
+                maxZoom = zoomRange.endInclusive
             ).collect { state ->
                 _downloadState.value = state
                 // Только что сохранённый район сразу становится рабочим:
@@ -144,8 +142,7 @@ class MapViewModel @Inject constructor(
         latitude: Double,
         longitude: Double,
         fishId: Int?,
-        note: String,
-        normalPressureMmHg: Double? = null
+        note: String
     ) {
         viewModelScope.launch {
             fishingSpotRepository.addSpot(
@@ -154,8 +151,7 @@ class MapViewModel @Inject constructor(
                     latitude = latitude,
                     longitude = longitude,
                     fishId = fishId,
-                    note = note,
-                    normalPressureMmHg = normalPressureMmHg
+                    note = note
                 )
             )
         }

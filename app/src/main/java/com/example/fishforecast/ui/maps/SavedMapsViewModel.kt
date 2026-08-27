@@ -72,10 +72,6 @@ class SavedMapsViewModel @Inject constructor(
         viewModelScope.launch { fishingContext.renameMap(map.id, name.ifBlank { map.name }) }
     }
 
-    fun setNormalPressure(map: SavedMapEntity, value: Double?) {
-        viewModelScope.launch { fishingContext.setNormalPressure(map.id, value) }
-    }
-
     fun setDepths(map: SavedMapEntity, shallowM: Double?, deepM: Double?) {
         viewModelScope.launch { fishingContext.setDepths(map.id, shallowM, deepM) }
     }

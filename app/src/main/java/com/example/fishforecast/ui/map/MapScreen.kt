@@ -292,14 +292,13 @@ fun MapScreen(
                 0
             },
             onDismiss = { showSaveDialog = false },
-            onConfirm = { name, normalPressure ->
+            onConfirm = { name ->
                 showSaveDialog = false
                 if (readyMap != null) {
                     viewModel.saveVisibleRegion(
                         name = name,
                         bounds = readyMap.projection.visibleRegion.latLngBounds,
-                        currentZoom = readyMap.cameraPosition.zoom,
-                        normalPressureMmHg = normalPressure
+                        currentZoom = readyMap.cameraPosition.zoom
                     )
                 }
             }
@@ -311,14 +310,13 @@ fun MapScreen(
             point = point,
             fishList = fishList,
             onDismiss = { newSpotPoint = null },
-            onConfirm = { name, fishId, note, normalPressure ->
+            onConfirm = { name, fishId, note ->
                 viewModel.addSpot(
                     name = name,
                     latitude = point.latitude,
                     longitude = point.longitude,
                     fishId = fishId,
-                    note = note,
-                    normalPressureMmHg = normalPressure
+                    note = note
                 )
                 newSpotPoint = null
             }
@@ -345,12 +343,11 @@ private fun AddSpotDialog(
     point: LatLng,
     fishList: List<FishEntity>,
     onDismiss: () -> Unit,
-    onConfirm: (name: String, fishId: Int?, note: String, normalPressureMmHg: Double?) -> Unit
+    onConfirm: (name: String, fishId: Int?, note: String) -> Unit
 ) {
     var name by remember { mutableStateOf("") }
     var note by remember { mutableStateOf("") }
     var fishId by remember { mutableStateOf<Int?>(null) }
-    var normalPressure by remember { mutableStateOf("") }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -374,18 +371,6 @@ private fun AddSpotDialog(
                     onValueChange = { note = it },
                     label = { Text("Заметка") }
                 )
-                Spacer(modifier = Modifier.height(8.dp))
-                OutlinedTextField(
-                    value = normalPressure,
-                    onValueChange = { normalPressure = it.filter { char -> char.isDigit() } },
-                    label = { Text("Норма давления, мм рт. ст.") },
-                    singleLine = true
-                )
-                Text(
-                    text = "У каждого водоёма она своя: рыба реагирует на отклонение " +
-                        "от привычного фона, а не на само значение.",
-                    style = MaterialTheme.typography.bodySmall
-                )
                 if (fishList.isNotEmpty()) {
                     Spacer(modifier = Modifier.height(12.dp))
                     Text("Кто здесь берёт:", style = MaterialTheme.typography.labelMedium)
@@ -405,12 +390,7 @@ private fun AddSpotDialog(
         confirmButton = {
             TextButton(
                 onClick = {
-                    onConfirm(
-                        name.ifBlank { "Точка" },
-                        fishId,
-                        note,
-                        normalPressure.toDoubleOrNull()
-                    )
+                    onConfirm(name.ifBlank { "Точка" }, fishId, note)
                 }
             ) {
                 Text("Сохранить")
@@ -603,10 +583,9 @@ private fun SaveRegionDialog(
     areaDescription: String?,
     tileCount: Long,
     onDismiss: () -> Unit,
-    onConfirm: (name: String, normalPressureMmHg: Double?) -> Unit
+    onConfirm: (name: String) -> Unit
 ) {
     var name by remember { mutableStateOf("") }
-    var normalPressure by remember { mutableStateOf("") }
     val tooLarge = tileCount > TILE_LIMIT
 
     AlertDialog(
@@ -637,18 +616,11 @@ private fun SaveRegionDialog(
                     label = { Text("Название района") },
                     singleLine = true
                 )
-                Spacer(modifier = Modifier.height(8.dp))
-                OutlinedTextField(
-                    value = normalPressure,
-                    onValueChange = { input -> normalPressure = input.filter { it.isDigit() } },
-                    label = { Text("Норма давления, мм рт. ст.") },
-                    singleLine = true
-                )
                 Text(
-                    text = "Можно не заполнять: приложение посчитает норму места само — " +
-                        "по среднему давлению за последние месяцы. Своё значение старше " +
-                        "расчёта, если вы знаете фон водоёма по своему барометру.",
-                    style = MaterialTheme.typography.bodySmall
+                    text = "Норма давления района посчитается сама — по среднему за " +
+                        "последние месяцы наблюдений. От неё считается клёв.",
+                    style = MaterialTheme.typography.bodySmall,
+                    modifier = Modifier.padding(top = 8.dp)
                 )
             }
         },
@@ -656,7 +628,7 @@ private fun SaveRegionDialog(
             TextButton(
                 enabled = !tooLarge,
                 onClick = {
-                    onConfirm(name.ifBlank { "Мой район" }, normalPressure.toDoubleOrNull())
+                    onConfirm(name.ifBlank { "Мой район" })
                 }
             ) {
                 Text("Скачать")

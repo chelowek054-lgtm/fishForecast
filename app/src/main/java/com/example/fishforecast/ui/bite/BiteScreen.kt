@@ -100,11 +100,10 @@ fun BiteScreen(
                 }
             }
 
-            val normal = state.selectedSpot?.normalPressureMmHg ?: state.activeMap?.normalPressureMmHg
-            if (normal != null) {
+            state.activeMap?.baselinePressureMmHg?.let { normal ->
                 Text(
-                    text = "Норма давления: ${normal.toInt()} мм рт. ст." +
-                        if (state.selectedSpot?.normalPressureMmHg != null) " (у точки)" else " (у карты)",
+                    text = "Норма давления района: ${normal.toInt()} мм рт. ст. — " +
+                        "среднее по наблюдениям за место",
                     style = MaterialTheme.typography.bodySmall
                 )
             }

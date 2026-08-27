@@ -121,7 +121,6 @@ fun SavedMapsScreen(
                     isActive = map.id == activeMap?.id,
                     onSelect = { viewModel.selectMap(map) },
                     onRename = { viewModel.renameMap(map, it) },
-                    onNormalPressureChange = { viewModel.setNormalPressure(map, it) },
                     onDepthsChange = { shallow, deep -> viewModel.setDepths(map, shallow, deep) },
                     onRecalculateNormal = { viewModel.recalculateNormalPressure(map) },
                     onWaterMeasured = { viewModel.measureWater(map, it) },
@@ -231,7 +230,6 @@ private fun SavedMapCard(
     isActive: Boolean,
     onSelect: () -> Unit,
     onRename: (String) -> Unit,
-    onNormalPressureChange: (Double?) -> Unit,
     onDepthsChange: (Double?, Double?) -> Unit,
     onRecalculateNormal: () -> Unit,
     onWaterMeasured: (Double?) -> Unit,
@@ -270,17 +268,10 @@ private fun SavedMapCard(
                     DATE_FORMAT.format(Date(map.createdAt)),
                 style = MaterialTheme.typography.bodySmall
             )
-            // Норма считается сама, поэтому важно не столько число, сколько
-            // откуда оно взялось: своё значение рыболова старше расчёта.
-            val normal = map.normalPressureMmHg ?: map.baselinePressureMmHg
-            normal?.let { value ->
+            map.baselinePressureMmHg?.let { normal ->
                 Text(
-                    text = "Норма давления: ${value.toInt()} мм рт. ст. · " +
-                        if (map.normalPressureMmHg != null) {
-                            "задана вами"
-                        } else {
-                            "среднее по наблюдениям"
-                        },
+                    text = "Норма давления: ${normal.toInt()} мм рт. ст. · " +
+                        "среднее по наблюдениям за место",
                     style = MaterialTheme.typography.bodySmall
                 )
             }
@@ -308,7 +299,6 @@ private fun SavedMapCard(
                 MapSettings(
                     map = map,
                     onRename = onRename,
-                    onNormalPressureChange = onNormalPressureChange,
                     onDepthsChange = onDepthsChange,
                     onRecalculateNormal = onRecalculateNormal,
                     onWaterMeasured = onWaterMeasured,
@@ -323,16 +313,12 @@ private fun SavedMapCard(
 private fun MapSettings(
     map: SavedMapEntity,
     onRename: (String) -> Unit,
-    onNormalPressureChange: (Double?) -> Unit,
     onDepthsChange: (Double?, Double?) -> Unit,
     onRecalculateNormal: () -> Unit,
     onWaterMeasured: (Double?) -> Unit,
     onDelete: () -> Unit
 ) {
     var name by remember(map.id) { mutableStateOf(map.name) }
-    var pressure by remember(map.id) {
-        mutableStateOf(map.normalPressureMmHg?.toInt()?.toString().orEmpty())
-    }
     var shallow by remember(map.id) { mutableStateOf(map.shallowDepthM.asInput()) }
     var deep by remember(map.id) { mutableStateOf(map.deepDepthM.asInput()) }
     var waterTemp by remember(map.id) { mutableStateOf("") }
@@ -346,24 +332,19 @@ private fun MapSettings(
         modifier = Modifier.fillMaxWidth()
     )
 
+    // Норма давления не спрашивается: она считается по наблюдениям за
+    // место. Ручной ввод требовал знания, которого у новичка нет, — цифру
+    // можно было взять только со своего барометра.
     Spacer(modifier = Modifier.height(8.dp))
-    OutlinedTextField(
-        value = pressure,
-        onValueChange = { input -> pressure = input.filter { it.isDigit() } },
-        label = { Text("Норма давления, мм рт. ст.") },
-        singleLine = true,
-        modifier = Modifier.fillMaxWidth()
-    )
     Text(
         text = map.baselinePressureMmHg?.let { baseline ->
-            "Можно не заполнять: по наблюдениям за место выходит " +
-                "${baseline.toInt()} мм рт. ст. Своё значение старше расчёта."
-        } ?: "Можно не заполнять: приложение посчитает норму места само, " +
-            "как только появится сеть.",
+            "Норма давления: ${baseline.toInt()} мм рт. ст. — среднее по наблюдениям " +
+                "за место. От неё считается отклонение, а значит и клёв."
+        } ?: "Норма давления посчитается сама, как только появится сеть.",
         style = MaterialTheme.typography.bodySmall
     )
     TextButton(onClick = onRecalculateNormal) {
-        Text("Пересчитать по наблюдениям")
+        Text("Пересчитать норму")
     }
 
     Spacer(modifier = Modifier.height(8.dp))
@@ -408,7 +389,6 @@ private fun MapSettings(
         Button(
             onClick = {
                 onRename(name)
-                onNormalPressureChange(pressure.toDoubleOrNull())
                 onDepthsChange(shallow.toDepth(), deep.toDepth())
                 waterTemp.toDoubleOrNull()?.let(onWaterMeasured)
             }

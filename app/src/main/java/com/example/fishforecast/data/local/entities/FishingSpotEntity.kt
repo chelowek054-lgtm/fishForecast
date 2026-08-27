@@ -31,11 +31,5 @@ data class FishingSpotEntity(
     val longitude: Double,
     val fishId: Int? = null,
     val note: String = "",
-    /**
-     * Норма давления именно этого водоёма, мм рт. ст. Общей цифры не
-     * существует: рыба привыкает к своему фону, и важно отклонение от него,
-     * а не абсолютное значение. null — норма не выяснена.
-     */
-    val normalPressureMmHg: Double? = null,
     val createdAt: Long = System.currentTimeMillis()
 )

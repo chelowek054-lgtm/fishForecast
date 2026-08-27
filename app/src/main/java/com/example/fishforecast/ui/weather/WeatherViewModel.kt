@@ -22,9 +22,6 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
-/** Норма давления и её происхождение: посчитана или задана рыболовом. */
-data class NormalPressureInfo(val valueMmHg: Double, val manual: Boolean)
-
 @HiltViewModel
 class WeatherViewModel @Inject constructor(
     private val fishingContext: FishingContextRepository,
@@ -75,17 +72,12 @@ class WeatherViewModel @Inject constructor(
         )
 
     /**
-     * Норма давления района, мм рт. ст., и то, откуда она взялась. От неё
-     * считается отклонение: общей цифры не существует, рыба привыкает к
-     * фону своего водоёма — но сам фон приложение считает само.
+     * Норма давления района, мм рт. ст. От неё считается отклонение: общей
+     * цифры не существует, рыба привыкает к фону своего места — и этот фон
+     * приложение считает само по наблюдениям.
      */
-    val normalPressure: StateFlow<NormalPressureInfo?> = fishingContext.activeMap
-        .map { map ->
-            map ?: return@map null
-            val manual = map.normalPressureMmHg
-            val value = manual ?: map.baselinePressureMmHg ?: return@map null
-            NormalPressureInfo(valueMmHg = value, manual = manual != null)
-        }
+    val normalPressure: StateFlow<Double?> = fishingContext.activeMap
+        .map { it?.baselinePressureMmHg }
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),

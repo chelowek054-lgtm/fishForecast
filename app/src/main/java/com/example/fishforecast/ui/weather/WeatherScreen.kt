@@ -184,7 +184,7 @@ fun WeatherScreen(
                             weather = current,
                             yesterday = yesterday,
                             sun = todaySun,
-                            normalPressure = normalPressure,
+                            normalPressureMmHg = normalPressure,
                             trend = pressureTrend(upcoming.take(TREND_WINDOW_HOURS))
                         )
                     }
@@ -256,14 +256,8 @@ fun WeatherScreen(
                             ChartSection(
                                 title = "Давление, мм рт. ст.",
                                 subtitle = normalPressure?.let { normal ->
-                                    "Пунктиром — норма района: %d мм (%s)".format(
-                                        normal.valueMmHg.roundToInt(),
-                                        if (normal.manual) {
-                                            "задана вами"
-                                        } else {
-                                            "среднее по наблюдениям"
-                                        }
-                                    )
+                                    "Пунктиром — норма района: %d мм, среднее по наблюдениям"
+                                        .format(normal.roundToInt())
                                 } ?: "Норма появится после первого обновления с сетью"
                             ) {
                                 LineChart(
@@ -276,7 +270,7 @@ fun WeatherScreen(
                                     valueSuffix = "",
                                     lineColor = MaterialTheme.colorScheme.tertiary,
                                     highlightIndex = 0,
-                                    referenceValue = normalPressure?.valueMmHg,
+                                    referenceValue = normalPressure,
                                     referenceLabel = "норма"
                                 )
                             }
@@ -288,7 +282,7 @@ fun WeatherScreen(
                             LocalBarometerCard(
                                 localPressure = localPressure,
                                 forecastPressureHpa = current?.pressure,
-                                normalPressureMmHg = normalPressure?.valueMmHg,
+                                normalPressureMmHg = normalPressure,
                                 dayAgoPressureHpa = pressureLog.pressureDayAgo()
                             )
                         }
@@ -313,7 +307,7 @@ private fun CurrentWeatherCard(
     weather: WeatherEntity?,
     yesterday: WeatherEntity?,
     sun: DailySunEntity?,
-    normalPressure: NormalPressureInfo?,
+    normalPressureMmHg: Double?,
     trend: com.example.fishforecast.domain.weather.PressureTrend?
 ) {
     if (weather == null) return
@@ -369,7 +363,7 @@ private fun CurrentWeatherCard(
                 WeatherFact(
                     title = "Давление",
                     value = "${pressureMmHg.roundToInt()} мм",
-                    detail = pressureDetail(pressureMmHg, normalPressure?.valueMmHg, trend)
+                    detail = pressureDetail(pressureMmHg, normalPressureMmHg, trend)
                 )
                 WeatherFact(
                     title = "Ветер",

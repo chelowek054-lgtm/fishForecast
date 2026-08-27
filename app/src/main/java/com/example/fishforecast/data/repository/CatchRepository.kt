@@ -37,7 +37,7 @@ class CatchRepository @Inject constructor(
         // Норма берётся у активной карты: улов записывается там, где рыболов
         // сейчас ловит, и сверять прогноз потом нужно с той же нормой.
         val map = fishingContext.currentMap()
-        val normalPressure = map?.normalPressureMmHg
+        val normalPressure = map?.baselinePressureMmHg
 
         val biteScore = if (fish != null && hour != null) {
             val forecast = fishingContext.activeForecast.first()

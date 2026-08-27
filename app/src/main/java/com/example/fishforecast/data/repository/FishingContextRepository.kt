@@ -6,7 +6,6 @@ import com.example.fishforecast.data.local.entities.DailySunEntity
 import com.example.fishforecast.data.local.entities.FishingSpotEntity
 import com.example.fishforecast.data.local.entities.SavedMapEntity
 import com.example.fishforecast.data.local.entities.WeatherEntity
-import com.example.fishforecast.domain.bite.resolveNormalPressure
 import com.example.fishforecast.domain.bite.standardPressureMmHg
 import com.example.fishforecast.ui.map.BaseLayer
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -89,9 +88,6 @@ class FishingContextRepository @Inject constructor(
 
     suspend fun renameMap(id: Int, name: String) = savedMapDao.rename(id, name)
 
-    suspend fun setNormalPressure(id: Int, normalPressureMmHg: Double?) =
-        savedMapDao.updateNormalPressure(id, normalPressureMmHg)
-
     suspend fun setDepths(id: Int, shallowM: Double?, deepM: Double?) =
         savedMapDao.updateDepths(id, shallowM, deepM)
 
@@ -107,15 +103,10 @@ class FishingContextRepository @Inject constructor(
     }
 
     /**
-     * Норма точки уточняет норму карты, а если рыболов не задавал ни той,
-     * ни другой — берётся посчитанная по истории наблюдений.
+     * Норма давления района: посчитанная по наблюдениям за место. Внутри
+     * одной карты у точек общий фон — наблюдения ведутся по району.
      */
-    fun normalPressureFor(map: SavedMapEntity?, spot: FishingSpotEntity?): Double? =
-        resolveNormalPressure(
-            mapNormalMmHg = map?.normalPressureMmHg,
-            spotNormalMmHg = spot?.normalPressureMmHg,
-            baselineMmHg = map?.baselinePressureMmHg
-        )
+    fun normalPressureFor(map: SavedMapEntity?): Double? = map?.baselinePressureMmHg
 
     suspend fun currentMap(): SavedMapEntity? = activeMap.first()
 

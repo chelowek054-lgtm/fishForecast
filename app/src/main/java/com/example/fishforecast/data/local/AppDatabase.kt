@@ -28,7 +28,7 @@ import com.example.fishforecast.data.local.entities.WeatherEntity
         DailySunEntity::class,
         PressureLogEntity::class
     ],
-    version = 12,
+    version = 13,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -314,6 +314,92 @@ abstract class AppDatabase : RoomDatabase() {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE `saved_maps` ADD COLUMN `baselinePressureMmHg` REAL")
                 db.execSQL("ALTER TABLE `saved_maps` ADD COLUMN `elevationM` REAL")
+            }
+        }
+
+        /**
+         * Ручной ввод нормы давления убран.
+         *
+         * Поле требовало от новичка знания, которого у него нет: норму
+         * водоёма он мог взять только со своего барометра, а приложение
+         * теперь считает её само по наблюдениям за место. Введённые ранее
+         * значения не пропадают — они переезжают в посчитанную норму как
+         * более точные: их снимал человек на самом водоёме.
+         */
+        val MIGRATION_12_13 = object : Migration(12, 13) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    UPDATE `saved_maps`
+                    SET `baselinePressureMmHg` = `normalPressureMmHg`
+                    WHERE `normalPressureMmHg` IS NOT NULL
+                    """.trimIndent()
+                )
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `saved_maps_new` (
+                        `id` INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+                        `name` TEXT NOT NULL,
+                        `offlineRegionId` INTEGER NOT NULL,
+                        `north` REAL NOT NULL,
+                        `south` REAL NOT NULL,
+                        `east` REAL NOT NULL,
+                        `west` REAL NOT NULL,
+                        `minZoom` REAL NOT NULL,
+                        `maxZoom` REAL NOT NULL,
+                        `sizeBytes` INTEGER NOT NULL,
+                        `baselinePressureMmHg` REAL,
+                        `elevationM` REAL,
+                        `shallowDepthM` REAL,
+                        `deepDepthM` REAL,
+                        `waterTempC` REAL,
+                        `waterTempAt` TEXT,
+                        `createdAt` INTEGER NOT NULL
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL(
+                    """
+                    INSERT INTO `saved_maps_new`
+                    SELECT `id`, `name`, `offlineRegionId`, `north`, `south`, `east`, `west`,
+                           `minZoom`, `maxZoom`, `sizeBytes`, `baselinePressureMmHg`,
+                           `elevationM`, `shallowDepthM`, `deepDepthM`, `waterTempC`,
+                           `waterTempAt`, `createdAt`
+                    FROM `saved_maps`
+                    """.trimIndent()
+                )
+                db.execSQL("DROP TABLE `saved_maps`")
+                db.execSQL("ALTER TABLE `saved_maps_new` RENAME TO `saved_maps`")
+
+                // У точки своей нормы больше нет: наблюдения считаются по
+                // району, и внутри одной карты у точек общий фон.
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `fishing_spots_new` (
+                        `id` INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+                        `name` TEXT NOT NULL,
+                        `latitude` REAL NOT NULL,
+                        `longitude` REAL NOT NULL,
+                        `fishId` INTEGER,
+                        `note` TEXT NOT NULL,
+                        `createdAt` INTEGER NOT NULL,
+                        FOREIGN KEY(`fishId`) REFERENCES `fish`(`id`) ON UPDATE NO ACTION ON DELETE SET NULL
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL(
+                    """
+                    INSERT INTO `fishing_spots_new`
+                    SELECT `id`, `name`, `latitude`, `longitude`, `fishId`, `note`, `createdAt`
+                    FROM `fishing_spots`
+                    """.trimIndent()
+                )
+                db.execSQL("DROP TABLE `fishing_spots`")
+                db.execSQL("ALTER TABLE `fishing_spots_new` RENAME TO `fishing_spots`")
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_fishing_spots_fishId` " +
+                        "ON `fishing_spots` (`fishId`)"
+                )
             }
         }
     }

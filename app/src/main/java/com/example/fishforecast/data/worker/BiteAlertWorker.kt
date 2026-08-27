@@ -54,7 +54,7 @@ class BiteAlertWorker @AssistedInject constructor(
             fishList = fishList,
             forecast = forecast,
             from = LocalDateTime.now(),
-            normalPressureMmHg = map.normalPressureMmHg,
+            normalPressureMmHg = map.baselinePressureMmHg,
             water = calculateWaterState(forecast, map)
         ) ?: return Result.success()
 
