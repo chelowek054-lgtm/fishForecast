@@ -5,6 +5,8 @@ import com.example.fishforecast.data.local.entities.FishingSpotEntity
 import com.example.fishforecast.data.local.entities.SavedMapEntity
 import com.example.fishforecast.data.local.entities.SectorEntity
 import com.example.fishforecast.data.local.entities.ZoneEntity
+import com.example.fishforecast.domain.fish.decodeBaits
+import com.example.fishforecast.domain.fish.encodeBaits
 import com.example.fishforecast.domain.fish.toCatalogFish
 import com.example.fishforecast.domain.fish.toEntity
 import kotlinx.serialization.json.Json
@@ -108,6 +110,7 @@ object RegionPackCodec {
                     lon = spot.longitude,
                     placement = spot.placement,
                     note = spot.note,
+                    structures = spot.structures.decodeBaits(),
                     // Ссылка на вид — глобальная: числовой ключ справочника
                     // у получателя свой.
                     fishId = fish.firstOrNull { it.id == spot.fishId }?.uid,
@@ -174,6 +177,7 @@ object RegionPackCodec {
                 longitude = spot.lon,
                 note = spot.note,
                 placement = spot.placement,
+                structures = spot.structures.encodeBaits(),
                 zoneUid = spot.zoneId,
                 sectorUid = spot.sectorId
             )

@@ -12,7 +12,11 @@ import com.example.fishforecast.data.local.entities.SavedMapEntity
 import com.example.fishforecast.data.repository.FishRepository
 import com.example.fishforecast.data.repository.FishingContextRepository
 import com.example.fishforecast.data.repository.RegionPackRepository
+import com.example.fishforecast.data.repository.KnowledgeRepository
 import com.example.fishforecast.data.repository.ZoneRepository
+import com.example.fishforecast.domain.fish.encodeBaits
+import com.example.fishforecast.domain.knowledge.StructureType
+import kotlinx.coroutines.flow.map
 import com.example.fishforecast.data.repository.enclosing
 import com.example.fishforecast.data.local.entities.SectorEntity
 import com.example.fishforecast.data.local.entities.ZoneEntity
@@ -40,6 +44,7 @@ class MapViewModel @Inject constructor(
     private val fishingContext: FishingContextRepository,
     private val regionPackRepository: RegionPackRepository,
     private val zoneRepository: ZoneRepository,
+    private val knowledgeRepository: KnowledgeRepository,
     fishRepository: FishRepository
 ) : ViewModel() {
 
@@ -103,6 +108,11 @@ class MapViewModel @Inject constructor(
         _packToShare.value = null
     }
 
+    /** Словарь структур: им размечаются и зоны, и точки. */
+    val structureTypes: StateFlow<List<StructureType>> = knowledgeRepository.catalog
+        .map { it.structures }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
     val zones: StateFlow<List<ZoneEntity>> = zoneRepository.activeZones
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
@@ -150,7 +160,7 @@ class MapViewModel @Inject constructor(
      * её сектор: на водоёмах места нумеруют внутри участков, а не поверх
      * них.
      */
-    fun saveOutline(name: String, kind: ZoneKind, asSector: Boolean) {
+    fun saveOutline(name: String, structureId: String, asSector: Boolean) {
         val points = _outline.value
         if (!points.isPolygon()) return
 
@@ -170,7 +180,10 @@ class MapViewModel @Inject constructor(
                     ZoneEntity(
                         mapUid = mapUid,
                         name = name,
-                        kind = kind.name,
+                        // Тип зоны — идентификатор структуры из словаря:
+                        // «вода» и «берег» остались там же, рядом с
+                        // коряжником и притоком.
+                        kind = structureId,
                         outline = points.encodeOutline()
                     )
                 )
@@ -253,7 +266,8 @@ class MapViewModel @Inject constructor(
         longitude: Double,
         fishId: Int?,
         note: String,
-        placement: SpotPlacement = SpotPlacement.WATER
+        placement: SpotPlacement = SpotPlacement.WATER,
+        structures: List<String> = emptyList()
     ) {
         viewModelScope.launch {
             fishingSpotRepository.addSpot(
@@ -263,7 +277,8 @@ class MapViewModel @Inject constructor(
                     longitude = longitude,
                     fishId = fishId,
                     note = note,
-                    placement = placement.name
+                    placement = placement.name,
+                    structures = structures.encodeBaits()
                 )
             )
         }

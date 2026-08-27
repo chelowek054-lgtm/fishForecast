@@ -33,7 +33,7 @@ import com.example.fishforecast.data.local.entities.WeatherEntity
         ZoneEntity::class,
         SectorEntity::class
     ],
-    version = 17,
+    version = 18,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -572,6 +572,21 @@ abstract class AppDatabase : RoomDatabase() {
         val MIGRATION_16_17 = object : Migration(16, 17) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE `saved_maps` ADD COLUMN `waterBodyType` TEXT")
+            }
+        }
+
+        /**
+         * Структуры у точки.
+         *
+         * Зона своим типом уже описывала место целиком, а точке нечем было
+         * сказать, чем она хороша: коряга, бровка или выход ключа. Между тем
+         * это и есть знание, ради которого точку сохраняют.
+         */
+        val MIGRATION_17_18 = object : Migration(17, 18) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "ALTER TABLE `fishing_spots` ADD COLUMN `structures` TEXT NOT NULL DEFAULT '[]'"
+                )
             }
         }
     }

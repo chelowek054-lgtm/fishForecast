@@ -132,6 +132,8 @@ data class PackSpot(
     /** `SHORE` или `WATER`: где встать против того, куда бросать. */
     val placement: String,
     val note: String = "",
+    /** Структуры места из словаря знаний. */
+    val structures: List<String> = emptyList(),
     /** Вид рыбы по его глобальному идентификатору; null — не привязана. */
     val fishId: String? = null,
     val zoneId: String? = null,

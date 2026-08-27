@@ -63,6 +63,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.example.fishforecast.data.local.entities.FishEntity
+import com.example.fishforecast.domain.bite.WaterLayerChoice
 import com.example.fishforecast.domain.fish.Guild
 import com.example.fishforecast.domain.fish.decodeBaits
 import com.example.fishforecast.domain.fish.decodeGroundbait
@@ -148,8 +149,15 @@ private fun FishCardItem(
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
+                    card.placesText()?.let { places ->
+                        Text(
+                            text = places,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                 }
-                card.score?.let { score -> ScoreBadge(score) }
+                card.bestScore?.let { score -> ScoreBadge(score) }
             }
 
             Spacer(modifier = Modifier.height(12.dp))
@@ -388,6 +396,21 @@ private fun FishCard.verdict(): String {
         water > fish.optMaxTemp -> "Вода ${water.roundToInt()}° — теплее оптимума"
         else -> "Вода ${water.roundToInt()}° — оптимум вида"
     }
+}
+
+/**
+ * Где сегодня лучше. Два числа рядом отвечают на вопрос «куда встать» —
+ * тот самый, ради которого вода считается двумя слоями.
+ */
+private fun FishCard.placesText(): String? {
+    val shallow = score ?: return null
+    val deep = deepScore ?: return null
+    val hint = when (betterPlace) {
+        WaterLayerChoice.SHALLOW -> " — сегодня на мели"
+        WaterLayerChoice.DEEP -> " — сегодня в яме"
+        null -> ""
+    }
+    return "Мель $shallow · яма $deep$hint"
 }
 
 private fun FishCard.oxygenText(): String {

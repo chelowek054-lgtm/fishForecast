@@ -13,6 +13,8 @@ import com.example.fishforecast.data.repository.KnowledgeRepository
 import com.example.fishforecast.domain.knowledge.KnowledgeCatalog
 import com.example.fishforecast.data.repository.FishingContextRepository
 import com.example.fishforecast.domain.bite.CalculateFishActivityUseCase
+import com.example.fishforecast.domain.bite.PlaceContext
+import com.example.fishforecast.domain.bite.WaterLayerChoice
 import com.example.fishforecast.domain.water.WaterState
 import com.example.fishforecast.domain.water.oxygenSaturationMgL
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -35,8 +37,10 @@ import javax.inject.Inject
  */
 data class FishCard(
     val fish: FishEntity,
-    /** Оценка клёва на ближайший час; null — прогноза ещё нет. */
+    /** Оценка на мели, ближайший час; null — прогноза ещё нет. */
     val score: Int?,
+    /** Оценка в яме: тот же час, другое место. */
+    val deepScore: Int? = null,
     /** Температура мели, °C; null — район не выбран. */
     val waterTemperature: Double?,
     val oxygenMgL: Double?,
@@ -46,6 +50,26 @@ data class FishCard(
     /** Вода холоднее порога — у вида холодный стол. */
     val coldTable: Boolean
         get() = (waterTemperature ?: Double.MAX_VALUE) < fish.coldTempThreshold
+
+    /** Лучшее из двух мест — по нему и сортируется список. */
+    val bestScore: Int? get() = listOfNotNull(score, deepScore).maxOrNull()
+
+    /** Где сегодня лучше; null — разница в пределах округления. */
+    val betterPlace: WaterLayerChoice?
+        get() {
+            val shallow = score ?: return null
+            val deep = deepScore ?: return null
+            return when {
+                shallow - deep >= PLACE_DIFFERENCE -> WaterLayerChoice.SHALLOW
+                deep - shallow >= PLACE_DIFFERENCE -> WaterLayerChoice.DEEP
+                else -> null
+            }
+        }
+
+    private companion object {
+        /** Меньше этого разброса выбирать место незачем. */
+        const val PLACE_DIFFERENCE = 5
+    }
 }
 
 @HiltViewModel
@@ -69,7 +93,9 @@ class ReferenceViewModel @Inject constructor(
             .map { fish -> fish.toCard(forecast, water, normal, sunTimes) }
             // Кто сегодня активнее — тот и выше: справочник должен отвечать
             // на вопрос «за кем ехать», а не хранить алфавитный порядок.
-            .sortedWith(compareByDescending<FishCard> { it.score ?: -1 }.thenBy { it.fish.name })
+            .sortedWith(
+                compareByDescending<FishCard> { it.bestScore ?: -1 }.thenBy { it.fish.name }
+            )
     }.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),
@@ -115,7 +141,9 @@ class ReferenceViewModel @Inject constructor(
         normalPressureMmHg: Double?,
         sunTimes: List<DailySunEntity>
     ): FishCard {
-        if (forecast.isEmpty()) return FishCard(this, null, null, null)
+        if (forecast.isEmpty()) {
+            return FishCard(fish = this, score = null, waterTemperature = null, oxygenMgL = null)
+        }
 
         val now = LocalDateTime.now()
         val hour = forecast.minByOrNull {
@@ -123,11 +151,20 @@ class ReferenceViewModel @Inject constructor(
                 java.time.Duration.between(LocalDateTime.parse(it.time), now).toMinutes()
             )
         }
-        val score = hour?.let {
-            calculateFishActivity(this, forecast, normalPressureMmHg, water, sunTimes)
-                .firstOrNull { forecastHour -> forecastHour.time == it.time }
-                ?.score
+        // Считаем оба места: разница между мелью и ямой и есть ответ на
+        // вопрос «куда встать», ради которого вода считается двумя слоями.
+        fun scoreAt(layer: WaterLayerChoice): Int? = hour?.let {
+            calculateFishActivity(
+                fish = this,
+                forecast = forecast,
+                normalPressureMmHg = normalPressureMmHg,
+                water = water,
+                sunTimes = sunTimes,
+                place = PlaceContext(layer = layer)
+            ).firstOrNull { forecastHour -> forecastHour.time == it.time }?.score
         }
+
+        val score = scoreAt(WaterLayerChoice.SHALLOW)
         val waterNow = hour?.let { water.shallowAt(it.time) }
         val phase = hour?.let {
             val moment = LocalDateTime.parse(it.time)
@@ -137,6 +174,7 @@ class ReferenceViewModel @Inject constructor(
         return FishCard(
             fish = this,
             score = score,
+            deepScore = scoreAt(WaterLayerChoice.DEEP),
             waterTemperature = waterNow,
             // Кислород берётся у воды: он зависит от типа водоёма и ночи,
             // а не только от температуры.

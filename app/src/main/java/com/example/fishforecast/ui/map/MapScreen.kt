@@ -65,7 +65,10 @@ import com.example.fishforecast.data.local.entities.FishingSpotEntity
 import com.example.fishforecast.data.local.entities.SpotPlacement
 import com.example.fishforecast.data.local.entities.SectorEntity
 import com.example.fishforecast.data.local.entities.ZoneEntity
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import com.example.fishforecast.data.local.entities.ZoneKind
+import com.example.fishforecast.domain.knowledge.StructureType
 import com.example.fishforecast.domain.share.GeoPoint
 import com.example.fishforecast.domain.share.decodeOutline
 import com.example.fishforecast.data.local.entities.SavedMapEntity
@@ -100,6 +103,7 @@ fun MapScreen(
     val zones by viewModel.zones.collectAsState()
     val sectors by viewModel.sectors.collectAsState()
     val outline by viewModel.outline
+    val structureTypes by viewModel.structureTypes.collectAsState()
     val drawing by viewModel.drawing
     var showZoneDialog by remember { mutableStateOf(false) }
     val baseLayer by viewModel.baseLayer.collectAsState()
@@ -385,10 +389,11 @@ fun MapScreen(
         SaveZoneDialog(
             pointCount = outline.size,
             parentZone = viewModel.enclosingZone(),
+            structureTypes = structureTypes,
             onDismiss = { showZoneDialog = false },
-            onConfirm = { name, kind, asSector ->
+            onConfirm = { name, structureId, asSector ->
                 showZoneDialog = false
-                viewModel.saveOutline(name, kind, asSector)
+                viewModel.saveOutline(name, structureId, asSector)
             }
         )
     }
@@ -588,7 +593,7 @@ private fun ZonesLayer(
         zones.forEach { zone ->
             val points = zone.outline.decodeOutline().map { LatLng(it.latitude, it.longitude) }
             if (points.size < 3) return@forEach
-            val water = zone.kind == ZoneKind.WATER.name
+            val water = zone.kind.equals(ZoneKind.WATER.name, ignoreCase = true)
             val color = if (water) "#1E88E5" else "#8D6E63"
             fillManager.create(
                 FillOptions()
@@ -656,15 +661,19 @@ private fun DrawingPanel(
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun SaveZoneDialog(
     pointCount: Int,
     parentZone: ZoneEntity?,
+    structureTypes: List<StructureType>,
     onDismiss: () -> Unit,
-    onConfirm: (name: String, kind: ZoneKind, asSector: Boolean) -> Unit
+    onConfirm: (name: String, structureId: String, asSector: Boolean) -> Unit
 ) {
     var name by remember { mutableStateOf("") }
-    var kind by remember { mutableStateOf(ZoneKind.WATER) }
+    // Тип зоны — структура из словаря знаний: не просто «вода», а заводь,
+    // коряжник или выход ключа. Ради этого зоны и рисуются.
+    var structureId by remember { mutableStateOf(ZoneKind.WATER.name.lowercase()) }
     // Контур внутри чужой зоны почти всегда сектор: на водоёмах места
     // нумеруют внутри участков, а не поверх них.
     var asSector by remember { mutableStateOf(parentZone != null) }
@@ -704,20 +713,18 @@ private fun SaveZoneDialog(
 
                 if (!asSector) {
                     Spacer(modifier = Modifier.height(8.dp))
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        ZoneKind.entries.forEach { option ->
+                    Text(text = "Что это за место", style = MaterialTheme.typography.labelLarge)
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        structureTypes.forEach { option ->
                             FilterChip(
-                                selected = kind == option,
-                                onClick = { kind = option },
-                                label = {
-                                    Text(if (option == ZoneKind.WATER) "Вода" else "Берег")
-                                }
+                                selected = structureId == option.id,
+                                onClick = { structureId = option.id },
+                                label = { Text(option.name) }
                             )
                         }
                     }
                     Text(
-                        text = "Вода — залив, яма, тростник. Берег — подход и места, " +
-                            "где можно встать.",
+                        text = structureTypes.firstOrNull { it.id == structureId }?.notes.orEmpty(),
                         style = MaterialTheme.typography.bodySmall
                     )
                 }
@@ -728,7 +735,7 @@ private fun SaveZoneDialog(
                 onClick = {
                     onConfirm(
                         name.ifBlank { if (asSector) "Сектор" else "Зона" },
-                        kind,
+                        structureId,
                         asSector
                     )
                 }

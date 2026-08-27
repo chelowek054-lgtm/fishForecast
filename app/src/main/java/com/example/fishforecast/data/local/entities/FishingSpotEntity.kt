@@ -50,6 +50,11 @@ data class FishingSpotEntity(
      * вещи: первая говорит, где встать, вторая — куда забрасывать.
      */
     val placement: String = SpotPlacement.WATER.name,
+    /**
+     * Структуры этого места, JSON-массив идентификаторов из словаря знаний:
+     * коряжник, бровка, приток. Ими место и отличается от соседнего.
+     */
+    val structures: String = "[]",
     /** В какой зоне и секторе стоит точка; null — привязки нет. */
     val zoneUid: String? = null,
     val sectorUid: String? = null,

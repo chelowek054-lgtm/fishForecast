@@ -46,7 +46,8 @@ class CalculateFishActivityUseCase @Inject constructor() {
         forecast: List<WeatherEntity>,
         normalPressureMmHg: Double? = null,
         water: WaterState? = null,
-        sunTimes: List<DailySunEntity> = emptyList()
+        sunTimes: List<DailySunEntity> = emptyList(),
+        place: PlaceContext = PlaceContext()
     ): List<BiteForecast> {
         val sorted = forecast.sortedBy { it.time }
         val normal = normalPressureMmHg
@@ -54,9 +55,11 @@ class CalculateFishActivityUseCase @Inject constructor() {
         return sorted.mapIndexed { index, hour ->
             // Рыба живёт в воде, а не в воздухе. Пока вода не посчитана,
             // остаётся прежнее допущение — но оно именно допущение.
-            val waterNow = water?.shallowAt(hour.time)
+            val waterNow = water?.layerAt(hour.time, place.layer)?.plus(place.waterOffsetC)
             val waterBefore = water?.let { state ->
-                sorted.getOrNull(index - TREND_WINDOW_HOURS)?.let { state.shallowAt(it.time) }
+                sorted.getOrNull(index - TREND_WINDOW_HOURS)
+                    ?.let { state.layerAt(it.time, place.layer) }
+                    ?.plus(place.waterOffsetC)
             }
 
             val temperature = temperatureFactor(waterNow ?: hour.temperature, fish, waterNow != null)
@@ -69,7 +72,8 @@ class CalculateFishActivityUseCase @Inject constructor() {
                     fish = fish,
                     // Кислород считает вода: он свойство водоёма, а не рыбы,
                     // и зависит от течения, ветра и того, была ли ночь.
-                    oxygenMgL = water?.oxygenAt(hour.time) ?: oxygenSaturationMgL(waterNow)
+                    oxygenMgL = ((water?.oxygenAt(hour.time) ?: oxygenSaturationMgL(waterNow)) +
+                        place.oxygenOffsetMgL).coerceAtLeast(0.0)
                 )
             } else {
                 oxygenFactor(sorted, index, hour, fish)
@@ -83,7 +87,9 @@ class CalculateFishActivityUseCase @Inject constructor() {
             // Ограничители перемножаются: непригодную для рыбы воду не
             // компенсирует ни давление, ни ветер. Условия клёва складываются
             // с весами и лишь масштабируют то, что осталось возможным.
-            val habitat = factors.filter { it.limiting }.fold(1.0) { acc, f -> acc * f.value }
+            val placeBonus = place.bonusFor(guild)
+            val habitat = factors.filter { it.limiting }.fold(1.0) { acc, f -> acc * f.value } *
+                placeBonus
             val scored = factors.filterNot { it.limiting }
             // Веса нормируются по тем факторам, которые удалось посчитать:
             // без данных о восходе оценка не должна проседать на треть
@@ -96,7 +102,7 @@ class CalculateFishActivityUseCase @Inject constructor() {
                 time = hour.time,
                 score = score,
                 level = BiteLevel.fromScore(score),
-                factors = factors
+                factors = factors + placeFactor(place, placeBonus)
             )
         }
     }
@@ -341,6 +347,27 @@ class CalculateFishActivityUseCase @Inject constructor() {
                 }
         )
     }
+
+    /**
+     * Место: слой и его структуры.
+     *
+     * Показывается отдельной строкой, даже когда ничего не меняет: рыболов
+     * должен видеть, для какого места посчитан балл, иначе два разных числа
+     * на одном экране выглядят ошибкой.
+     */
+    private fun placeFactor(place: PlaceContext, bonus: Double): BiteFactor = BiteFactor(
+        name = "Место",
+        value = bonus.coerceIn(0.0, 1.0),
+        weight = 0.0,
+        limiting = true,
+        comment = place.title.replaceFirstChar { it.uppercase() } + when {
+            place.structures.isEmpty() -> " — без особенностей"
+            bonus > 1.05 -> ": " + place.structures.joinToString(", ") { it.name.lowercase() }
+            bonus < 0.95 -> ": " + place.structures.joinToString(", ") { it.name.lowercase() } +
+                " — это место против рыбы"
+            else -> ": " + place.structures.joinToString(", ") { it.name.lowercase() }
+        }
+    )
 
     /**
      * Свет — тот самый ритм, по которому рыба живёт.

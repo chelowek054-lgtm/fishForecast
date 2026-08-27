@@ -2,6 +2,7 @@ package com.example.fishforecast.domain.water
 
 import com.example.fishforecast.data.local.entities.SavedMapEntity
 import com.example.fishforecast.data.local.entities.WeatherEntity
+import com.example.fishforecast.domain.bite.WaterLayerChoice
 import com.example.fishforecast.domain.knowledge.WaterBodyType
 import com.example.fishforecast.domain.weather.kmhToMs
 import java.time.LocalDateTime
@@ -38,6 +39,12 @@ data class WaterState(
     fun deepAt(time: String): Double? = deep.firstOrNull { it.time == time }?.temperature
 
     fun oxygenAt(time: String): Double? = oxygen[time]
+
+    /** Температура выбранного слоя: мель или яма. */
+    fun layerAt(time: String, layer: WaterLayerChoice): Double? = when (layer) {
+        WaterLayerChoice.SHALLOW -> shallowAt(time)
+        WaterLayerChoice.DEEP -> deepAt(time)
+    }
 }
 
 /**
