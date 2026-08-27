@@ -33,7 +33,7 @@ import com.example.fishforecast.data.local.entities.WeatherEntity
         ZoneEntity::class,
         SectorEntity::class
     ],
-    version = 14,
+    version = 15,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -467,6 +467,74 @@ abstract class AppDatabase : RoomDatabase() {
                     "CREATE INDEX IF NOT EXISTS `index_zone_sectors_zoneUid` " +
                         "ON `zone_sectors` (`zoneUid`)"
                 )
+            }
+        }
+
+        /**
+         * Справочник видов становится знанием, а не парой цифр.
+         *
+         * Раньше у рыбы был один диапазон температуры «от и до». Но рыба не
+         * выключается на границе: есть оптимум, где она кормится, и предел
+         * выносливости, за которым ей не до еды. Между ними активность тает,
+         * и ширина этого перехода у видов разная.
+         *
+         * Появляются и вещи, которых в базе не было вовсе: пороги кислорода
+         * (карасю хватает трёх миллиграммов, налиму нужно шесть), горизонт,
+         * граница холодного стола, наживки и правила прикормки.
+         *
+         * Старым записям оптимум и предел достаются от прежнего диапазона —
+         * это всё, что о них известно. Настоящие значения приедут при первом
+         * же обновлении справочника: вид узнаётся по имени, даже если
+         * идентификатор у него ещё случайный.
+         */
+        val MIGRATION_14_15 = object : Migration(14, 15) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `fish_new` (
+                        `id` INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+                        `uid` TEXT NOT NULL,
+                        `name` TEXT NOT NULL,
+                        `description` TEXT NOT NULL,
+                        `optMinTemp` REAL NOT NULL,
+                        `optMaxTemp` REAL NOT NULL,
+                        `absMinTemp` REAL NOT NULL,
+                        `absMaxTemp` REAL NOT NULL,
+                        `minPressure` REAL NOT NULL,
+                        `maxPressure` REAL NOT NULL,
+                        `oxygenComfortMgL` REAL NOT NULL,
+                        `oxygenCriticalMgL` REAL NOT NULL,
+                        `defaultHorizon` TEXT NOT NULL,
+                        `coldTempThreshold` REAL NOT NULL,
+                        `baitsCold` TEXT NOT NULL,
+                        `baitsWarm` TEXT NOT NULL,
+                        `groundbaitCold` TEXT NOT NULL,
+                        `groundbaitWarm` TEXT NOT NULL,
+                        `imageUrl` TEXT
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL(
+                    """
+                    INSERT INTO `fish_new` (
+                        `id`, `uid`, `name`, `description`,
+                        `optMinTemp`, `optMaxTemp`, `absMinTemp`, `absMaxTemp`,
+                        `minPressure`, `maxPressure`,
+                        `oxygenComfortMgL`, `oxygenCriticalMgL`,
+                        `defaultHorizon`, `coldTempThreshold`,
+                        `baitsCold`, `baitsWarm`, `groundbaitCold`, `groundbaitWarm`, `imageUrl`
+                    )
+                    SELECT `id`, `uid`, `name`, `description`,
+                           `minTemp`, `maxTemp`, `minTemp`, `maxTemp`,
+                           `minPressure`, `maxPressure`,
+                           5.0, 3.0,
+                           'bottom', 12.0,
+                           '[]', '[]', '{}', '{}', `imageUrl`
+                    FROM `fish`
+                    """.trimIndent()
+                )
+                db.execSQL("DROP TABLE `fish`")
+                db.execSQL("ALTER TABLE `fish_new` RENAME TO `fish`")
             }
         }
     }

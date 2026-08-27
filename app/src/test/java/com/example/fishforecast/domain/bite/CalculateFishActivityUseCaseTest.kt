@@ -12,13 +12,15 @@ class CalculateFishActivityUseCaseTest {
 
     private val useCase = CalculateFishActivityUseCase()
 
-    /** Щука из базового справочника: 8–18 °C, 740–760 мм рт. ст. */
+    /** Щука: оптимум 8–18 °C, предел 2–22 °C, 740–760 мм рт. ст. */
     private val pike = FishEntity(
         id = 1,
         name = "Щука",
         description = "",
-        minTemp = 8f,
-        maxTemp = 18f,
+        optMinTemp = 8f,
+        optMaxTemp = 18f,
+        absMinTemp = 2f,
+        absMaxTemp = 22f,
         minPressure = 740f,
         maxPressure = 760f
     )
@@ -88,13 +90,20 @@ class CalculateFishActivityUseCaseTest {
 
     @Test
     fun `остывающая вода ценится выше стоячей`() {
-        // Оба ряда заканчиваются одной температурой: разница только в том,
-        // что в одном случае вода пришла к ней сверху.
-        val carp = pike.copy(name = "Карп", minTemp = 15f, maxTemp = 28f)
-        val forecast = (0..5).map { hour(it, temperature = 24.0) }
+        // Оба ряда заканчиваются одной температурой — чуть выше оптимума,
+        // где кислорода уже впритык. Разница только в том, что в одном
+        // случае вода пришла к ней сверху: значит, кислород прибывает.
+        val carp = pike.copy(
+            name = "Карп",
+            optMinTemp = 18f,
+            optMaxTemp = 26f,
+            absMinTemp = 8f,
+            absMaxTemp = 30f
+        )
+        val forecast = (0..5).map { hour(it, temperature = 27.0) }
 
-        val steady = useCase(carp, forecast, water = water(24.5, 24.5, 24.5, 24.5, 24.5, 24.5))
-        val cooling = useCase(carp, forecast, water = water(26.0, 25.7, 25.4, 25.1, 24.8, 24.5))
+        val steady = useCase(carp, forecast, water = water(27.5, 27.5, 27.5, 27.5, 27.5, 27.5))
+        val cooling = useCase(carp, forecast, water = water(29.0, 28.7, 28.4, 28.1, 27.8, 27.5))
 
         assertTrue(
             "остывание добавляет кислорода: ${cooling.last().score} vs ${steady.last().score}",
@@ -207,8 +216,26 @@ class CalculateFishActivityUseCaseTest {
     @Test
     fun `в тёплой воде амуру лучше чем карпу`() {
         // Случай из разбора: 28 °C — амур кормится, карпу нечем дышать.
-        val carp = pike.copy(id = 2, name = "Карп", minTemp = 15f, maxTemp = 28f)
-        val grassCarp = pike.copy(id = 3, name = "Белый амур", minTemp = 25f, maxTemp = 30f)
+        val carp = pike.copy(
+            id = 2,
+            name = "Карп",
+            optMinTemp = 18f,
+            optMaxTemp = 26f,
+            absMinTemp = 8f,
+            absMaxTemp = 30f,
+            oxygenComfortMgL = 5f,
+            oxygenCriticalMgL = 3f
+        )
+        val grassCarp = pike.copy(
+            id = 3,
+            name = "Белый амур",
+            optMinTemp = 25f,
+            optMaxTemp = 30f,
+            absMinTemp = 12f,
+            absMaxTemp = 34f,
+            oxygenComfortMgL = 4f,
+            oxygenCriticalMgL = 2.5f
+        )
         val warm = (0..5).map { hour(it, temperature = 28.0) }
 
         val carpScore = useCase(carp, warm).last().score

@@ -22,8 +22,10 @@ fun AddEditFishScreen(
 ) {
     val nameState = viewModel.fishName.value
     val descriptionState = viewModel.fishDescription.value
-    val minTempState = viewModel.minTemp.value
-    val maxTempState = viewModel.maxTemp.value
+    val optMinTempState = viewModel.optMinTemp.value
+    val optMaxTempState = viewModel.optMaxTemp.value
+    val absMinTempState = viewModel.absMinTemp.value
+    val absMaxTempState = viewModel.absMaxTemp.value
     val minPressureState = viewModel.minPressure.value
     val maxPressureState = viewModel.maxPressure.value
 
@@ -86,16 +88,39 @@ fun AddEditFishScreen(
 
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedTextField(
-                    value = minTempState,
-                    onValueChange = { viewModel.onEvent(AddEditFishEvent.EnteredMinTemp(it)) },
-                    label = { Text("Мин T°C") },
+                    value = optMinTempState,
+                    onValueChange = { viewModel.onEvent(AddEditFishEvent.EnteredOptMinTemp(it)) },
+                    label = { Text("Оптимум от, °C") },
                     modifier = Modifier.weight(1f),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
                 )
                 OutlinedTextField(
-                    value = maxTempState,
-                    onValueChange = { viewModel.onEvent(AddEditFishEvent.EnteredMaxTemp(it)) },
-                    label = { Text("Макс T°C") },
+                    value = optMaxTempState,
+                    onValueChange = { viewModel.onEvent(AddEditFishEvent.EnteredOptMaxTemp(it)) },
+                    label = { Text("Оптимум до, °C") },
+                    modifier = Modifier.weight(1f),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+                )
+            }
+
+            Text(
+                text = "Оптимум — где рыба кормится. Предел — где активность уже нулевая: " +
+                    "между ними она тает постепенно.",
+                style = MaterialTheme.typography.bodySmall
+            )
+
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedTextField(
+                    value = absMinTempState,
+                    onValueChange = { viewModel.onEvent(AddEditFishEvent.EnteredAbsMinTemp(it)) },
+                    label = { Text("Предел от, °C") },
+                    modifier = Modifier.weight(1f),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+                )
+                OutlinedTextField(
+                    value = absMaxTempState,
+                    onValueChange = { viewModel.onEvent(AddEditFishEvent.EnteredAbsMaxTemp(it)) },
+                    label = { Text("Предел до, °C") },
                     modifier = Modifier.weight(1f),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
                 )

@@ -79,13 +79,32 @@ class CalculateFishActivityUseCase @Inject constructor() {
         }
     }
 
+    /**
+     * Температура — ограничитель: непригодную воду не искупает ничто.
+     *
+     * У вида два диапазона. В оптимуме рыба кормится, между оптимумом и
+     * пределом выносливости активность тает, за пределом её нет. Ширина
+     * этого перехода у каждого своя: карась терпит остывание до четырёх
+     * градусов, а налим в двадцати уже задыхается, — поэтому и падение
+     * считается от собственного предела вида, а не от общей константы.
+     */
     private fun temperatureFactor(
         temperature: Double,
         fish: FishEntity,
         fromWater: Boolean
     ): BiteFactor {
-        val distance = distanceOutside(temperature, fish.minTemp.toDouble(), fish.maxTemp.toDouble())
-        val value = falloff(distance, TEMPERATURE_TOLERANCE)
+        val optimum = fish.optMinTemp.toDouble()..fish.optMaxTemp.toDouble()
+        val value = when {
+            temperature in optimum -> 1.0
+            temperature < optimum.start -> {
+                val span = (optimum.start - fish.absMinTemp).coerceAtLeast(MIN_TOLERANCE)
+                falloff(optimum.start - temperature, span)
+            }
+            else -> {
+                val span = (fish.absMaxTemp - optimum.endInclusive).coerceAtLeast(MIN_TOLERANCE)
+                falloff(temperature - optimum.endInclusive, span)
+            }
+        }
 
         val what = if (fromWater) "Вода" else "Воздух"
         return BiteFactor(
@@ -94,9 +113,11 @@ class CalculateFishActivityUseCase @Inject constructor() {
             weight = 0.0,
             limiting = true,
             comment = "$what ${temperature.roundToInt()}°C — " + when {
-                distance == 0.0 -> "в комфортном диапазоне"
-                temperature < fish.minTemp -> "холоднее комфорта"
-                else -> "теплее комфорта"
+                temperature in optimum -> "оптимум вида"
+                temperature < optimum.start && value > 0 -> "холоднее оптимума"
+                temperature < optimum.start -> "холодно до оцепенения"
+                value > 0 -> "теплее оптимума"
+                else -> "жарко до оцепенения"
             }
         )
     }
@@ -202,7 +223,7 @@ class CalculateFishActivityUseCase @Inject constructor() {
         hour: WeatherEntity,
         fish: FishEntity
     ): BiteFactor {
-        val warmWaterStarts = fish.maxTemp - OXYGEN_MARGIN
+        val warmWaterStarts = fish.optMaxTemp.toDouble()
         val warmthPenalty = falloff(
             distance = (hour.temperature - warmWaterStarts).coerceAtLeast(0.0),
             tolerance = HEAT_TOLERANCE
@@ -257,7 +278,19 @@ class CalculateFishActivityUseCase @Inject constructor() {
         fish: FishEntity
     ): BiteFactor {
         val oxygen = oxygenSaturationMgL(waterNow)
-        val warmWaterStarts = fish.maxTemp - OXYGEN_MARGIN
+        // Пороги берутся у вида: карасю хватает трёх миллиграммов, налиму
+        // нужно шесть. Общая шкала уравняла бы их и соврала бы про обоих.
+        val comfort = fish.oxygenComfortMgL.toDouble()
+        val critical = fish.oxygenCriticalMgL.toDouble()
+        val base = when {
+            oxygen >= comfort -> 1.0
+            oxygen <= critical -> 0.0
+            else -> (oxygen - critical) / (comfort - critical).coerceAtLeast(MIN_TOLERANCE)
+        }
+
+        // Прогретая вода бьёт по рыбе раньше, чем растворимость дойдёт до
+        // её порога: с теплом растёт и собственная потребность в кислороде.
+        val warmWaterStarts = fish.optMaxTemp.toDouble()
         val warmthPenalty = falloff(
             distance = (waterNow - warmWaterStarts).coerceAtLeast(0.0),
             tolerance = HEAT_TOLERANCE
@@ -272,11 +305,12 @@ class CalculateFishActivityUseCase @Inject constructor() {
 
         return BiteFactor(
             name = "Кислород",
-            value = (warmthPenalty + coolingBonus).coerceIn(0.0, 1.0),
+            value = (minOf(base, warmthPenalty) + coolingBonus).coerceIn(0.0, 1.0),
             weight = 0.0,
             limiting = true,
             comment = "%.1f мг/л — %s".format(oxygen, oxygenLevelText(oxygenLevel(oxygen))) +
                 when {
+                    oxygen <= critical -> ", для этой рыбы критично"
                     cooling >= WATER_COOLING_STEP -> ", вода остывает"
                     cooling <= -WATER_COOLING_STEP -> ", вода прогревается"
                     waterNow > warmWaterStarts -> ", для этой рыбы вода тёплая"
@@ -304,13 +338,6 @@ class CalculateFishActivityUseCase @Inject constructor() {
         )
     }
 
-    /** На сколько значение выходит за границы диапазона; 0, если внутри. */
-    private fun distanceOutside(value: Double, min: Double, max: Double): Double = when {
-        value < min -> min - value
-        value > max -> value - max
-        else -> 0.0
-    }
-
     /** Плавное затухание: у границы диапазона обрыва быть не должно. */
     private fun falloff(distance: Double, tolerance: Double): Double =
         (1.0 - distance / tolerance).coerceIn(0.0, 1.0)
@@ -322,8 +349,8 @@ class CalculateFishActivityUseCase @Inject constructor() {
         const val WEIGHT_TREND = 0.35
         const val WEIGHT_WIND = 0.20
 
-        /** За сколько градусов от комфорта активность падает до нуля. */
-        const val TEMPERATURE_TOLERANCE = 8.0
+        /** Ширина перехода не бывает нулевой: иначе деление на ноль. */
+        const val MIN_TOLERANCE = 1.0
 
         /** Отклонение от нормы водоёма, при котором активность падает до нуля. */
         const val PRESSURE_TOLERANCE = 12.0
@@ -335,11 +362,6 @@ class CalculateFishActivityUseCase @Inject constructor() {
         const val STABLE_PRESSURE_MMHG = 1.0
         const val NOTICEABLE_PRESSURE_MMHG = 3.0
 
-        /**
-         * За сколько градусов до верхней границы комфорта рыба начинает
-         * испытывать нехватку кислорода в прогретой воде.
-         */
-        const val OXYGEN_MARGIN = 4.0
         const val HEAT_TOLERANCE = 12.0
         const val NOTICEABLE_COOLING = 2.0
 

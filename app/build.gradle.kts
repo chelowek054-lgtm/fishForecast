@@ -72,7 +72,8 @@ dependencies {
 
     // Networking
     implementation(libs.retrofit)
-    implementation(libs.retrofit.kotlinx.serialization) // Было retrofit-kotlinx-serialization
+    implementation(libs.retrofit.kotlinx.serialization)
+    implementation(libs.retrofit.scalars)
     implementation(libs.okhttp)
     implementation(libs.okhttp.logging) // Было okhttp-logging
     implementation(libs.kotlinx.serialization.json) // Было kotlinx-serialization-json

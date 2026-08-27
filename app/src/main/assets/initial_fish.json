@@ -1,26 +1,402 @@
 [
   {
-    "name": "Щука",
-    "description": "Хищная рыба, активна при умеренной температуре.",
-    "minTemp": 8.0,
-    "maxTemp": 18.0,
-    "minPressure": 740.0,
-    "maxPressure": 760.0
+    "id": "carp",
+    "name": "Карп / Сазан",
+    "temp": {
+      "opt_min": 18.0,
+      "opt_max": 26.0,
+      "abs_min": 8.0,
+      "abs_max": 30.0
+    },
+    "pressure": {
+      "min_mmHg": 740,
+      "max_mmHg": 755
+    },
+    "oxygen": {
+      "comfort_mg_l": 5.0,
+      "critical_mg_l": 3.0
+    },
+    "default_horizon": "bottom",
+    "cold_temp_threshold": 14.0,
+    "baits": {
+      "cold": ["Мотыль", "Опарыш", "Навозный червь"],
+      "warm": ["Кукуруза", "Бойлы", "Горох", "Тесто", "Тигровый орех"]
+    },
+    "groundbait_rules": {
+      "cold": {
+        "volume": "low",
+        "fraction": "fine",
+        "sweetness": "none",
+        "flavor_profile": "spicy_salty",
+        "notes": "Минимальный закорм, темный цвет, пряный или мясной аромат, добавить мотыля"
+      },
+      "warm": {
+        "volume": "high",
+        "fraction": "coarse",
+        "sweetness": "high",
+        "flavor_profile": "sweet_fruity",
+        "notes": "Обильный закорм крупной фракцией (кукуруза, пеллетс), фруктовые и сладкие ароматизаторы"
+      }
+    }
   },
   {
+    "id": "crucian",
+    "name": "Карась",
+    "temp": {
+      "opt_min": 16.0,
+      "opt_max": 24.0,
+      "abs_min": 4.0,
+      "abs_max": 28.0
+    },
+    "pressure": {
+      "min_mmHg": 742,
+      "max_mmHg": 758
+    },
+    "oxygen": {
+      "comfort_mg_l": 3.0,
+      "critical_mg_l": 1.5
+    },
+    "default_horizon": "bottom",
+    "cold_temp_threshold": 13.0,
+    "baits": {
+      "cold": ["Мотыль", "Опарыш", "Червь"],
+      "warm": ["Манная болтушка", "Перловка", "Хлебный мякиш", "Чесночное тесто", "Опарыш"]
+    },
+    "groundbait_rules": {
+      "cold": {
+        "volume": "low",
+        "fraction": "fine",
+        "sweetness": "low",
+        "flavor_profile": "garlic_hemp",
+        "notes": "Мелкофракционная пылящая смесь с чесноком или укропом, малые порции"
+      },
+      "warm": {
+        "volume": "medium",
+        "fraction": "medium",
+        "sweetness": "medium",
+        "flavor_profile": "vanilla_honey",
+        "notes": "Средняя фракция, сладкий аромат (ваниль, мед, бисквит), добавление пшена"
+      }
+    }
+  },
+  {
+    "id": "bream",
+    "name": "Лещ",
+    "temp": {
+      "opt_min": 15.0,
+      "opt_max": 22.0,
+      "abs_min": 5.0,
+      "abs_max": 25.0
+    },
+    "pressure": {
+      "min_mmHg": 745,
+      "max_mmHg": 758
+    },
+    "oxygen": {
+      "comfort_mg_l": 5.0,
+      "critical_mg_l": 3.5
+    },
+    "default_horizon": "bottom",
+    "cold_temp_threshold": 12.0,
+    "baits": {
+      "cold": ["Мотыль (пучок)", "Опарыш", "Червь"],
+      "warm": ["Опарыш + кукуруза", "Гороховая мастырка", "Перловка", "Пучок червей"]
+    },
+    "groundbait_rules": {
+      "cold": {
+        "volume": "low",
+        "fraction": "fine",
+        "sweetness": "none",
+        "flavor_profile": "coriander_spicy",
+        "notes": "Темная мелкофракционная прикормка, кориандр/корица, обязателен кормовой мотыль"
+      },
+      "warm": {
+        "volume": "high",
+        "fraction": "coarse",
+        "sweetness": "high",
+        "flavor_profile": "caramel_vanilla",
+        "notes": "Heavy-смесь, инертная (не пылящая), крупная фракция (горох, пшено), сладкие лещевые ароматизаторы"
+      }
+    }
+  },
+  {
+    "id": "roach",
+    "name": "Плотва",
+    "temp": {
+      "opt_min": 12.0,
+      "opt_max": 20.0,
+      "abs_min": 2.0,
+      "abs_max": 24.0
+    },
+    "pressure": {
+      "min_mmHg": 745,
+      "max_mmHg": 760
+    },
+    "oxygen": {
+      "comfort_mg_l": 5.0,
+      "critical_mg_l": 3.0
+    },
+    "default_horizon": "midwater",
+    "cold_temp_threshold": 10.0,
+    "baits": {
+      "cold": ["Мотыль", "Опарыш"],
+      "warm": ["Тесто", "Перловка", "Шелковица (зелень)", "Опарыш", "Конопля"]
+    },
+    "groundbait_rules": {
+      "cold": {
+        "volume": "low",
+        "fraction": "ultra_fine",
+        "sweetness": "none",
+        "flavor_profile": "anis_hemp",
+        "notes": "Активно пылящая темная прикормка, малый объем, добавление мелкого мотыля"
+      },
+      "warm": {
+        "volume": "medium",
+        "fraction": "fine_medium",
+        "sweetness": "medium",
+        "flavor_profile": "chocolate_anis",
+        "notes": "Пылящая легкая прикормка, жареная конопля, бисквит, анис"
+      }
+    }
+  },
+  {
+    "id": "perch",
     "name": "Окунь",
-    "description": "Стайный хищник, любит стабильное давление.",
-    "minTemp": 10.0,
-    "maxTemp": 22.0,
-    "minPressure": 745.0,
-    "maxPressure": 755.0
+    "temp": {
+      "opt_min": 12.0,
+      "opt_max": 20.0,
+      "abs_min": 2.0,
+      "abs_max": 24.0
+    },
+    "pressure": {
+      "min_mmHg": 748,
+      "max_mmHg": 762
+    },
+    "oxygen": {
+      "comfort_mg_l": 5.5,
+      "critical_mg_l": 3.0
+    },
+    "default_horizon": "bottom",
+    "cold_temp_threshold": 11.0,
+    "baits": {
+      "cold": ["Мотыль", "Пиявка", "Мелкий живец", "Микроджиг (силикон 1.5-2\")"],
+      "warm": ["Червь", "Живец", "Вращающиеся блесны", "Тейл-спиннеры", "Силикон"]
+    },
+    "groundbait_rules": {
+      "cold": {
+        "volume": "low",
+        "fraction": "fine",
+        "sweetness": "none",
+        "flavor_profile": "blood_fishmeal",
+        "notes": "Грунт с кормовым мотылем и сухой кровью/рыбной мукой"
+      },
+      "warm": {
+        "volume": "low",
+        "fraction": "fine",
+        "sweetness": "none",
+        "flavor_profile": "fishmeal",
+        "notes": "Создание мути с рубленым червем или опарышем; растительная кормежка не используется"
+      }
+    }
   },
   {
-    "name": "Карп",
-    "description": "Любит теплую воду и слабую освещенность.",
-    "minTemp": 15.0,
-    "maxTemp": 28.0,
-    "minPressure": 740.0,
-    "maxPressure": 750.0
+    "id": "pike",
+    "name": "Щука",
+    "temp": {
+      "opt_min": 10.0,
+      "opt_max": 18.0,
+      "abs_min": 1.0,
+      "abs_max": 22.0
+    },
+    "pressure": {
+      "min_mmHg": 738,
+      "max_mmHg": 752
+    },
+    "oxygen": {
+      "comfort_mg_l": 6.0,
+      "critical_mg_l": 4.0
+    },
+    "default_horizon": "midwater",
+    "cold_temp_threshold": 10.0,
+    "baits": {
+      "cold": ["Живец (карась, плотва)", "Крупный силикон (slow roll)", "Колеблющиеся блесны"],
+      "warm": ["Живец", "Воблеры minnow", "Попперы", "Спиннербейты", "Силикон"]
+    },
+    "groundbait_rules": {
+      "cold": {
+        "volume": "none",
+        "fraction": "none",
+        "sweetness": "none",
+        "flavor_profile": "none",
+        "notes": "Прикормка не применяется. Возможно использование рыбных аттрактантов на приманку"
+      },
+      "warm": {
+        "volume": "none",
+        "fraction": "none",
+        "sweetness": "none",
+        "flavor_profile": "none",
+        "notes": "Прикормка не применяется"
+      }
+    }
+  },
+  {
+    "id": "zander",
+    "name": "Судак",
+    "temp": {
+      "opt_min": 14.0,
+      "opt_max": 22.0,
+      "abs_min": 4.0,
+      "abs_max": 26.0
+    },
+    "pressure": {
+      "min_mmHg": 745,
+      "max_mmHg": 760
+    },
+    "oxygen": {
+      "comfort_mg_l": 7.0,
+      "critical_mg_l": 5.0
+    },
+    "default_horizon": "bottom",
+    "cold_temp_threshold": 12.0,
+    "baits": {
+      "cold": ["Узкий живец (уклейка, пескарь)", "Поролоновые рыбки", "Мандула", "Силикон 3-4\""],
+      "warm": ["Живец", "Воблеры (ночной проход)", "Джиг (силикон)", "Узкие пилькеры"]
+    },
+    "groundbait_rules": {
+      "cold": {
+        "volume": "none",
+        "fraction": "none",
+        "sweetness": "none",
+        "flavor_profile": "none",
+        "notes": "Прикормка не применяется"
+      },
+      "warm": {
+        "volume": "none",
+        "fraction": "none",
+        "sweetness": "none",
+        "flavor_profile": "none",
+        "notes": "Прикормка не применяется"
+      }
+    }
+  },
+  {
+    "id": "grass_carp",
+    "name": "Белый амур",
+    "temp": {
+      "opt_min": 25.0,
+      "opt_max": 30.0,
+      "abs_min": 15.0,
+      "abs_max": 33.0
+    },
+    "pressure": {
+      "min_mmHg": 745,
+      "max_mmHg": 758
+    },
+    "oxygen": {
+      "comfort_mg_l": 6.0,
+      "critical_mg_l": 4.0
+    },
+    "default_horizon": "surface",
+    "cold_temp_threshold": 18.0,
+    "baits": {
+      "cold": ["Мотыль", "Опарыш", "Червь"],
+      "warm": ["Молодой камыш", "Лист огурца", "Кукуруза (плавающая)", "Технопланктон", "Горох"]
+    },
+    "groundbait_rules": {
+      "cold": {
+        "volume": "low",
+        "fraction": "fine",
+        "sweetness": "low",
+        "flavor_profile": "herbal",
+        "notes": "Практически не питается при остывании воды ниже 15°C"
+      },
+      "warm": {
+        "volume": "high",
+        "fraction": "coarse",
+        "sweetness": "medium",
+        "flavor_profile": "grass_sweetcorn",
+        "notes": "Огромный объем прикормки с высокой столбчатой пылимостью (люцерна, травяная мука, разваренная кукуруза)"
+      }
+    }
+  },
+  {
+    "id": "catfish",
+    "name": "Сом европейский",
+    "temp": {
+      "opt_min": 18.0,
+      "opt_max": 26.0,
+      "abs_min": 10.0,
+      "abs_max": 28.0
+    },
+    "pressure": {
+      "min_mmHg": 740,
+      "max_mmHg": 752
+    },
+    "oxygen": {
+      "comfort_mg_l": 5.5,
+      "critical_mg_l": 3.5
+    },
+    "default_horizon": "bottom",
+    "cold_temp_threshold": 14.0,
+    "baits": {
+      "cold": ["Пучок выползков", "Живец"],
+      "warm": ["Пучок выползков", "Жареная птица", "Пиявки", "Печень", "Крупный живец", "Квок-приманки"]
+    },
+    "groundbait_rules": {
+      "cold": {
+        "volume": "none",
+        "fraction": "none",
+        "sweetness": "none",
+        "flavor_profile": "none",
+        "notes": "Прикормка не применяется"
+      },
+      "warm": {
+        "volume": "low",
+        "fraction": "coarse",
+        "sweetness": "none",
+        "flavor_profile": "liver_smell",
+        "notes": "Прикармливание квоком и ароматическими клейкими кормушками (рубленая потроша/кровь)"
+      }
+    }
+  },
+  {
+    "id": "burbot",
+    "name": "Налим",
+    "temp": {
+      "opt_min": 2.0,
+      "opt_max": 12.0,
+      "abs_min": 0.0,
+      "abs_max": 15.0
+    },
+    "pressure": {
+      "min_mmHg": 740,
+      "max_mmHg": 760
+    },
+    "oxygen": {
+      "comfort_mg_l": 6.0,
+      "critical_mg_l": 4.0
+    },
+    "default_horizon": "bottom",
+    "cold_temp_threshold": 12.0,
+    "baits": {
+      "cold": ["Выползок", "Пучок мелких червей", "Резаная рыбка (ерш, плотва)", "Лягушонок", "Кусочек печени"],
+      "warm": ["Не клюет (впадает в оцепенение при T > 15°C)"]
+    },
+    "groundbait_rules": {
+      "cold": {
+        "volume": "low",
+        "fraction": "coarse",
+        "sweetness": "none",
+        "flavor_profile": "fish_blood",
+        "notes": "Кормушки с фаршем из свежей рыбы или сухой кровью у дна в холодную погоду"
+      },
+      "warm": {
+        "volume": "none",
+        "fraction": "none",
+        "sweetness": "none",
+        "flavor_profile": "none",
+        "notes": "Рыба неактивна"
+      }
+    }
   }
 ]

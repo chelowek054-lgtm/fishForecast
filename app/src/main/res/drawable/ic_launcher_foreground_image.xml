@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Передний план адаптивного значка. Отступ обязателен: система обрезает
+  иконку по своей маске и ещё двигает слои при анимации, поэтому рисунок
+  должен помещаться в безопасную зону, иначе у него срежет края.
+-->
+<inset xmlns:android="http://schemas.android.com/apk/res/android"
+    android:drawable="@drawable/ic_launcher_image"
+    android:inset="16%" />

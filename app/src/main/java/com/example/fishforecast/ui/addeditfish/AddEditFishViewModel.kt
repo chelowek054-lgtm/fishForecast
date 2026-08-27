@@ -27,11 +27,19 @@ class AddEditFishViewModel @Inject constructor(
     private val _fishDescription = mutableStateOf("")
     val fishDescription: State<String> = _fishDescription
 
-    private val _minTemp = mutableStateOf("")
-    val minTemp: State<String> = _minTemp
+    /** Оптимум: в этих градусах рыба кормится охотно. */
+    private val _optMinTemp = mutableStateOf("")
+    val optMinTemp: State<String> = _optMinTemp
 
-    private val _maxTemp = mutableStateOf("")
-    val maxTemp: State<String> = _maxTemp
+    private val _optMaxTemp = mutableStateOf("")
+    val optMaxTemp: State<String> = _optMaxTemp
+
+    /** Предел выносливости: за ним активность уходит в ноль. */
+    private val _absMinTemp = mutableStateOf("")
+    val absMinTemp: State<String> = _absMinTemp
+
+    private val _absMaxTemp = mutableStateOf("")
+    val absMaxTemp: State<String> = _absMaxTemp
 
     private val _minPressure = mutableStateOf("")
     val minPressure: State<String> = _minPressure
@@ -42,18 +50,25 @@ class AddEditFishViewModel @Inject constructor(
     private val _eventFlow = MutableSharedFlow<UiEvent>()
     val eventFlow = _eventFlow.asSharedFlow()
 
-    private var currentFishId: Int? = null
+    /**
+     * Редактируемая запись целиком. Экран правит только часть полей, а
+     * наживки, прикормка и пороги кислорода приходят из справочника —
+     * пересобирать вид с нуля значило бы их потерять.
+     */
+    private var editedFish: FishEntity? = null
 
     init {
         val fishId = savedStateHandle.toRoute<AddEditFishRoute>().fishId
         if (fishId != AddEditFishRoute.NEW_FISH_ID) {
             viewModelScope.launch {
                 repository.getFishById(fishId)?.also { fish ->
-                    currentFishId = fish.id
+                    editedFish = fish
                     _fishName.value = fish.name
                     _fishDescription.value = fish.description
-                    _minTemp.value = fish.minTemp.toString()
-                    _maxTemp.value = fish.maxTemp.toString()
+                    _optMinTemp.value = fish.optMinTemp.toString()
+                    _optMaxTemp.value = fish.optMaxTemp.toString()
+                    _absMinTemp.value = fish.absMinTemp.toString()
+                    _absMaxTemp.value = fish.absMaxTemp.toString()
                     _minPressure.value = fish.minPressure.toString()
                     _maxPressure.value = fish.maxPressure.toString()
                 }
@@ -65,20 +80,37 @@ class AddEditFishViewModel @Inject constructor(
         when (event) {
             is AddEditFishEvent.EnteredName -> _fishName.value = event.value
             is AddEditFishEvent.EnteredDescription -> _fishDescription.value = event.value
-            is AddEditFishEvent.EnteredMinTemp -> _minTemp.value = event.value
-            is AddEditFishEvent.EnteredMaxTemp -> _maxTemp.value = event.value
+            is AddEditFishEvent.EnteredOptMinTemp -> _optMinTemp.value = event.value
+            is AddEditFishEvent.EnteredOptMaxTemp -> _optMaxTemp.value = event.value
+            is AddEditFishEvent.EnteredAbsMinTemp -> _absMinTemp.value = event.value
+            is AddEditFishEvent.EnteredAbsMaxTemp -> _absMaxTemp.value = event.value
             is AddEditFishEvent.EnteredMinPressure -> _minPressure.value = event.value
             is AddEditFishEvent.EnteredMaxPressure -> _maxPressure.value = event.value
             is AddEditFishEvent.SaveFish -> {
                 viewModelScope.launch {
                     try {
+                        val optMin = optMinTemp.value.toFloatOrNull() ?: 0f
+                        val optMax = optMaxTemp.value.toFloatOrNull() ?: 0f
                         repository.insertFish(
-                            FishEntity(
-                                id = currentFishId ?: 0,
+                            (editedFish ?: FishEntity(
+                                name = "",
+                                optMinTemp = optMin,
+                                optMaxTemp = optMax,
+                                absMinTemp = optMin,
+                                absMaxTemp = optMax,
+                                minPressure = 0f,
+                                maxPressure = 0f
+                            )).copy(
                                 name = fishName.value,
                                 description = fishDescription.value,
-                                minTemp = minTemp.value.toFloatOrNull() ?: 0f,
-                                maxTemp = maxTemp.value.toFloatOrNull() ?: 0f,
+                                optMinTemp = optMin,
+                                optMaxTemp = optMax,
+                                // Предел не бывает уже оптимума: пустое поле
+                                // значит «не выяснено», а не «ноль».
+                                absMinTemp = absMinTemp.value.toFloatOrNull()?.coerceAtMost(optMin)
+                                    ?: optMin,
+                                absMaxTemp = absMaxTemp.value.toFloatOrNull()?.coerceAtLeast(optMax)
+                                    ?: optMax,
                                 minPressure = minPressure.value.toFloatOrNull() ?: 0f,
                                 maxPressure = maxPressure.value.toFloatOrNull() ?: 0f
                             )

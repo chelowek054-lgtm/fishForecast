@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Значок для Android до 8.0: там адаптивных иконок ещё нет, поэтому система
+  берёт картинку целиком. Изображение одно на все случаи и лежит в
+  drawable-nodpi — копировать его по плотностям незачем.
+-->
+<bitmap xmlns:android="http://schemas.android.com/apk/res/android"
+    android:src="@drawable/ic_launcher_image" />

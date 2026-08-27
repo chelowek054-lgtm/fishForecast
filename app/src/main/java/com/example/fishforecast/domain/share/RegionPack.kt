@@ -1,5 +1,6 @@
 package com.example.fishforecast.domain.share
 
+import com.example.fishforecast.domain.fish.CatalogFish
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
@@ -36,14 +37,15 @@ data class RegionPack(
     val zones: List<PackZone> = emptyList(),
     val spots: List<PackSpot> = emptyList(),
     /**
-     * Виды рыб этой местности. Справочник ходит вместе с районом: в разных
-     * водоёмах берёт разная рыба, и чужие пороги температуры и давления —
-     * такое же знание о месте, как глубина ямы.
+     * Виды рыб этой местности — в том же формате, в каком справочник
+     * приходит с сервера. Двух описаний одной и той же рыбы быть не должно:
+     * в разных водоёмах берёт разная рыба, и её пороги, наживки и правила
+     * прикормки — такое же знание о месте, как глубина ямы.
      */
-    val fish: List<PackFish> = emptyList()
+    val fish: List<CatalogFish> = emptyList()
 ) {
     companion object {
-        const val SCHEMA = "fishforecast.region-pack/1"
+        const val SCHEMA = "fishforecast.region-pack/2"
 
         /** Расширение файла: по нему система предлагает открыть приложением. */
         const val FILE_EXTENSION = "ffpack"
@@ -131,13 +133,3 @@ data class PackSpot(
     val sectorId: String? = null
 )
 
-@Serializable
-data class PackFish(
-    val id: String,
-    val name: String,
-    val description: String = "",
-    val minTempC: Double,
-    val maxTempC: Double,
-    val minPressureMmHg: Double,
-    val maxPressureMmHg: Double
-)

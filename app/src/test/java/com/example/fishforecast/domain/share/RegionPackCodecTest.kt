@@ -36,8 +36,10 @@ class RegionPackCodecTest {
         uid = "fish-carp",
         name = "Карп",
         description = "",
-        minTemp = 15f,
-        maxTemp = 28f,
+        optMinTemp = 18f,
+        optMaxTemp = 26f,
+        absMinTemp = 8f,
+        absMaxTemp = 30f,
         minPressure = 740f,
         maxPressure = 760f
     )
@@ -141,7 +143,7 @@ class RegionPackCodecTest {
 
     @Test
     fun `пакет из будущей версии отвергается с понятной причиной`() {
-        val future = RegionPackCodec.encode(pack()).replace("region-pack/1", "region-pack/2")
+        val future = RegionPackCodec.encode(pack()).replace("region-pack/2", "region-pack/3")
 
         val error = RegionPackCodec.decode(future).exceptionOrNull()!!
 

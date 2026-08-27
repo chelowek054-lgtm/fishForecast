@@ -5,6 +5,8 @@ import com.example.fishforecast.data.local.entities.FishingSpotEntity
 import com.example.fishforecast.data.local.entities.SavedMapEntity
 import com.example.fishforecast.data.local.entities.SectorEntity
 import com.example.fishforecast.data.local.entities.ZoneEntity
+import com.example.fishforecast.domain.fish.toCatalogFish
+import com.example.fishforecast.domain.fish.toEntity
 import kotlinx.serialization.json.Json
 
 /**
@@ -112,17 +114,7 @@ object RegionPackCodec {
                     sectorId = spot.sectorUid
                 )
             },
-            fish = fish.map { entry ->
-                PackFish(
-                    id = entry.uid,
-                    name = entry.name,
-                    description = entry.description,
-                    minTempC = entry.minTemp.toDouble(),
-                    maxTempC = entry.maxTemp.toDouble(),
-                    minPressureMmHg = entry.minPressure.toDouble(),
-                    maxPressureMmHg = entry.maxPressure.toDouble()
-                )
-            }
+            fish = fish.map { it.toCatalogFish() }
         )
     }
 
@@ -188,17 +180,7 @@ object RegionPackCodec {
         // станет известен только после того, как справочник получателя
         // примет чужие виды.
         spotFish = pack.spots.mapNotNull { spot -> spot.fishId?.let { spot.id to it } }.toMap(),
-        fish = pack.fish.map { entry ->
-            FishEntity(
-                uid = entry.id,
-                name = entry.name,
-                description = entry.description,
-                minTemp = entry.minTempC.toFloat(),
-                maxTemp = entry.maxTempC.toFloat(),
-                minPressure = entry.minPressureMmHg.toFloat(),
-                maxPressure = entry.maxPressureMmHg.toFloat()
-            )
-        }
+        fish = pack.fish.map { it.toEntity() }
     )
 }
 
