@@ -26,6 +26,7 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -58,6 +59,7 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.example.fishforecast.data.local.entities.FishEntity
 import com.example.fishforecast.data.local.entities.FishingSpotEntity
+import com.example.fishforecast.data.local.entities.SpotPlacement
 import com.example.fishforecast.data.local.entities.SavedMapEntity
 import com.example.fishforecast.data.repository.RegionDownloadState
 import com.example.fishforecast.domain.share.GpxWriter
@@ -126,6 +128,14 @@ fun MapScreen(
                         onDismissRequest = { showShareMenu = false }
                     ) {
                         DropdownMenuItem(
+                            text = { Text("Район целиком: пакет") },
+                            enabled = activeMap != null,
+                            onClick = {
+                                showShareMenu = false
+                                viewModel.shareActiveRegion()
+                            }
+                        )
+                        DropdownMenuItem(
                             text = { Text("Точки файлом GPX") },
                             enabled = spots.isNotEmpty(),
                             onClick = {
@@ -164,6 +174,16 @@ fun MapScreen(
                 .fillMaxSize()
                 .padding(paddingValues)
         ) {
+            // Пакет собирается в фоне, поэтому отправка запускается отдельно
+            // от нажатия: иначе системный выбор открылся бы с пустым файлом.
+            val packToShare by viewModel.packToShare
+            LaunchedEffect(packToShare) {
+                packToShare?.let { file ->
+                    shareRegionPack(context, file)
+                    viewModel.packShared()
+                }
+            }
+
             val mapView = rememberMapViewWithLifecycle()
 
             AndroidView(
@@ -310,13 +330,14 @@ fun MapScreen(
             point = point,
             fishList = fishList,
             onDismiss = { newSpotPoint = null },
-            onConfirm = { name, fishId, note ->
+            onConfirm = { name, fishId, note, placement ->
                 viewModel.addSpot(
                     name = name,
                     latitude = point.latitude,
                     longitude = point.longitude,
                     fishId = fishId,
-                    note = note
+                    note = note,
+                    placement = placement
                 )
                 newSpotPoint = null
             }
@@ -343,11 +364,12 @@ private fun AddSpotDialog(
     point: LatLng,
     fishList: List<FishEntity>,
     onDismiss: () -> Unit,
-    onConfirm: (name: String, fishId: Int?, note: String) -> Unit
+    onConfirm: (name: String, fishId: Int?, note: String, placement: SpotPlacement) -> Unit
 ) {
     var name by remember { mutableStateOf("") }
     var note by remember { mutableStateOf("") }
     var fishId by remember { mutableStateOf<Int?>(null) }
+    var placement by remember { mutableStateOf(SpotPlacement.WATER) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -371,6 +393,19 @@ private fun AddSpotDialog(
                     onValueChange = { note = it },
                     label = { Text("Заметка") }
                 )
+                // Точка на берегу и точка в воде — разные вещи: первая
+                // говорит, где встать, вторая — куда забрасывать.
+                Spacer(modifier = Modifier.height(12.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    SpotPlacement.entries.forEach { option ->
+                        FilterChip(
+                            selected = placement == option,
+                            onClick = { placement = option },
+                            label = { Text(if (option == SpotPlacement.SHORE) "Берег" else "Вода") }
+                        )
+                    }
+                }
+
                 if (fishList.isNotEmpty()) {
                     Spacer(modifier = Modifier.height(12.dp))
                     Text("Кто здесь берёт:", style = MaterialTheme.typography.labelMedium)
@@ -390,7 +425,7 @@ private fun AddSpotDialog(
         confirmButton = {
             TextButton(
                 onClick = {
-                    onConfirm(name.ifBlank { "Точка" }, fishId, note)
+                    onConfirm(name.ifBlank { "Точка" }, fishId, note, placement)
                 }
             ) {
                 Text("Сохранить")

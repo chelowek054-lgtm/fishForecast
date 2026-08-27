@@ -8,6 +8,7 @@ import com.example.fishforecast.data.local.dao.CatchDao
 import com.example.fishforecast.data.local.dao.FishDao
 import com.example.fishforecast.data.local.dao.FishingSpotDao
 import com.example.fishforecast.data.local.dao.PressureLogDao
+import com.example.fishforecast.data.local.dao.ZoneDao
 import com.example.fishforecast.data.local.dao.SavedMapDao
 import com.example.fishforecast.data.local.dao.WeatherDao
 import com.example.fishforecast.data.local.entities.CatchEntity
@@ -15,6 +16,8 @@ import com.example.fishforecast.data.local.entities.DailySunEntity
 import com.example.fishforecast.data.local.entities.FishEntity
 import com.example.fishforecast.data.local.entities.FishingSpotEntity
 import com.example.fishforecast.data.local.entities.PressureLogEntity
+import com.example.fishforecast.data.local.entities.SectorEntity
+import com.example.fishforecast.data.local.entities.ZoneEntity
 import com.example.fishforecast.data.local.entities.SavedMapEntity
 import com.example.fishforecast.data.local.entities.WeatherEntity
 
@@ -26,9 +29,11 @@ import com.example.fishforecast.data.local.entities.WeatherEntity
         FishingSpotEntity::class,
         CatchEntity::class,
         DailySunEntity::class,
-        PressureLogEntity::class
+        PressureLogEntity::class,
+        ZoneEntity::class,
+        SectorEntity::class
     ],
-    version = 13,
+    version = 14,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -38,6 +43,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun fishingSpotDao(): FishingSpotDao
     abstract fun catchDao(): CatchDao
     abstract fun pressureLogDao(): PressureLogDao
+    abstract fun zoneDao(): ZoneDao
 
     companion object {
         /** Офлайн-области (Фаза 3). Справочник рыб пересоздавать нельзя — он правится вручную. */
@@ -399,6 +405,67 @@ abstract class AppDatabase : RoomDatabase() {
                 db.execSQL(
                     "CREATE INDEX IF NOT EXISTS `index_fishing_spots_fishId` " +
                         "ON `fishing_spots` (`fishId`)"
+                )
+            }
+        }
+
+        /**
+         * Всё, чем есть смысл делиться, получает глобальный идентификатор, а
+         * рыболов — право обвести свои границы.
+         *
+         * Числовой ключ Room у каждого устройства свой: два человека, каждый
+         * со своим «районом номер один», при обмене затирали бы друг друга.
+         * uid делает запись одной и той же на любом устройстве и на будущем
+         * общем сервере. Существующим строкам он раздаётся здесь же —
+         * случайными шестнадцатеричными, как это умеет сам SQLite.
+         *
+         * Зоны и секторы появляются потому, что карт границ и глубин в
+         * открытых источниках нет, а у рыболова эти знания есть.
+         */
+        val MIGRATION_13_14 = object : Migration(13, 14) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                listOf("fish", "saved_maps", "fishing_spots").forEach { table ->
+                    db.execSQL("ALTER TABLE `$table` ADD COLUMN `uid` TEXT NOT NULL DEFAULT ''")
+                    db.execSQL("UPDATE `$table` SET `uid` = lower(hex(randomblob(16)))")
+                }
+
+                db.execSQL(
+                    "ALTER TABLE `fishing_spots` ADD COLUMN `placement` TEXT NOT NULL " +
+                        "DEFAULT 'WATER'"
+                )
+                db.execSQL("ALTER TABLE `fishing_spots` ADD COLUMN `zoneUid` TEXT")
+                db.execSQL("ALTER TABLE `fishing_spots` ADD COLUMN `sectorUid` TEXT")
+
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `zones` (
+                        `uid` TEXT NOT NULL PRIMARY KEY,
+                        `mapUid` TEXT NOT NULL,
+                        `name` TEXT NOT NULL,
+                        `kind` TEXT NOT NULL,
+                        `outline` TEXT NOT NULL,
+                        `note` TEXT NOT NULL,
+                        `createdAt` INTEGER NOT NULL
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_zones_mapUid` ON `zones` (`mapUid`)")
+
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `zone_sectors` (
+                        `uid` TEXT NOT NULL PRIMARY KEY,
+                        `zoneUid` TEXT NOT NULL,
+                        `name` TEXT NOT NULL,
+                        `outline` TEXT NOT NULL,
+                        `note` TEXT NOT NULL,
+                        `createdAt` INTEGER NOT NULL
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_zone_sectors_zoneUid` " +
+                        "ON `zone_sectors` (`zoneUid`)"
                 )
             }
         }

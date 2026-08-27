@@ -15,6 +15,11 @@ import androidx.room.PrimaryKey
 data class SavedMapEntity(
     @PrimaryKey(autoGenerate = true)
     val id: Int = 0,
+    /**
+     * Глобальный идентификатор района: он же останется ключом в общей базе,
+     * когда районы начнут публиковаться на сервер.
+     */
+    val uid: String = java.util.UUID.randomUUID().toString(),
     val name: String,
     /** Идентификатор региона в OfflineManager MapLibre. */
     val offlineRegionId: Long,

@@ -12,6 +12,13 @@ interface FishDao {
     @Query("SELECT * FROM fish WHERE id = :id")
     suspend fun getFishById(id: Int): FishEntity?
 
+    @Query("SELECT * FROM fish")
+    suspend fun allFish(): List<FishEntity>
+
+    /** Поиск по глобальному идентификатору: так узнаётся чужой вид. */
+    @Query("SELECT * FROM fish WHERE uid = :uid")
+    suspend fun getFishByUid(uid: String): FishEntity?
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertFish(fish: FishEntity)
 

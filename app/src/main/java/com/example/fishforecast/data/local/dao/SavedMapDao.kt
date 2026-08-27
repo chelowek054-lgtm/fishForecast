@@ -17,6 +17,10 @@ interface SavedMapDao {
     @Query("SELECT * FROM saved_maps WHERE id = :id")
     suspend fun getRegionById(id: Int): SavedMapEntity?
 
+    /** Поиск по глобальному идентификатору: так узнаётся чужой район. */
+    @Query("SELECT * FROM saved_maps WHERE uid = :uid")
+    suspend fun getRegionByUid(uid: String): SavedMapEntity?
+
     @Query("SELECT * FROM saved_maps WHERE id = :id")
     fun observeMap(id: Int): Flow<SavedMapEntity?>
 

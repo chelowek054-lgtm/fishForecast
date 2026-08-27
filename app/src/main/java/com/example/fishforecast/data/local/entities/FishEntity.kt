@@ -9,6 +9,12 @@ import kotlinx.serialization.Serializable
 data class FishEntity(
     @PrimaryKey(autoGenerate = true)
     val id: Int = 0,
+    /**
+     * Глобальный идентификатор вида. Числовой ключ у каждого устройства
+     * свой, а справочник ходит между рыболовами вместе с районом: по uid
+     * видно, что это тот же карп, а не второй такой же.
+     */
+    val uid: String = java.util.UUID.randomUUID().toString(),
     val name: String,
     val description: String,
     val minTemp: Float,

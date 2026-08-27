@@ -6,6 +6,18 @@ import androidx.room.Index
 import androidx.room.PrimaryKey
 
 /**
+ * Где стоит точка. Разговор на воде идёт именно так: «встал на мысу» и
+ * «бросал в яму» — это разные точки, и путать их нельзя.
+ */
+enum class SpotPlacement {
+    /** Место на берегу: подход, стоянка, номер сектора. */
+    SHORE,
+
+    /** Место в воде: яма, бровка, стол, окно в траве. */
+    WATER
+}
+
+/**
  * Секретная точка. [fishId] связывает её со справочником: по нему видно,
  * какая рыба здесь берёт, и Bite Score из Фазы 4 сможет считать прогноз
  * прямо для точки. Удаление рыбы из справочника не должно уносить точку —
@@ -26,10 +38,20 @@ import androidx.room.PrimaryKey
 data class FishingSpotEntity(
     @PrimaryKey(autoGenerate = true)
     val id: Int = 0,
+    /** Глобальный идентификатор точки — ключ при обмене и в общей базе. */
+    val uid: String = java.util.UUID.randomUUID().toString(),
     val name: String,
     val latitude: Double,
     val longitude: Double,
     val fishId: Int? = null,
     val note: String = "",
+    /**
+     * [SpotPlacement] строкой. Точка на берегу и точка в воде — разные
+     * вещи: первая говорит, где встать, вторая — куда забрасывать.
+     */
+    val placement: String = SpotPlacement.WATER.name,
+    /** В какой зоне и секторе стоит точка; null — привязки нет. */
+    val zoneUid: String? = null,
+    val sectorUid: String? = null,
     val createdAt: Long = System.currentTimeMillis()
 )

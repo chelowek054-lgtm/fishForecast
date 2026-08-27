@@ -34,6 +34,35 @@ class ActiveMapStore @Inject constructor(
         context.settings.edit { preferences -> preferences[BASE_LAYER] = name }
     }
 
+    /**
+     * Кто этот рыболов для обмена пакетами. Идентификатор случайный и
+     * заводится сам: требовать учётную запись ради отправки файла незачем,
+     * а в общей базе нужно понимать, чей район. Имя — по желанию.
+     */
+    val authorId: Flow<String?> = context.settings.data.map { it[AUTHOR_ID] }
+
+    val authorName: Flow<String?> = context.settings.data.map { it[AUTHOR_NAME] }
+
+    /** Возвращает идентификатор, заводя его при первом обращении. */
+    suspend fun ensureAuthorId(): String {
+        var id = ""
+        context.settings.edit { preferences ->
+            id = preferences[AUTHOR_ID] ?: java.util.UUID.randomUUID().toString()
+            preferences[AUTHOR_ID] = id
+        }
+        return id
+    }
+
+    suspend fun setAuthorName(name: String?) {
+        context.settings.edit { preferences ->
+            if (name.isNullOrBlank()) {
+                preferences.remove(AUTHOR_NAME)
+            } else {
+                preferences[AUTHOR_NAME] = name
+            }
+        }
+    }
+
     suspend fun setActiveMapId(id: Int?) {
         context.settings.edit { preferences ->
             if (id == null) {
@@ -47,5 +76,7 @@ class ActiveMapStore @Inject constructor(
     private companion object {
         val ACTIVE_MAP_ID = intPreferencesKey("active_map_id")
         val BASE_LAYER = stringPreferencesKey("base_layer")
+        val AUTHOR_ID = stringPreferencesKey("author_id")
+        val AUTHOR_NAME = stringPreferencesKey("author_name")
     }
 }

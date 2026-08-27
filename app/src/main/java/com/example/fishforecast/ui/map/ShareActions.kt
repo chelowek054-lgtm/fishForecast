@@ -5,6 +5,7 @@ import android.content.Intent
 import android.graphics.Bitmap
 import androidx.core.content.FileProvider
 import com.example.fishforecast.data.local.entities.FishingSpotEntity
+import com.example.fishforecast.domain.share.RegionPack
 import java.io.File
 import java.io.FileOutputStream
 
@@ -39,9 +40,13 @@ fun shareSpotsAsGpx(context: Context, gpx: String) {
     shareIntent(context, file, "application/gpx+xml", "Поделиться точками")
 }
 
-/** Отдаёт наружу базу скачанных карт: файл уже подготовлен репозиторием. */
-fun shareMapsDatabase(context: Context, file: File) {
-    shareIntent(context, file, "application/octet-stream", "Поделиться картами")
+/**
+ * Отдаёт наружу пакет района: границы и зоны, норма давления, глубины,
+ * точки и виды рыб. Файл собран репозиторием и весит килобайты — тайлы в
+ * него не входят, получатель докачает их сам.
+ */
+fun shareRegionPack(context: Context, file: File) {
+    shareIntent(context, file, RegionPack.MIME_TYPE, "Поделиться районом")
 }
 
 fun shareMapSnapshot(context: Context, bitmap: Bitmap) {

@@ -43,7 +43,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.example.fishforecast.data.local.entities.SavedMapEntity
-import com.example.fishforecast.ui.map.shareMapsDatabase
+import com.example.fishforecast.ui.map.shareRegionPack
 import com.example.fishforecast.ui.map.shareSpotsAsGpx
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
@@ -66,9 +66,9 @@ fun SavedMapsScreen(
 
     // Чужие файлы приходят через системный выбор — приложению не нужен
     // доступ ко всему хранилищу.
-    val pickMaps = rememberLauncherForActivityResult(
+    val pickPack = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenDocument()
-    ) { uri -> uri?.let(viewModel::importMaps) }
+    ) { uri -> uri?.let(viewModel::importPack) }
 
     val pickGpx = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenDocument()
@@ -83,7 +83,7 @@ fun SavedMapsScreen(
     LaunchedEffect(Unit) {
         viewModel.events.collect { event ->
             when (event) {
-                is SavedMapsMessage.MapsReady -> shareMapsDatabase(context, event.file)
+                is SavedMapsMessage.PackReady -> shareRegionPack(context, event.file)
                 is SavedMapsMessage.Info -> snackbarHostState.showSnackbar(event.text)
                 is SavedMapsMessage.Error -> snackbarHostState.showSnackbar(event.text)
             }
@@ -110,7 +110,7 @@ fun SavedMapsScreen(
                     EmptyMapsCard(
                         busy = busy,
                         onOpenMap = onOpenMap,
-                        onImport = { pickMaps.launch(arrayOf("*/*")) }
+                        onImport = { pickPack.launch(arrayOf("*/*")) }
                     )
                 }
             }
@@ -122,33 +122,27 @@ fun SavedMapsScreen(
                     onSelect = { viewModel.selectMap(map) },
                     onRename = { viewModel.renameMap(map, it) },
                     onDepthsChange = { shallow, deep -> viewModel.setDepths(map, shallow, deep) },
+                    onShareRegion = { viewModel.exportRegion(map) },
                     onRecalculateNormal = { viewModel.recalculateNormalPressure(map) },
                     onWaterMeasured = { viewModel.measureWater(map, it) },
                     onDelete = { viewModel.deleteMap(map) }
                 )
             }
 
-            if (maps.isNotEmpty()) {
-                item {
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Button(onClick = { viewModel.exportMaps() }, enabled = !busy) {
-                            Text("Поделиться картами")
-                        }
-                        OutlinedButton(
-                            onClick = { pickMaps.launch(arrayOf("*/*")) },
-                            enabled = !busy
-                        ) {
-                            Text("Загрузить чужие")
-                        }
-                    }
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(
-                        text = "Чужую карту нужно один раз открыть при интернете: вместе с " +
-                            "областью не передаётся оформление стиля. После этого она " +
-                            "рисуется без сети.",
-                        style = MaterialTheme.typography.bodySmall
-                    )
+            item {
+                Spacer(modifier = Modifier.height(8.dp))
+                OutlinedButton(
+                    onClick = { pickPack.launch(arrayOf("*/*")) },
+                    enabled = !busy
+                ) {
+                    Text("Открыть чужой пакет района")
                 }
+                Text(
+                    text = "В пакете едет знание о месте: границы и зоны с секторами, " +
+                        "норма давления, глубины, точки и виды рыб. Тайлы карты в него " +
+                        "не входят — откройте район при сети, и они скачаются.",
+                    style = MaterialTheme.typography.bodySmall
+                )
             }
 
             item {
@@ -231,6 +225,7 @@ private fun SavedMapCard(
     onSelect: () -> Unit,
     onRename: (String) -> Unit,
     onDepthsChange: (Double?, Double?) -> Unit,
+    onShareRegion: () -> Unit,
     onRecalculateNormal: () -> Unit,
     onWaterMeasured: (Double?) -> Unit,
     onDelete: () -> Unit
@@ -292,6 +287,9 @@ private fun SavedMapCard(
                 }
                 TextButton(onClick = { expanded = !expanded }) {
                     Text(if (expanded) "Свернуть" else "Изменить")
+                }
+                TextButton(onClick = onShareRegion) {
+                    Text("Поделиться")
                 }
             }
 

@@ -9,6 +9,9 @@ Android-приложение, которое отвечает на один во
 Какие данные нужны, чтобы подсказать место, прикормку и наживку, и что из этого
 уже есть на устройстве — в [app/docs/BiteFactors.md](app/docs/BiteFactors.md).
 
+Как рыболовы обмениваются районами и каким будет общий сервер —
+в [app/docs/RegionPack.md](app/docs/RegionPack.md).
+
 ## Сборка
 
 Нужен JDK 17+ (подойдёт тот, что идёт с Android Studio) и Android SDK.

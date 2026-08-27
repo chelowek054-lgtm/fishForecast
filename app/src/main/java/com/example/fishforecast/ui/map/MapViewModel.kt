@@ -7,9 +7,11 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.fishforecast.data.local.entities.FishEntity
 import com.example.fishforecast.data.local.entities.FishingSpotEntity
+import com.example.fishforecast.data.local.entities.SpotPlacement
 import com.example.fishforecast.data.local.entities.SavedMapEntity
 import com.example.fishforecast.data.repository.FishRepository
 import com.example.fishforecast.data.repository.FishingContextRepository
+import com.example.fishforecast.data.repository.RegionPackRepository
 import com.example.fishforecast.data.repository.FishingSpotRepository
 import com.example.fishforecast.data.repository.OfflineMapRepository
 import com.example.fishforecast.data.repository.RegionDownloadState
@@ -28,6 +30,7 @@ class MapViewModel @Inject constructor(
     private val offlineMapRepository: OfflineMapRepository,
     private val fishingSpotRepository: FishingSpotRepository,
     private val fishingContext: FishingContextRepository,
+    private val regionPackRepository: RegionPackRepository,
     fishRepository: FishRepository
 ) : ViewModel() {
 
@@ -75,6 +78,21 @@ class MapViewModel @Inject constructor(
             started = SharingStarted.WhileSubscribed(5000),
             initialValue = emptyList()
         )
+
+    /** Готовый пакет района ждёт отправки; null — делиться пока нечем. */
+    private val _packToShare = mutableStateOf<java.io.File?>(null)
+    val packToShare: State<java.io.File?> = _packToShare
+
+    fun shareActiveRegion() {
+        viewModelScope.launch {
+            val map = activeMap.value ?: return@launch
+            regionPackRepository.exportRegion(map.id).onSuccess { _packToShare.value = it }
+        }
+    }
+
+    fun packShared() {
+        _packToShare.value = null
+    }
 
     private val _downloadState = mutableStateOf<RegionDownloadState?>(null)
     val downloadState: State<RegionDownloadState?> = _downloadState
@@ -142,7 +160,8 @@ class MapViewModel @Inject constructor(
         latitude: Double,
         longitude: Double,
         fishId: Int?,
-        note: String
+        note: String,
+        placement: SpotPlacement = SpotPlacement.WATER
     ) {
         viewModelScope.launch {
             fishingSpotRepository.addSpot(
@@ -151,7 +170,8 @@ class MapViewModel @Inject constructor(
                     latitude = latitude,
                     longitude = longitude,
                     fishId = fishId,
-                    note = note
+                    note = note,
+                    placement = placement.name
                 )
             )
         }

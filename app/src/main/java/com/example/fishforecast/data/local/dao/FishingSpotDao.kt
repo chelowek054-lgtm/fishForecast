@@ -14,6 +14,12 @@ interface FishingSpotDao {
     @Query("SELECT * FROM fishing_spots ORDER BY createdAt DESC")
     fun getSpots(): Flow<List<FishingSpotEntity>>
 
+    @Query("SELECT * FROM fishing_spots")
+    suspend fun allSpots(): List<FishingSpotEntity>
+
+    @Query("SELECT * FROM fishing_spots WHERE uid = :uid")
+    suspend fun getSpotByUid(uid: String): FishingSpotEntity?
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertSpot(spot: FishingSpotEntity)
 

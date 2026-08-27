@@ -10,7 +10,7 @@ import com.example.fishforecast.data.local.entities.SavedMapEntity
 import com.example.fishforecast.data.repository.FishRepository
 import com.example.fishforecast.data.repository.FishingContextRepository
 import com.example.fishforecast.data.repository.FishingSpotRepository
-import com.example.fishforecast.data.repository.MapLibraryRepository
+import com.example.fishforecast.data.repository.RegionPackRepository
 import com.example.fishforecast.data.repository.OfflineMapRepository
 import com.example.fishforecast.domain.share.GpxParser
 import com.example.fishforecast.domain.share.GpxWriter
@@ -32,12 +32,12 @@ sealed interface SavedMapsMessage {
     data class Info(val text: String) : SavedMapsMessage
     data class Error(val text: String) : SavedMapsMessage
     /** Файл готов к отправке — экран открывает системный выбор приложения. */
-    data class MapsReady(val file: File) : SavedMapsMessage
+    data class PackReady(val file: File) : SavedMapsMessage
 }
 
 @HiltViewModel
 class SavedMapsViewModel @Inject constructor(
-    private val mapLibraryRepository: MapLibraryRepository,
+    private val regionPackRepository: RegionPackRepository,
     private val spotRepository: FishingSpotRepository,
     private val fishRepository: FishRepository,
     private val fishingContext: FishingContextRepository,
@@ -105,26 +105,21 @@ class SavedMapsViewModel @Inject constructor(
         viewModelScope.launch { offlineMapRepository.deleteRegion(map) }
     }
 
-    fun exportMaps() {
+    /** Собирает пакет района: знание о месте, а не файл тайлов. */
+    fun exportRegion(map: SavedMapEntity) {
         withBusy {
-            mapLibraryRepository.exportMaps().fold(
-                onSuccess = { SavedMapsMessage.MapsReady(it) },
-                onFailure = { SavedMapsMessage.Error("Не удалось выгрузить карты: ${it.message}") }
+            regionPackRepository.exportRegion(map.id).fold(
+                onSuccess = { SavedMapsMessage.PackReady(it) },
+                onFailure = { SavedMapsMessage.Error("Не удалось собрать пакет: ${it.message}") }
             )
         }
     }
 
-    fun importMaps(uri: Uri) {
+    fun importPack(uri: Uri) {
         withBusy {
-            mapLibraryRepository.importMaps(uri).fold(
-                onSuccess = { added ->
-                    if (added > 0) {
-                        SavedMapsMessage.Info("Добавлено карт: $added")
-                    } else {
-                        SavedMapsMessage.Info("Новых карт в файле не нашлось")
-                    }
-                },
-                onFailure = { SavedMapsMessage.Error("Не удалось загрузить карты: ${it.message}") }
+            regionPackRepository.importPack(uri).fold(
+                onSuccess = { summary -> SavedMapsMessage.Info(summary.describe()) },
+                onFailure = { SavedMapsMessage.Error("Не удалось открыть пакет: ${it.message}") }
             )
         }
     }
@@ -166,4 +161,20 @@ class SavedMapsViewModel @Inject constructor(
             _busy.value = false
         }
     }
+}
+
+/**
+ * Короткий отчёт о том, что приехало. Рыболову важно понимать, что он
+ * получил не картинку, а знание о месте — и что тайлы надо будет докачать.
+ */
+private fun RegionPackRepository.ImportSummary.describe(): String = buildString {
+    append(if (regionAdded) "Район «$regionName» добавлен" else "Район «$regionName» обновлён")
+    val parts = listOfNotNull(
+        zonesAdded.takeIf { it > 0 }?.let { "зон: $it" },
+        sectorsAdded.takeIf { it > 0 }?.let { "секторов: $it" },
+        spotsAdded.takeIf { it > 0 }?.let { "точек: $it" },
+        fishAdded.takeIf { it > 0 }?.let { "видов рыб: $it" }
+    )
+    if (parts.isNotEmpty()) append(" · ${parts.joinToString(", ")}")
+    if (needsTiles) append(". Откройте карту при сети — тайлы скачаются")
 }
