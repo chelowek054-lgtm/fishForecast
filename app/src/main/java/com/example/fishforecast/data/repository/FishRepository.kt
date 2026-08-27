@@ -47,14 +47,28 @@ class FishRepository @Inject constructor(
     suspend fun setCatalogUrl(url: String?) = store.setCatalogUrl(url)
 
     /**
-     * Заполняет справочник из ассетов, если он пуст.
+     * Раскладывает встроенный справочник по базе, когда это нужно.
      *
-     * Пустой справочник — это первый запуск, а не выбор рыболова: без видов
-     * приложению нечего считать.
+     * Раньше это делалось только для пустой базы, и получалось скверно: с
+     * новой версией приложения приезжал новый справочник, а рыболов
+     * продолжал видеть старый — база-то не пуста. Теперь у файла считается
+     * отпечаток, и обновлённый справочник применяется при первом же
+     * запуске.
+     *
+     * Своё при этом не страдает: виды, заведённые рыболовом, не трогаются,
+     * его описания сохраняются. А вот пороги вида справочник перезапишет —
+     * он для того и обновляется.
      */
-    suspend fun preloadDataIfNeeded(): Result<Unit> = runCatching {
-        if (fishDao.allFish().isNotEmpty()) return@runCatching
-        applyCatalog(readAssetCatalog())
+    suspend fun syncBuiltInCatalog(): Result<Int> = runCatching {
+        val text = readAssetText()
+        val fingerprint = text.hashCode()
+        if (fishDao.allFish().isNotEmpty() && store.builtInFingerprint.first() == fingerprint) {
+            return@runCatching 0
+        }
+
+        val changed = applyCatalog(FishCatalogCodec.decode(text).getOrThrow())
+        store.setBuiltInFingerprint(fingerprint)
+        changed
     }
 
     /**
@@ -84,12 +98,14 @@ class FishRepository @Inject constructor(
 
     /** Возвращает справочник к тому, что едет с приложением. */
     suspend fun restoreCatalogFromAssets(): Result<Int> = runCatching {
-        applyCatalog(readAssetCatalog())
+        val text = readAssetText()
+        val changed = applyCatalog(FishCatalogCodec.decode(text).getOrThrow())
+        store.setBuiltInFingerprint(text.hashCode())
+        changed
     }
 
-    private suspend fun readAssetCatalog(): FishCatalog = withContext(Dispatchers.IO) {
-        val text = context.assets.open(ASSET_NAME).bufferedReader().use { it.readText() }
-        FishCatalogCodec.decode(text).getOrThrow()
+    private suspend fun readAssetText(): String = withContext(Dispatchers.IO) {
+        context.assets.open(ASSET_NAME).bufferedReader().use { it.readText() }
     }
 
     /**

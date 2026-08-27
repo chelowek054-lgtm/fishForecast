@@ -85,7 +85,7 @@ class FishListViewModel @Inject constructor(
 
     init {
         viewModelScope.launch {
-            repository.preloadDataIfNeeded().onFailure {
+            repository.syncBuiltInCatalog().onFailure {
                 _error.value = "Не удалось загрузить справочник: ${it.message}"
             }
         }

@@ -40,6 +40,17 @@ class CatalogStore @Inject constructor(
         }
     }
 
+    /**
+     * Отпечаток встроенного справочника, который уже разложен по базе.
+     * По нему видно, что файл в приложении обновился и его надо применить.
+     */
+    val builtInFingerprint: Flow<Int> = context.catalogSettings.data
+        .map { it[BUILT_IN_FINGERPRINT] ?: 0 }
+
+    suspend fun setBuiltInFingerprint(fingerprint: Int) {
+        context.catalogSettings.edit { it[BUILT_IN_FINGERPRINT] = fingerprint }
+    }
+
     suspend fun setCatalogVersion(version: Int) {
         context.catalogSettings.edit { preferences -> preferences[CATALOG_VERSION] = version }
     }
@@ -47,5 +58,6 @@ class CatalogStore @Inject constructor(
     private companion object {
         val CATALOG_URL = stringPreferencesKey("catalog_url")
         val CATALOG_VERSION = intPreferencesKey("catalog_version")
+        val BUILT_IN_FINGERPRINT = intPreferencesKey("built_in_fingerprint")
     }
 }
