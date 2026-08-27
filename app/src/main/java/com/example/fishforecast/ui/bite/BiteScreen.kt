@@ -20,6 +20,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.ui.draw.alpha
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
 import androidx.compose.runtime.mutableStateOf
@@ -195,7 +196,8 @@ fun BiteScreen(
                 return@Column
             }
 
-            val current = state.forecast.firstOrNull()
+            val current = state.forecast.getOrNull(state.nowIndex)
+                ?: state.forecast.firstOrNull()
             if (current != null) {
                 CurrentBiteCard(current, state.selectedFish?.name.orEmpty())
             }
@@ -205,7 +207,13 @@ fun BiteScreen(
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold
             )
-            BiteChart(forecast = state.forecast)
+            Text(
+                text = "$HOURS_BACK часов позади и $HOURS_FORWARD впереди — " +
+                    "клёв читается в ходе, а не в одном срезе",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            BiteChart(forecast = state.forecast, nowIndex = state.nowIndex)
         }
         }
     }
@@ -281,11 +289,11 @@ private fun CurrentBiteCard(forecast: BiteForecast, fishName: String) {
  * одной диаграммы утянула бы в офлайн-приложение лишний вес.
  */
 @Composable
-private fun BiteChart(forecast: List<BiteForecast>) {
+private fun BiteChart(forecast: List<BiteForecast>, nowIndex: Int) {
     if (forecast.isEmpty()) return
 
-    val visible = forecast.take(HOURS_ON_CHART)
-    val barColors = visible.map { it.level.bar() }
+    val barColors = forecast.map { it.level.bar() }
+    val nowColor = MaterialTheme.colorScheme.onSurface
 
     Column {
         Row(
@@ -295,11 +303,16 @@ private fun BiteChart(forecast: List<BiteForecast>) {
             verticalAlignment = Alignment.Bottom,
             horizontalArrangement = Arrangement.spacedBy(4.dp)
         ) {
-            visible.forEachIndexed { index, hour ->
+            forecast.forEachIndexed { index, hour ->
+                val past = nowIndex >= 0 && index < nowIndex
+
                 Box(
                     modifier = Modifier
                         .weight(1f)
-                        .fillMaxSize(),
+                        .fillMaxSize()
+                        // Прошедшее бледнее: оно объясняет, откуда пришли,
+                        // но решение принимают по тому, что впереди.
+                        .alpha(if (past) PAST_ALPHA else 1f),
                     contentAlignment = Alignment.BottomCenter
                 ) {
                     Canvas(modifier = Modifier.fillMaxSize()) {
@@ -309,6 +322,16 @@ private fun BiteChart(forecast: List<BiteForecast>) {
                             topLeft = androidx.compose.ui.geometry.Offset(0f, size.height - barHeight),
                             size = androidx.compose.ui.geometry.Size(size.width, barHeight)
                         )
+                        // Разделитель «сейчас»: без него столбики прошлого и
+                        // будущего сливаются в один ряд.
+                        if (index == nowIndex) {
+                            drawLine(
+                                color = nowColor,
+                                start = androidx.compose.ui.geometry.Offset(0f, 0f),
+                                end = androidx.compose.ui.geometry.Offset(0f, size.height),
+                                strokeWidth = 3f
+                            )
+                        }
                     }
                 }
             }
@@ -316,18 +339,27 @@ private fun BiteChart(forecast: List<BiteForecast>) {
 
         Spacer(modifier = Modifier.height(4.dp))
 
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(4.dp)
-        ) {
-            visible.forEach { hour ->
+        // Подпись у каждого столбика не влезает: ячейка уже, чем «06:00».
+        // Поэтому ось делится на группы по шесть часов, и подпись занимает
+        // всю ширину своей группы.
+        Row(modifier = Modifier.fillMaxWidth()) {
+            forecast.chunked(LABEL_STEP).forEach { chunk ->
                 Text(
-                    text = hour.time.takeLast(5).take(2),
+                    text = chunk.first().time.takeLast(5),
                     style = MaterialTheme.typography.labelSmall,
-                    modifier = Modifier.weight(1f),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.weight(chunk.size.toFloat()),
                     maxLines = 1
                 )
             }
+        }
+
+        forecast.getOrNull(nowIndex)?.let { hour ->
+            Text(
+                text = "• сейчас ${hour.time.takeLast(5)}",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
         }
     }
 }
@@ -350,4 +382,12 @@ private fun BiteLevel.bar(): Color = when (this) {
     BiteLevel.POOR -> Color(0xFFC62828)
 }
 
-private const val HOURS_ON_CHART = 12
+/** Сколько часов показывать назад и вперёд на графике активности. */
+internal const val HOURS_BACK = 12
+internal const val HOURS_FORWARD = 24
+
+/** Насколько бледнее показываются прошедшие часы. */
+private const val PAST_ALPHA = 0.4f
+
+/** Через сколько часов ставится подпись на оси. */
+private const val LABEL_STEP = 6

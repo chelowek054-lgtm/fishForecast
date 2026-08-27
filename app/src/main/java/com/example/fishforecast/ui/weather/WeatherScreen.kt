@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -39,6 +40,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -56,6 +58,8 @@ import com.example.fishforecast.domain.water.oxygenSaturationMgL
 import com.example.fishforecast.domain.water.waterTrend
 import com.example.fishforecast.domain.weather.DailyForecast
 import com.example.fishforecast.domain.weather.PressureDirection
+import com.example.fishforecast.domain.weather.HourWindow
+import com.example.fishforecast.domain.weather.hourWindow
 import com.example.fishforecast.domain.weather.kmhToMs
 import com.example.fishforecast.domain.weather.pressureTrend
 import com.example.fishforecast.domain.weather.skyOf
@@ -73,8 +77,17 @@ import java.util.Locale
 import kotlin.math.abs
 import kotlin.math.roundToInt
 
-/** Сколько часов показывать на графиках ближайшего времени. */
-private const val HOURLY_WINDOW = 24
+/** Сколько часов показывать вперёд на графиках ближайшего времени. */
+private const val HOURS_FORWARD = 24
+
+/**
+ * И сколько назад. Прогноз без прошлого отвечает только «что будет», а
+ * рыболову нужно «что происходит»: падение давления читается в сравнении.
+ */
+private const val HOURS_BACK = 12
+
+/** Насколько бледнее показываются прошедшие часы. */
+private const val PAST_ALPHA = 0.45f
 
 /** Ход воды меньше этого за окно — считаем, что вода стоит. */
 private const val COOLING_THRESHOLD = 0.5
@@ -115,8 +128,11 @@ fun WeatherScreen(
     // «сейчас» показывало бы полночь.
     val currentIndex = remember(forecast) { forecast.indexOfCurrentHour() }
     val current = forecast.getOrNull(currentIndex)
+    val window = remember(forecast) {
+        hourWindow(forecast, HOURS_BACK, HOURS_FORWARD) { it.time }
+    }
     val upcoming = remember(forecast, currentIndex) {
-        forecast.drop(currentIndex).take(HOURLY_WINDOW)
+        forecast.drop(currentIndex).take(HOURS_FORWARD)
     }
     // Неделя считается от сегодняшнего дня: в кэше теперь лежат и прошедшие
     // сутки, но прогноз на вчера рыболову ни к чему.
@@ -207,8 +223,16 @@ fun WeatherScreen(
                                         }
                                     )
                                 ) {
-                                    val shallow = water.shallow.fromNow().take(HOURLY_WINDOW)
-                                    val deep = water.deep.fromNow().take(HOURLY_WINDOW)
+                                    val shallow = hourWindow(
+                                        items = water.shallow,
+                                        hoursBack = HOURS_BACK,
+                                        hoursForward = HOURS_FORWARD
+                                    ) { it.time }.items
+                                    val deep = hourWindow(
+                                        items = water.deep,
+                                        hoursBack = HOURS_BACK,
+                                        hoursForward = HOURS_FORWARD
+                                    ) { it.time }.items
                                     MultiLineChart(
                                         labels = shallow.map { it.time.timeOnly() },
                                         series = listOf(
@@ -231,24 +255,30 @@ fun WeatherScreen(
 
                     if (upcoming.size >= 2) {
                         item {
-                            ChartSection(title = "Ближайшие часы") {
-                                HourlyStrip(upcoming)
+                            ChartSection(
+                                title = "Ход погоды",
+                                subtitle = "$HOURS_BACK часов назад и $HOURS_FORWARD вперёд"
+                            ) {
+                                HourlyStrip(window)
                             }
                         }
                         item {
                             ChartSection(
                                 title = "Температура",
-                                subtitle = "На $HOURLY_WINDOW часа вперёд"
+                                subtitle = "От −$HOURS_BACK ч до +$HOURS_FORWARD ч"
                             ) {
                                 LineChart(
-                                    points = upcoming.map { hour ->
+                                    points = window.items.map { hour ->
                                         ChartPoint(
                                             label = hour.hourLabel(),
                                             value = hour.temperature
                                         )
                                     },
                                     valueSuffix = "°",
-                                    highlightIndex = 0
+                                    // Окно стало шире: подписи через каждые
+                                    // три часа налезали бы друг на друга.
+                                    labelEvery = 6,
+                                    highlightIndex = window.nowIndex
                                 )
                             }
                         }
@@ -261,7 +291,7 @@ fun WeatherScreen(
                                 } ?: "Норма появится после первого обновления с сетью"
                             ) {
                                 LineChart(
-                                    points = upcoming.map { hour ->
+                                    points = window.items.map { hour ->
                                         ChartPoint(
                                             label = hour.hourLabel(),
                                             value = hour.pressure.hPaToMmHg()
@@ -269,7 +299,8 @@ fun WeatherScreen(
                                     },
                                     valueSuffix = "",
                                     lineColor = MaterialTheme.colorScheme.tertiary,
-                                    highlightIndex = 0,
+                                    labelEvery = 6,
+                                    highlightIndex = window.nowIndex,
                                     referenceValue = normalPressure,
                                     referenceLabel = "норма"
                                 )
@@ -587,25 +618,39 @@ private fun WeatherFact(
 
 /** Лента часов: значок, вероятность осадков, температура и ветер. */
 @Composable
-private fun HourlyStrip(hours: List<WeatherEntity>) {
-    LazyRow(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-        itemsIndexed(hours) { index, hour ->
+private fun HourlyStrip(window: HourWindow<WeatherEntity>) {
+    val listState = rememberLazyListState()
+
+    // Лента открывается на «сейчас»: прошлое рядом, но смотрят вперёд.
+    LaunchedEffect(window.nowIndex) {
+        if (window.nowIndex > 0) listState.scrollToItem(window.nowIndex)
+    }
+
+    LazyRow(
+        state = listState,
+        horizontalArrangement = Arrangement.spacedBy(4.dp)
+    ) {
+        itemsIndexed(window.items) { index, hour ->
+            val past = window.isPast(index)
+            val now = index == window.nowIndex
+
             Column(
                 modifier = Modifier
                     .width(64.dp)
                     .background(
-                        color = if (index == 0) {
-                            MaterialTheme.colorScheme.surfaceVariant
+                        color = if (now) {
+                            MaterialTheme.colorScheme.primaryContainer
                         } else {
                             MaterialTheme.colorScheme.surface
                         },
                         shape = RoundedCornerShape(12.dp)
                     )
+                    .alpha(if (past) PAST_ALPHA else 1f)
                     .padding(vertical = 8.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Text(
-                    text = if (index == 0) "сейчас" else hour.hourLabel(),
+                    text = if (now) "сейчас" else hour.hourLabel(),
                     style = MaterialTheme.typography.labelSmall
                 )
                 Icon(

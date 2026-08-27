@@ -9,6 +9,7 @@ import com.example.fishforecast.data.repository.FishRepository
 import com.example.fishforecast.data.repository.FishingContextRepository
 import com.example.fishforecast.domain.bite.BiteForecast
 import com.example.fishforecast.domain.bite.CalculateFishActivityUseCase
+import com.example.fishforecast.domain.weather.hourWindow
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -28,6 +29,8 @@ data class BiteUiState(
     val selectedSpot: FishingSpotEntity? = null,
     val activeMap: SavedMapEntity? = null,
     val forecast: List<BiteForecast> = emptyList(),
+    /** Где в ряду текущий час: по нему рисуется разделитель «сейчас». */
+    val nowIndex: Int = -1,
     /** Прогноза нет — считать нечего, и это не ошибка. */
     val weatherMissing: Boolean = false
 )
@@ -66,8 +69,9 @@ class BiteViewModel @Inject constructor(
         val calculated = selected
             ?.let { calculateFishActivity(it, weather, normalPressure, water, sunTimes) }
             .orEmpty()
-        // Час усекается: текущий час ещё идёт, и выбрасывать его нельзя.
-        val fromNow = LocalDateTime.now().truncatedTo(ChronoUnit.HOURS).format(HOUR_FORMAT)
+        // Прошедшие часы больше не выбрасываются: клёв читается в ходе, а
+        // не в моментальном срезе. Отметку «сейчас» ставит окно.
+        val window = hourWindow(calculated, HOURS_BACK, HOURS_FORWARD) { it.time }
 
         BiteUiState(
             fishList = fishList,
@@ -75,7 +79,8 @@ class BiteViewModel @Inject constructor(
             spots = spots,
             selectedSpot = spot,
             activeMap = map,
-            forecast = calculated.filter { it.time >= fromNow },
+            forecast = window.items,
+            nowIndex = window.nowIndex,
             weatherMissing = weather.isEmpty()
         )
     }.stateIn(
