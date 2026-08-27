@@ -4,6 +4,7 @@ import android.app.Application
 import com.example.fishforecast.data.local.dao.CatchDao
 import com.example.fishforecast.data.local.entities.CatchEntity
 import com.example.fishforecast.data.local.entities.FishEntity
+import com.example.fishforecast.data.local.dao.FishingSessionDao
 import com.example.fishforecast.domain.bite.CalculateFishActivityUseCase
 import com.example.fishforecast.domain.sensor.hPaToMmHg
 import kotlinx.coroutines.Dispatchers
@@ -22,7 +23,8 @@ class CatchRepository @Inject constructor(
     private val application: Application,
     private val dao: CatchDao,
     private val fishingContext: FishingContextRepository,
-    private val calculateFishActivity: CalculateFishActivityUseCase
+    private val calculateFishActivity: CalculateFishActivityUseCase,
+    private val sessionDao: FishingSessionDao
 ) {
     val catches: Flow<List<CatchEntity>> = dao.getCatches()
 
@@ -52,8 +54,12 @@ class CatchRepository @Inject constructor(
             null
         }
 
+        // Улов сам находит свой выезд: рыболову незачем связывать их руками.
+        val session = sessionDao.active()
+
         dao.insertCatch(
             entity.copy(
+                sessionId = session?.id,
                 temperature = hour?.temperature,
                 pressureMmHg = hour?.pressure?.hPaToMmHg(),
                 windSpeed = hour?.windSpeed,

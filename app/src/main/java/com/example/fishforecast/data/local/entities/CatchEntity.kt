@@ -41,6 +41,8 @@ data class CatchEntity(
     val weightGrams: Int? = null,
     val lengthCm: Int? = null,
     val note: String = "",
+    /** Выезд, в котором взяли эту рыбу; null — записана вне сессии. */
+    val sessionId: Int? = null,
     val caughtAt: Long = System.currentTimeMillis(),
 
     // Снимок условий на момент поимки.

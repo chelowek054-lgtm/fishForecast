@@ -1,6 +1,6 @@
 {
   "schema": "fishforecast.knowledge/1",
-  "version": 1,
+  "version": 2,
   "waterbodies": [
     {
       "id": "still_small",
@@ -67,39 +67,55 @@
     {
       "id": "snags",
       "name": "Коряжник, затопленные стволы",
-      "gives": ["shelter", "food"],
+      "gives": [
+        "shelter",
+        "food"
+      ],
       "predator_bonus": 0.25,
-      "peaceful_bonus": 0.10,
+      "peaceful_bonus": 0.1,
       "notes": "Работает как искусственный риф: в корягах держатся раки, личинки и малёк, за ними подтягивается хищник."
     },
     {
       "id": "bridge_piles",
       "name": "Сваи мостков",
-      "gives": ["shelter", "food", "shade"],
-      "predator_bonus": 0.20,
-      "peaceful_bonus": 0.10,
+      "gives": [
+        "shelter",
+        "food",
+        "shade"
+      ],
+      "predator_bonus": 0.2,
+      "peaceful_bonus": 0.1,
       "notes": "Тот же коряжник, только рукотворный: тень, обрастания и постоянный корм."
     },
     {
       "id": "undercut_bank",
       "name": "Подмытый берег",
-      "gives": ["shelter", "shade", "food"],
-      "predator_bonus": 0.20,
+      "gives": [
+        "shelter",
+        "shade",
+        "food"
+      ],
+      "predator_bonus": 0.2,
       "peaceful_bonus": 0.15,
       "notes": "Нависший дёрн и обнажённые корни дают тень, прохладу и постоянный сброс насекомых в воду."
     },
     {
       "id": "point",
       "name": "Мыс, выступ берега",
-      "gives": ["food"],
-      "predator_bonus": 0.20,
+      "gives": [
+        "food"
+      ],
+      "predator_bonus": 0.2,
       "peaceful_bonus": 0.05,
       "notes": "Кормовые потоки сходятся с двух сторон, и хищник патрулирует сразу два фланга."
     },
     {
       "id": "bay",
       "name": "Заводь, бухта",
-      "gives": ["food", "calm"],
+      "gives": [
+        "food",
+        "calm"
+      ],
       "predator_bonus": 0.05,
       "peaceful_bonus": 0.25,
       "notes": "Спокойная вода с планктоном и мутью: столовая леща, карася и плотвы."
@@ -107,7 +123,9 @@
     {
       "id": "steep_bank",
       "name": "Крутой обрыв",
-      "gives": ["depth"],
+      "gives": [
+        "depth"
+      ],
       "predator_bonus": 0.15,
       "peaceful_bonus": 0.05,
       "notes": "Признак того, что свал и глубина начинаются прямо от берега."
@@ -115,33 +133,45 @@
     {
       "id": "drop_off",
       "name": "Бровка, свал",
-      "gives": ["depth", "food"],
-      "predator_bonus": 0.20,
-      "peaceful_bonus": 0.20,
+      "gives": [
+        "depth",
+        "food"
+      ],
+      "predator_bonus": 0.2,
+      "peaceful_bonus": 0.2,
       "notes": "Граница глубин: тропа, по которой рыба выходит кормиться и по которой уходит пережидать."
     },
     {
       "id": "hump",
       "name": "Банка, подводный пупок",
-      "gives": ["depth", "food"],
+      "gives": [
+        "depth",
+        "food"
+      ],
       "predator_bonus": 0.25,
-      "peaceful_bonus": 0.10,
+      "peaceful_bonus": 0.1,
       "notes": "Локальное поднятие дна: хищник стоит на нём выше добычи и бьёт сверху."
     },
     {
       "id": "inflow",
       "name": "Приток, впадающий ручей",
-      "gives": ["food", "oxygen"],
+      "gives": [
+        "food",
+        "oxygen"
+      ],
       "predator_bonus": 0.15,
-      "peaceful_bonus": 0.20,
+      "peaceful_bonus": 0.2,
       "oxygen_bonus_mg_l": 0.5,
       "notes": "Несёт корм и кислород, намывает конус донных отложений."
     },
     {
       "id": "outflow",
       "name": "Исток, вытекающая протока",
-      "gives": ["food", "oxygen"],
-      "predator_bonus": 0.30,
+      "gives": [
+        "food",
+        "oxygen"
+      ],
+      "predator_bonus": 0.3,
       "peaceful_bonus": 0.05,
       "oxygen_bonus_mg_l": 0.3,
       "notes": "Течение вытягивает малька из озера, и в этой воронке дежурят щука и судак."
@@ -149,34 +179,46 @@
     {
       "id": "spring",
       "name": "Донный ключ, родник",
-      "gives": ["thermal_refuge", "oxygen"],
-      "predator_bonus": 0.10,
-      "peaceful_bonus": 0.10,
+      "gives": [
+        "thermal_refuge",
+        "oxygen"
+      ],
+      "predator_bonus": 0.1,
+      "peaceful_bonus": 0.1,
       "water_offset_c": -3.0,
       "notes": "Локальный терморегулятор: в жару и в мороз рыба собирается вокруг выхода ключа."
     },
     {
       "id": "reeds",
       "name": "Тростник, кромка травы",
-      "gives": ["shelter", "food", "shade"],
-      "predator_bonus": 0.20,
+      "gives": [
+        "shelter",
+        "food",
+        "shade"
+      ],
+      "predator_bonus": 0.2,
       "peaceful_bonus": 0.25,
       "notes": "Укрытие и кормовая база разом: мальку есть где прятаться, мирной рыбе есть что есть."
     },
     {
       "id": "foam_line",
       "name": "Пена и ряска в подветренном углу",
-      "gives": ["food", "shade"],
+      "gives": [
+        "food",
+        "shade"
+      ],
       "predator_bonus": 0.05,
-      "peaceful_bonus": 0.20,
+      "peaceful_bonus": 0.2,
       "notes": "Ветер сгоняет сюда планктон и насекомых, а плёнка ряски даёт тень."
     },
     {
       "id": "rotten_silt",
       "name": "Гнилой ил, радужная плёнка",
-      "gives": ["oxygen_deficit"],
-      "predator_bonus": -0.30,
-      "peaceful_bonus": -0.30,
+      "gives": [
+        "oxygen_deficit"
+      ],
+      "predator_bonus": -0.3,
+      "peaceful_bonus": -0.3,
       "oxygen_bonus_mg_l": -1.5,
       "notes": "Пузыри газа и маслянистые разводы выдают гниение: кислорода тут нет, рыба уходит."
     },
@@ -202,7 +244,7 @@
       "id": "bait_fish_panic",
       "name": "Всплески и паника малька",
       "guild": "predator",
-      "effect": 0.30,
+      "effect": 0.3,
       "hours": 2,
       "notes": "Круги и хаотичные прыжки малька: прямой признак боя окуня, щуки или жереха."
     },
@@ -234,7 +276,7 @@
       "id": "rainbow_film",
       "name": "Радужная плёнка, пузыри газа",
       "guild": "any",
-      "effect": -0.40,
+      "effect": -0.4,
       "hours": 12,
       "notes": "Гниение ила: кислорода нет, рыба отсюда ушла."
     },
@@ -245,6 +287,172 @@
       "effect": -0.15,
       "hours": 12,
       "notes": "Ливневый смыв сбивает рыбу с привычных мест; мирная переносит муть легче хищника."
+    }
+  ],
+  "methods": [
+    {
+      "id": "feeder_flat",
+      "name": "Фидер, флэт-метод",
+      "guild": "peaceful",
+      "horizon": "bottom",
+      "groundbait": true,
+      "notes": "Насадка лежит на кормушке у дна. Работает, когда рыба кормится со дна, и бесполезна, когда она в толще."
+    },
+    {
+      "id": "carp_bottom",
+      "name": "Карповая донка",
+      "guild": "peaceful",
+      "horizon": "bottom",
+      "groundbait": true,
+      "notes": "Волосяной монтаж на дне, закорм точечный. Требует понимания дна: без промера это лотерея."
+    },
+    {
+      "id": "float",
+      "name": "Поплавочная снасть",
+      "guild": "peaceful",
+      "horizon": "mid",
+      "groundbait": true,
+      "notes": "Единственная донная снасть, которой легко переставить горизонт: спуск меняется за минуту."
+    },
+    {
+      "id": "zig_rig",
+      "name": "Зиг-риг, ловля в толще",
+      "guild": "peaceful",
+      "horizon": "mid",
+      "groundbait": false,
+      "notes": "Насадка висит в полводы. То, чем берут карпа, который гуляет выше дна и не реагирует на кормушку."
+    },
+    {
+      "id": "surface",
+      "name": "Поверхностная ловля",
+      "guild": "peaceful",
+      "horizon": "top",
+      "groundbait": false,
+      "notes": "Корка, плавающий пеллетс, собачий корм. Летний вечер и тёплая вода — её время."
+    },
+    {
+      "id": "spinning",
+      "name": "Спиннинг, искусственная приманка",
+      "guild": "predator",
+      "horizon": "mid",
+      "groundbait": false,
+      "notes": "Поиск активной рыбы: облавливается вода, а не точка."
+    },
+    {
+      "id": "jig",
+      "name": "Джиг по дну",
+      "guild": "predator",
+      "horizon": "bottom",
+      "groundbait": false,
+      "notes": "Ступенчатая проводка вдоль бровок и коряжника, когда хищник стоит внизу."
+    },
+    {
+      "id": "livebait",
+      "name": "Живец",
+      "guild": "predator",
+      "horizon": "bottom",
+      "groundbait": false,
+      "notes": "Работает по пассивной рыбе, когда искусственную приманку она игнорирует."
+    }
+  ],
+  "lure_types": [
+    {
+      "id": "soft_jig",
+      "name": "Силикон на джиг-головке",
+      "horizon": "bottom",
+      "notes": "Универсал по холодной и по глубокой воде: скорость подачи задаёте вы."
+    },
+    {
+      "id": "spinner",
+      "name": "Вращающаяся блесна",
+      "horizon": "mid",
+      "notes": "Сильный сигнал в мутной воде и на мели; по пассивной рыбе часто избыточна."
+    },
+    {
+      "id": "spoon",
+      "name": "Колеблющаяся блесна",
+      "horizon": "mid",
+      "notes": "Медленная игра на паузах — то, что нужно холодной воде."
+    },
+    {
+      "id": "crank",
+      "name": "Воблер",
+      "horizon": "mid",
+      "notes": "Держит горизонт: удобно, когда известно, на какой глубине стоит рыба."
+    },
+    {
+      "id": "popper",
+      "name": "Поверхностная приманка",
+      "horizon": "top",
+      "notes": "Тёплая вода и низкий свет: бой у поверхности слышно и видно."
+    },
+    {
+      "id": "jerk",
+      "name": "Джерк, крупный минноу",
+      "horizon": "mid",
+      "notes": "Крупная приманка отсекает мелочь и берёт трофейную рыбу."
+    }
+  ],
+  "lure_guides": [
+    {
+      "id": "clear_bright",
+      "clarity": "clear",
+      "light": "bright",
+      "colors": [
+        "натуральные: плотвичка, окунёк",
+        "прозрачные с блёстками"
+      ],
+      "size": "мельче обычного",
+      "action": "быстрая, рывковая",
+      "notes": "В прозрачной воде на ярком свету рыба разглядывает приманку целиком — выручает естественность и скорость."
+    },
+    {
+      "id": "clear_low",
+      "clarity": "clear",
+      "light": "low",
+      "colors": [
+        "натуральные тёмные",
+        "тёмный силуэт: чёрный, тёмно-зелёный"
+      ],
+      "size": "обычный",
+      "action": "равномерная с паузами",
+      "notes": "На зорях хищник бьёт по силуэту снизу вверх — тёмное читается лучше яркого."
+    },
+    {
+      "id": "stained_any",
+      "clarity": "stained",
+      "light": "bright",
+      "colors": [
+        "кислотные: шартрез, оранжевый",
+        "с contrast-точкой"
+      ],
+      "size": "крупнее обычного",
+      "action": "с сильной вибрацией",
+      "notes": "В мути приманку находят боковой линией, а не глазами: нужен звук и заметный цвет."
+    },
+    {
+      "id": "dark_night",
+      "clarity": "clear",
+      "light": "dark",
+      "colors": [
+        "чёрный",
+        "тёмно-фиолетовый"
+      ],
+      "size": "крупнее обычного",
+      "action": "медленная, шумная",
+      "notes": "Ночью работает силуэт на фоне неба и колебания, а не расцветка."
+    },
+    {
+      "id": "cold_water",
+      "clarity": "clear",
+      "light": "bright",
+      "water": "cold",
+      "colors": [
+        "натуральные бледные"
+      ],
+      "size": "мельче обычного",
+      "action": "медленная, с долгими паузами",
+      "notes": "В холодной воде хищник не догоняет: приманку надо вести медленно и дать ей зависнуть."
     }
   ]
 }

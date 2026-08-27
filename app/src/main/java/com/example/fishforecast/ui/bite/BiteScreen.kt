@@ -20,6 +20,13 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
+import com.example.fishforecast.ui.session.ActiveSession
+import com.example.fishforecast.ui.session.FishingSessionViewModel
+import com.example.fishforecast.ui.session.SessionSetup
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
@@ -40,12 +47,24 @@ import com.example.fishforecast.domain.bite.BiteLevel
 @Composable
 fun BiteScreen(
     onOpenMap: () -> Unit = {},
-    viewModel: BiteViewModel = hiltViewModel()
+    viewModel: BiteViewModel = hiltViewModel(),
+    sessionViewModel: FishingSessionViewModel = hiltViewModel()
 ) {
     val state by viewModel.state.collectAsState()
+    val activeSession by sessionViewModel.active.collectAsState()
+    val sessionFish by sessionViewModel.fishList.collectAsState()
+    val structures by sessionViewModel.structures.collectAsState()
+    val form = sessionViewModel.form.value
+    val strategy = sessionViewModel.strategy.value
+    val snackbarHostState = remember { SnackbarHostState() }
+
+    LaunchedEffect(Unit) {
+        sessionViewModel.messages.collect { snackbarHostState.showSnackbar(it) }
+    }
 
     Scaffold(
-        topBar = { TopAppBar(title = { Text("Клёв") }) }
+        topBar = { TopAppBar(title = { Text("Рыбалка") }) },
+        snackbarHost = { SnackbarHost(snackbarHostState) }
     ) { paddingValues ->
         Column(
             modifier = Modifier
@@ -68,6 +87,28 @@ fun BiteScreen(
                 Text("Справочник рыб пуст — добавьте рыбу, чтобы считать активность.")
                 return@Column
             }
+
+            // Сборы и план идут первыми: прогноз отвечает «ехать ли», а
+            // рыболову, который уже собрался, нужнее «что делать на воде».
+            activeSession?.let { session ->
+                ActiveSession(
+                    session = session,
+                    fishName = sessionFish.firstOrNull { it.id == session.targetFishId }?.name,
+                    onFinish = { count, note, rating ->
+                        sessionViewModel.finish(count, note, rating)
+                    },
+                    onCancel = { sessionViewModel.cancel() }
+                )
+            } ?: SessionSetup(
+                form = form,
+                fishList = sessionFish,
+                methods = sessionViewModel.methodsForSelected(),
+                structures = structures,
+                strategy = strategy,
+                busy = sessionViewModel.busy.value,
+                onChange = sessionViewModel::update,
+                onStart = { sessionViewModel.start() }
+            )
 
             Row(
                 modifier = Modifier.horizontalScroll(rememberScrollState()),

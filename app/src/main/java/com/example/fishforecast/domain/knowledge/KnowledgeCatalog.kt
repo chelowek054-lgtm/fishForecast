@@ -23,13 +23,26 @@ data class KnowledgeCatalog(
     val updatedAt: String? = null,
     val waterbodies: List<WaterBodyType> = emptyList(),
     val structures: List<StructureType> = emptyList(),
-    val observations: List<ObservationType> = emptyList()
+    val observations: List<ObservationType> = emptyList(),
+    /** Способы ловли: чем именно рыболов собирается ловить. */
+    val methods: List<FishingMethod> = emptyList(),
+    @SerialName("lure_types")
+    val lureTypes: List<LureType> = emptyList(),
+    @SerialName("lure_guides")
+    val lureGuides: List<LureGuide> = emptyList()
 ) {
     fun waterBody(id: String?): WaterBodyType? = waterbodies.firstOrNull { it.id == id }
 
     fun structure(id: String): StructureType? = structures.firstOrNull { it.id == id }
 
     fun observation(id: String): ObservationType? = observations.firstOrNull { it.id == id }
+
+    fun method(id: String?): FishingMethod? = methods.firstOrNull { it.id == id }
+
+    /** Способы, подходящие гильдии: хищника прикормкой не соберёшь. */
+    fun methodsFor(guildName: String): List<FishingMethod> = methods.filter { it.guild == guildName }
+
+    fun lureType(id: String): LureType? = lureTypes.firstOrNull { it.id == id }
 
     companion object {
         const val SCHEMA = "fishforecast.knowledge/1"
@@ -160,3 +173,53 @@ object KnowledgeCodec {
     fun encode(catalog: KnowledgeCatalog): String =
         json.encodeToString(KnowledgeCatalog.serializer(), catalog)
 }
+
+/**
+ * Способ ловли.
+ *
+ * Он задаёт горизонт жёстче, чем любое желание рыболова: флэт-метод кладёт
+ * насадку на дно, зиг-риг подвешивает её в толще. Когда рыба стоит выше
+ * дна, дело не в насадке, а в том, что снасть работает не там.
+ */
+@Serializable
+data class FishingMethod(
+    val id: String,
+    val name: String,
+    /** `predator` или `peaceful`. */
+    val guild: String = "peaceful",
+    /** `bottom`, `mid` или `top`. */
+    val horizon: String = "bottom",
+    /** Применяется ли с прикормкой. */
+    val groundbait: Boolean = false,
+    val notes: String = ""
+)
+
+/** Тип искусственной приманки для хищника. */
+@Serializable
+data class LureType(
+    val id: String,
+    val name: String,
+    val horizon: String = "mid",
+    val notes: String = ""
+)
+
+/**
+ * Правило подбора приманки: цвет, размер и подача под условия.
+ *
+ * Условия описаны словами, а не числами: прозрачность, свет и температура
+ * приходят из расчёта, а сопоставление с ними — дело кода.
+ */
+@Serializable
+data class LureGuide(
+    val id: String,
+    /** `clear` или `stained`. */
+    val clarity: String = "clear",
+    /** `bright`, `low` или `dark`. */
+    val light: String = "bright",
+    /** `cold` или `warm`; пусто — правило не про температуру. */
+    val water: String? = null,
+    val colors: List<String> = emptyList(),
+    val size: String = "",
+    val action: String = "",
+    val notes: String = ""
+)

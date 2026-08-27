@@ -6,6 +6,7 @@ import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 import com.example.fishforecast.data.local.dao.CatchDao
 import com.example.fishforecast.data.local.dao.FishDao
+import com.example.fishforecast.data.local.dao.FishingSessionDao
 import com.example.fishforecast.data.local.dao.FishingSpotDao
 import com.example.fishforecast.data.local.dao.PressureLogDao
 import com.example.fishforecast.data.local.dao.ZoneDao
@@ -14,6 +15,7 @@ import com.example.fishforecast.data.local.dao.WeatherDao
 import com.example.fishforecast.data.local.entities.CatchEntity
 import com.example.fishforecast.data.local.entities.DailySunEntity
 import com.example.fishforecast.data.local.entities.FishEntity
+import com.example.fishforecast.data.local.entities.FishingSessionEntity
 import com.example.fishforecast.data.local.entities.FishingSpotEntity
 import com.example.fishforecast.data.local.entities.PressureLogEntity
 import com.example.fishforecast.data.local.entities.SectorEntity
@@ -31,9 +33,10 @@ import com.example.fishforecast.data.local.entities.WeatherEntity
         DailySunEntity::class,
         PressureLogEntity::class,
         ZoneEntity::class,
-        SectorEntity::class
+        SectorEntity::class,
+        FishingSessionEntity::class
     ],
-    version = 18,
+    version = 19,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -44,6 +47,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun catchDao(): CatchDao
     abstract fun pressureLogDao(): PressureLogDao
     abstract fun zoneDao(): ZoneDao
+    abstract fun fishingSessionDao(): FishingSessionDao
 
     companion object {
         /** Офлайн-области (Фаза 3). Справочник рыб пересоздавать нельзя — он правится вручную. */
@@ -587,6 +591,46 @@ abstract class AppDatabase : RoomDatabase() {
                 db.execSQL(
                     "ALTER TABLE `fishing_spots` ADD COLUMN `structures` TEXT NOT NULL DEFAULT '[]'"
                 )
+            }
+        }
+
+        /**
+         * Выезд целиком: от сборов до итога.
+         *
+         * Приложение умело предсказывать и умело записывать улов, но между
+         * ними зияла дыра — чем закончился выезд, если не поймал ничего. А
+         * это и есть самые ценные данные: прогноз обещал клёв, поклёвок не
+         * было, и понять почему можно, только сравнив план с тем, что вышло.
+         */
+        val MIGRATION_18_19 = object : Migration(18, 19) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `fishing_sessions` (
+                        `id` INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+                        `uid` TEXT NOT NULL,
+                        `mapId` INTEGER,
+                        `startedAt` INTEGER NOT NULL,
+                        `finishedAt` INTEGER,
+                        `targetFishId` INTEGER,
+                        `methodId` TEXT,
+                        `layer` TEXT NOT NULL,
+                        `structures` TEXT NOT NULL,
+                        `hasGroundbait` INTEGER NOT NULL,
+                        `waterTempC` REAL,
+                        `oxygenMgL` REAL,
+                        `pressureMmHg` REAL,
+                        `windMs` REAL,
+                        `lightPhase` TEXT,
+                        `biteScore` INTEGER,
+                        `plan` TEXT NOT NULL,
+                        `caughtCount` INTEGER,
+                        `resultNote` TEXT NOT NULL,
+                        `rating` INTEGER
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL("ALTER TABLE `catches` ADD COLUMN `sessionId` INTEGER")
             }
         }
     }

@@ -16,7 +16,9 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.lazy.LazyColumn
+import com.example.fishforecast.data.local.entities.FishingSessionEntity
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -78,7 +80,7 @@ fun JournalScreen(
             }
         }
     ) { paddingValues ->
-        if (state.catches.isEmpty()) {
+        if (state.catches.isEmpty() && state.sessions.isEmpty()) {
             Box(
                 modifier = Modifier
                     .fillMaxSize()
@@ -98,6 +100,31 @@ fun JournalScreen(
                 contentPadding = PaddingValues(16.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
+                if (state.sessions.isNotEmpty()) {
+                    item {
+                        Text(
+                            text = "Выезды",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                    items(state.sessions) { session ->
+                        SessionCard(
+                            session = session,
+                            fishName = state.fishList
+                                .firstOrNull { it.id == session.targetFishId }?.name,
+                            catchCount = state.catches.count { it.sessionId == session.id }
+                        )
+                    }
+                    item {
+                        Text(
+                            text = "Трофеи",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+
                 items(state.catches) { entry ->
                     CatchCard(
                         entry = entry,
@@ -342,3 +369,80 @@ private fun Modifier.verticalScrollIfNeeded(): Modifier =
         .verticalScroll(rememberScrollState())
 
 private val DATE_FORMAT = SimpleDateFormat("d MMMM, HH:mm", Locale.forLanguageTag("ru"))
+
+/**
+ * Выезд в архиве.
+ *
+ * Главная строка — не улов, а сверка: что обещал прогноз и чем кончилось.
+ * Пустая рыбалка при высоком балле ценнее удачной, потому что показывает,
+ * где модель ошибается.
+ */
+@Composable
+private fun SessionCard(
+    session: FishingSessionEntity,
+    fishName: String?,
+    catchCount: Int
+) {
+    var expanded by remember { mutableStateOf(false) }
+    val caught = session.caughtCount ?: catchCount
+
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { expanded = !expanded }
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = fishName ?: "Выезд",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        text = SESSION_FORMAT.format(Date(session.startedAt)) +
+                            (session.finishedAt?.let {
+                                " — " + TIME_ONLY.format(Date(it))
+                            } ?: ""),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                Text(
+                    text = if (caught > 0) "$caught шт" else "пусто",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = if (caught > 0) {
+                        MaterialTheme.colorScheme.primary
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    }
+                )
+            }
+
+            Text(
+                text = listOfNotNull(
+                    session.biteScore?.let { "прогноз $it" },
+                    session.waterTempC?.let { "вода %.0f°".format(it) },
+                    session.oxygenMgL?.let { "O₂ %.1f".format(it) },
+                    session.rating?.let { "оценка $it из 5" }
+                ).joinToString(" · "),
+                style = MaterialTheme.typography.bodySmall
+            )
+
+            if (expanded) {
+                if (session.resultNote.isNotBlank()) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(text = session.resultNote, style = MaterialTheme.typography.bodyMedium)
+                }
+                if (session.plan.isNotBlank()) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(text = "План был такой", style = MaterialTheme.typography.labelLarge)
+                    Text(text = session.plan, style = MaterialTheme.typography.bodySmall)
+                }
+            }
+        }
+    }
+}
+
+private val SESSION_FORMAT = SimpleDateFormat("d MMMM, HH:mm", Locale.forLanguageTag("ru"))
+private val TIME_ONLY = SimpleDateFormat("HH:mm", Locale.forLanguageTag("ru"))

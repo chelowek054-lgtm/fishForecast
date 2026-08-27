@@ -5,7 +5,9 @@ import androidx.lifecycle.viewModelScope
 import com.example.fishforecast.data.local.entities.CatchEntity
 import com.example.fishforecast.data.local.entities.FishEntity
 import com.example.fishforecast.data.local.entities.FishingSpotEntity
+import com.example.fishforecast.data.local.entities.FishingSessionEntity
 import com.example.fishforecast.data.repository.CatchRepository
+import com.example.fishforecast.data.repository.FishingSessionRepository
 import com.example.fishforecast.data.repository.FishRepository
 import com.example.fishforecast.data.repository.FishingSpotRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -20,11 +22,17 @@ import javax.inject.Inject
 data class JournalUiState(
     val catches: List<CatchEntity> = emptyList(),
     val fishList: List<FishEntity> = emptyList(),
-    val spots: List<FishingSpotEntity> = emptyList()
+    val spots: List<FishingSpotEntity> = emptyList(),
+    /**
+     * Архив выездов. Пустая рыбалка — такие же данные, как удачная: по ним
+     * и видно, где модель ошиблась.
+     */
+    val sessions: List<FishingSessionEntity> = emptyList()
 )
 
 @HiltViewModel
 class JournalViewModel @Inject constructor(
+    sessionRepository: FishingSessionRepository,
     private val catchRepository: CatchRepository,
     fishRepository: FishRepository,
     spotRepository: FishingSpotRepository
@@ -33,9 +41,15 @@ class JournalViewModel @Inject constructor(
     val state: StateFlow<JournalUiState> = combine(
         catchRepository.catches,
         fishRepository.getAllFish(),
-        spotRepository.spots
-    ) { catches, fishList, spots ->
-        JournalUiState(catches = catches, fishList = fishList, spots = spots)
+        spotRepository.spots,
+        sessionRepository.sessions
+    ) { catches, fishList, spots, sessions ->
+        JournalUiState(
+            catches = catches,
+            fishList = fishList,
+            spots = spots,
+            sessions = sessions.filter { it.finished }
+        )
     }.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),

@@ -74,7 +74,7 @@ private data class BottomNavItem(
 /** Карта в центре: с неё начинается любой сценарий — она задаёт контекст. */
 private val bottomNavItems = listOf(
     BottomNavItem(FishListRoute, FishListRoute::class, "Знания", Icons.AutoMirrored.Filled.List),
-    BottomNavItem(BiteRoute, BiteRoute::class, "Клёв", Icons.Default.Insights),
+    BottomNavItem(BiteRoute, BiteRoute::class, "Рыбалка", Icons.Default.Insights),
     BottomNavItem(MapRoute, MapRoute::class, "Карта", Icons.Default.Map),
     BottomNavItem(WeatherRoute, WeatherRoute::class, "Погода", Icons.Default.Cloud),
     BottomNavItem(JournalRoute, JournalRoute::class, "Журнал", Icons.AutoMirrored.Filled.MenuBook)
