@@ -25,7 +25,7 @@ import com.example.fishforecast.data.local.entities.WeatherEntity
         CatchEntity::class,
         DailySunEntity::class
     ],
-    version = 9,
+    version = 10,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -265,6 +265,20 @@ abstract class AppDatabase : RoomDatabase() {
                     )
                     """.trimIndent()
                 )
+            }
+        }
+
+        /**
+         * Глубины района и замер воды. Без глубины температуру воды не
+         * посчитать — именно она задаёт инерцию слоя, и из-за неё мелководье
+         * остывает за ночь, а яма у дамбы не успевает.
+         */
+        val MIGRATION_9_10 = object : Migration(9, 10) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `saved_maps` ADD COLUMN `shallowDepthM` REAL")
+                db.execSQL("ALTER TABLE `saved_maps` ADD COLUMN `deepDepthM` REAL")
+                db.execSQL("ALTER TABLE `saved_maps` ADD COLUMN `waterTempC` REAL")
+                db.execSQL("ALTER TABLE `saved_maps` ADD COLUMN `waterTempAt` TEXT")
             }
         }
     }

@@ -5,6 +5,7 @@ import com.example.fishforecast.data.local.dao.CatchDao
 import com.example.fishforecast.data.local.entities.CatchEntity
 import com.example.fishforecast.data.local.entities.FishEntity
 import com.example.fishforecast.domain.bite.CalculateFishActivityUseCase
+import com.example.fishforecast.domain.water.calculateWaterState
 import com.example.fishforecast.domain.sensor.hPaToMmHg
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
@@ -35,11 +36,12 @@ class CatchRepository @Inject constructor(
         val hour = currentForecastHour()
         // Норма берётся у активной карты: улов записывается там, где рыболов
         // сейчас ловит, и сверять прогноз потом нужно с той же нормой.
-        val normalPressure = fishingContext.currentMap()?.normalPressureMmHg
+        val map = fishingContext.currentMap()
+        val normalPressure = map?.normalPressureMmHg
 
         val biteScore = if (fish != null && hour != null) {
             val forecast = fishingContext.activeForecast.first()
-            calculateFishActivity(fish, forecast, normalPressure)
+            calculateFishActivity(fish, forecast, normalPressure, calculateWaterState(forecast, map))
                 .firstOrNull { it.time == hour.time }?.score
         } else {
             null

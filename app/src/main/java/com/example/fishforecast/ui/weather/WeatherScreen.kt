@@ -47,6 +47,12 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.example.fishforecast.data.local.entities.DailySunEntity
 import com.example.fishforecast.data.local.entities.WeatherEntity
 import com.example.fishforecast.domain.sensor.hPaToMmHg
+import com.example.fishforecast.domain.water.WaterState
+import com.example.fishforecast.domain.water.fromNow
+import com.example.fishforecast.domain.water.oxygenLevel
+import com.example.fishforecast.domain.water.oxygenLevelText
+import com.example.fishforecast.domain.water.oxygenSaturationMgL
+import com.example.fishforecast.domain.water.waterTrend
 import com.example.fishforecast.domain.weather.DailyForecast
 import com.example.fishforecast.domain.weather.PressureDirection
 import com.example.fishforecast.domain.weather.kmhToMs
@@ -69,6 +75,9 @@ import kotlin.math.roundToInt
 /** Сколько часов показывать на графиках ближайшего времени. */
 private const val HOURLY_WINDOW = 24
 
+/** Ход воды меньше этого за окно — считаем, что вода стоит. */
+private const val COOLING_THRESHOLD = 0.5
+
 /** Насколько порыв должен превысить ветер, чтобы о нём стоило говорить. */
 private const val GUST_MARGIN_KMH = 8.0
 
@@ -88,6 +97,7 @@ fun WeatherScreen(
     val activeMap by viewModel.activeMap.collectAsState()
     val localPressure by viewModel.localPressure.collectAsState()
     val sunTimes by viewModel.sunTimes.collectAsState()
+    val water by viewModel.water.collectAsState()
     val normalPressure by viewModel.normalPressureMmHg.collectAsState()
     val isLoading = viewModel.isLoading.value
     val error = viewModel.error.value
@@ -175,6 +185,46 @@ fun WeatherScreen(
                             normalPressureMmHg = normalPressure,
                             trend = pressureTrend(upcoming.take(TREND_WINDOW_HOURS))
                         )
+                    }
+
+                    if (!water.isEmpty && current != null) {
+                        item {
+                            WaterCard(water = water, currentTime = current.time)
+                        }
+                        if (upcoming.size >= 2) {
+                            item {
+                                ChartSection(
+                                    title = "Температура воды",
+                                    subtitle = "Мель %.1f м и яма %.1f м%s".format(
+                                        water.shallowDepthM,
+                                        water.deepDepthM,
+                                        if (water.depthsAssumed) {
+                                            " — глубины типовые, задайте свои в списке карт"
+                                        } else {
+                                            ""
+                                        }
+                                    )
+                                ) {
+                                    val shallow = water.shallow.fromNow().take(HOURLY_WINDOW)
+                                    val deep = water.deep.fromNow().take(HOURLY_WINDOW)
+                                    MultiLineChart(
+                                        labels = shallow.map { it.time.timeOnly() },
+                                        series = listOf(
+                                            ChartSeries(
+                                                values = shallow.map { it.temperature },
+                                                color = MaterialTheme.colorScheme.primary
+                                            ),
+                                            ChartSeries(
+                                                values = deep.map { it.temperature },
+                                                color = MaterialTheme.colorScheme.outline,
+                                                labelAbove = false
+                                            )
+                                        ),
+                                        valueSuffix = "°"
+                                    )
+                                }
+                            }
+                        }
                     }
 
                     if (upcoming.size >= 2) {
@@ -361,6 +411,88 @@ private fun CurrentWeatherCard(
                 )
             }
         }
+    }
+}
+
+/**
+ * Вода и кислород — то, ради чего считается погода.
+ *
+ * Показаны оба слоя: разница между мелью и ямой и подсказывает, где рыба.
+ * Кислород выводится из температуры, поэтому стоит рядом, а не отдельно.
+ */
+@Composable
+private fun WaterCard(water: WaterState, currentTime: String) {
+    val shallowNow = water.shallowAt(currentTime) ?: return
+    val deepNow = water.deepAt(currentTime) ?: return
+    val trend = waterTrend(water.shallow.fromNow())
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.tertiaryContainer
+        )
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Text(
+                text = if (water.anchored) "Вода (от вашего замера)" else "Вода (расчёт по погоде)",
+                style = MaterialTheme.typography.labelLarge
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                WaterLayerFact(
+                    title = "Мель %.1f м".format(water.shallowDepthM),
+                    temperature = shallowNow
+                )
+                WaterLayerFact(
+                    title = "Яма %.1f м".format(water.deepDepthM),
+                    temperature = deepNow
+                )
+                WeatherFact(
+                    title = "Кислород",
+                    value = "%.1f".format(oxygenSaturationMgL(shallowNow)),
+                    detail = oxygenLevelText(oxygenLevel(oxygenSaturationMgL(shallowNow)))
+                )
+            }
+
+            trend?.let { delta ->
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = when {
+                        delta <= -COOLING_THRESHOLD ->
+                            "Мель остывает на %.1f° за %d часов — вода насыщается кислородом"
+                                .format(abs(delta), TREND_WINDOW_HOURS)
+                        delta >= COOLING_THRESHOLD ->
+                            "Мель прогревается на %.1f° за %d часов — кислорода станет меньше"
+                                .format(delta, TREND_WINDOW_HOURS)
+                        else -> "Вода стоит ровно"
+                    },
+                    style = MaterialTheme.typography.bodySmall
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun WaterLayerFact(title: String, temperature: Double) {
+    Column(
+        modifier = Modifier.width(110.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text(text = title, style = MaterialTheme.typography.labelSmall)
+        Text(
+            text = "%.1f°".format(temperature),
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold
+        )
+        Text(
+            text = "%.1f мг/л".format(oxygenSaturationMgL(temperature)),
+            style = MaterialTheme.typography.bodySmall
+        )
     }
 }
 

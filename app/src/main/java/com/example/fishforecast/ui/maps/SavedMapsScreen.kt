@@ -122,6 +122,8 @@ fun SavedMapsScreen(
                     onSelect = { viewModel.selectMap(map) },
                     onRename = { viewModel.renameMap(map, it) },
                     onNormalPressureChange = { viewModel.setNormalPressure(map, it) },
+                    onDepthsChange = { shallow, deep -> viewModel.setDepths(map, shallow, deep) },
+                    onWaterMeasured = { viewModel.measureWater(map, it) },
                     onDelete = { viewModel.deleteMap(map) }
                 )
             }
@@ -229,6 +231,8 @@ private fun SavedMapCard(
     onSelect: () -> Unit,
     onRename: (String) -> Unit,
     onNormalPressureChange: (Double?) -> Unit,
+    onDepthsChange: (Double?, Double?) -> Unit,
+    onWaterMeasured: (Double?) -> Unit,
     onDelete: () -> Unit
 ) {
     var expanded by remember { mutableStateOf(false) }
@@ -270,6 +274,15 @@ private fun SavedMapCard(
                     style = MaterialTheme.typography.bodySmall
                 )
             }
+            if (map.shallowDepthM != null || map.deepDepthM != null) {
+                Text(
+                    text = "Глубины: мель %s, яма %s".format(
+                        map.shallowDepthM?.let { "%.1f м".format(it) } ?: "—",
+                        map.deepDepthM?.let { "%.1f м".format(it) } ?: "—"
+                    ),
+                    style = MaterialTheme.typography.bodySmall
+                )
+            }
 
             Spacer(modifier = Modifier.height(12.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -286,6 +299,8 @@ private fun SavedMapCard(
                     map = map,
                     onRename = onRename,
                     onNormalPressureChange = onNormalPressureChange,
+                    onDepthsChange = onDepthsChange,
+                    onWaterMeasured = onWaterMeasured,
                     onDelete = onDelete
                 )
             }
@@ -298,12 +313,17 @@ private fun MapSettings(
     map: SavedMapEntity,
     onRename: (String) -> Unit,
     onNormalPressureChange: (Double?) -> Unit,
+    onDepthsChange: (Double?, Double?) -> Unit,
+    onWaterMeasured: (Double?) -> Unit,
     onDelete: () -> Unit
 ) {
     var name by remember(map.id) { mutableStateOf(map.name) }
     var pressure by remember(map.id) {
         mutableStateOf(map.normalPressureMmHg?.toInt()?.toString().orEmpty())
     }
+    var shallow by remember(map.id) { mutableStateOf(map.shallowDepthM.asInput()) }
+    var deep by remember(map.id) { mutableStateOf(map.deepDepthM.asInput()) }
+    var waterTemp by remember(map.id) { mutableStateOf("") }
 
     Spacer(modifier = Modifier.height(8.dp))
     OutlinedTextField(
@@ -330,10 +350,49 @@ private fun MapSettings(
 
     Spacer(modifier = Modifier.height(8.dp))
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        OutlinedTextField(
+            value = shallow,
+            onValueChange = { shallow = it.filterDepth() },
+            label = { Text("Мель, м") },
+            singleLine = true,
+            modifier = Modifier.weight(1f)
+        )
+        OutlinedTextField(
+            value = deep,
+            onValueChange = { deep = it.filterDepth() },
+            label = { Text("Яма, м") },
+            singleLine = true,
+            modifier = Modifier.weight(1f)
+        )
+    }
+    Text(
+        text = "Карт глубин для прудов не существует, а без глубины не посчитать " +
+            "температуру воды: мель за ночь остывает и насыщается кислородом, яма — нет.",
+        style = MaterialTheme.typography.bodySmall
+    )
+
+    Spacer(modifier = Modifier.height(8.dp))
+    OutlinedTextField(
+        value = waterTemp,
+        onValueChange = { waterTemp = it.filterDepth() },
+        label = { Text("Замер воды термометром, °C") },
+        singleLine = true,
+        modifier = Modifier.fillMaxWidth()
+    )
+    Text(
+        text = map.waterTempAt?.let { "Последний замер: ${it.replace('T', ' ')}" }
+            ?: "Необязательно: расчёт идёт и без замера, но измеренное всегда точнее.",
+        style = MaterialTheme.typography.bodySmall
+    )
+
+    Spacer(modifier = Modifier.height(8.dp))
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         Button(
             onClick = {
                 onRename(name)
                 onNormalPressureChange(pressure.toDoubleOrNull())
+                onDepthsChange(shallow.toDepth(), deep.toDepth())
+                waterTemp.toDoubleOrNull()?.let(onWaterMeasured)
             }
         ) {
             Text("Сохранить")
@@ -343,6 +402,17 @@ private fun MapSettings(
         }
     }
 }
+
+/** В поле глубины пускаем только число с одной запятой. */
+private fun String.filterDepth(): String =
+    replace(',', '.').filter { it.isDigit() || it == '.' }.let { input ->
+        val dot = input.indexOf('.')
+        if (dot < 0) input else input.substring(0, dot + 1) + input.substring(dot + 1).replace(".", "")
+    }
+
+private fun String.toDepth(): Double? = toDoubleOrNull()?.takeIf { it > 0 }
+
+private fun Double?.asInput(): String = this?.let { "%.1f".format(it) }.orEmpty()
 
 private fun Long.asMegabytes(): String = "%.1f".format(this / 1024.0 / 1024.0)
 

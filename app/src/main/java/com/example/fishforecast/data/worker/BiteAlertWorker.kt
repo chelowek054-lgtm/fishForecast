@@ -23,6 +23,7 @@ import com.example.fishforecast.R
 import com.example.fishforecast.data.repository.FishRepository
 import com.example.fishforecast.data.repository.FishingContextRepository
 import com.example.fishforecast.domain.bite.FindBiteWindowUseCase
+import com.example.fishforecast.domain.water.calculateWaterState
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
 import kotlinx.coroutines.flow.first
@@ -53,7 +54,8 @@ class BiteAlertWorker @AssistedInject constructor(
             fishList = fishList,
             forecast = forecast,
             from = LocalDateTime.now(),
-            normalPressureMmHg = map.normalPressureMmHg
+            normalPressureMmHg = map.normalPressureMmHg,
+            water = calculateWaterState(forecast, map)
         ) ?: return Result.success()
 
         notify(

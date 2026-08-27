@@ -2,6 +2,8 @@ package com.example.fishforecast.domain.bite
 
 import com.example.fishforecast.data.local.entities.FishEntity
 import com.example.fishforecast.data.local.entities.WeatherEntity
+import com.example.fishforecast.domain.water.WaterHour
+import com.example.fishforecast.domain.water.WaterState
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -40,6 +42,65 @@ class CalculateFishActivityUseCaseTest {
         latitude = 55.0,
         longitude = 37.0
     )
+
+    /** Ход воды, посчитанный где-то снаружи; здесь он задаётся руками. */
+    private fun water(vararg temperatures: Double): WaterState {
+        val hours = temperatures.mapIndexed { index, value ->
+            WaterHour(time = "2026-08-26T%02d:00".format(index), temperature = value)
+        }
+        return WaterState(
+            shallow = hours,
+            deep = hours,
+            shallowDepthM = 1.5,
+            deepDepthM = 4.0,
+            depthsAssumed = false,
+            anchored = false
+        )
+    }
+
+    @Test
+    fun `решает температура воды, а не воздуха`() {
+        // Воздух прогрелся, вода ещё холодная — рыба живёт в воде.
+        val forecast = (0..5).map { hour(it, temperature = 30.0) }
+
+        val byAir = useCase(pike, forecast).last().score
+        val byWater = useCase(
+            fish = pike,
+            forecast = forecast,
+            water = water(14.0, 14.0, 14.0, 14.0, 14.0, 14.0)
+        ).last().score
+
+        assertTrue("вода в комфорте должна поднять оценку: $byWater vs $byAir", byWater > byAir)
+    }
+
+    @Test
+    fun `духота в прогретой воде гасит клёв`() {
+        val forecast = (0..5).map { hour(it) }
+
+        val cool = useCase(pike, forecast, water = water(16.0, 16.0, 16.0, 16.0, 16.0, 16.0))
+        val hot = useCase(pike, forecast, water = water(31.0, 31.0, 31.0, 31.0, 31.0, 31.0))
+
+        assertTrue(
+            "в тёплой воде кислорода не хватает: ${hot.last().score} vs ${cool.last().score}",
+            hot.last().score < cool.last().score
+        )
+    }
+
+    @Test
+    fun `остывающая вода ценится выше стоячей`() {
+        // Оба ряда заканчиваются одной температурой: разница только в том,
+        // что в одном случае вода пришла к ней сверху.
+        val carp = pike.copy(name = "Карп", minTemp = 15f, maxTemp = 28f)
+        val forecast = (0..5).map { hour(it, temperature = 24.0) }
+
+        val steady = useCase(carp, forecast, water = water(24.5, 24.5, 24.5, 24.5, 24.5, 24.5))
+        val cooling = useCase(carp, forecast, water = water(26.0, 25.7, 25.4, 25.1, 24.8, 24.5))
+
+        assertTrue(
+            "остывание добавляет кислорода: ${cooling.last().score} vs ${steady.last().score}",
+            cooling.last().score > steady.last().score
+        )
+    }
 
     @Test
     fun `идеальные условия дают высокую оценку`() {

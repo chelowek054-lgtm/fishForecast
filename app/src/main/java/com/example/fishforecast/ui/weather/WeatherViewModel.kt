@@ -10,7 +10,10 @@ import com.example.fishforecast.data.local.entities.WeatherEntity
 import com.example.fishforecast.data.repository.FishingContextRepository
 import com.example.fishforecast.domain.sensor.PressureProvider
 import dagger.hilt.android.lifecycle.HiltViewModel
+import com.example.fishforecast.domain.water.WaterState
+import com.example.fishforecast.domain.water.calculateWaterState
 import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
@@ -57,6 +60,21 @@ class WeatherViewModel @Inject constructor(
             started = SharingStarted.WhileSubscribed(5000),
             initialValue = null
         )
+
+    /**
+     * Ход воды в двух слоях. Считается по уже скачанному прогнозу вместе с
+     * прошедшими сутками: без истории инерционная модель не разгоняется.
+     */
+    val water: StateFlow<WaterState> = combine(
+        fishingContext.activeForecast,
+        fishingContext.activeMap
+    ) { forecast, map ->
+        calculateWaterState(forecast, map)
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = calculateWaterState(emptyList(), null)
+    )
 
     val hasBarometer: Boolean = pressureProvider.isAvailable
 

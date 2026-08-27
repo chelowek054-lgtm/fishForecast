@@ -31,6 +31,17 @@ data class SavedMapEntity(
      * карты может уточнить это значение для себя.
      */
     val normalPressureMmHg: Double? = null,
+    /**
+     * Глубины района, м: мель и яма. Батиметрии пруда нет ни в одном
+     * открытом источнике, но рыболов свой водоём знает, а без глубины
+     * температуру воды не посчитать: она и задаёт инерцию слоя.
+     */
+    val shallowDepthM: Double? = null,
+    val deepDepthM: Double? = null,
+    /** Замер воды термометром, °C: факт всегда главнее расчёта. */
+    val waterTempC: Double? = null,
+    /** Когда сделан замер, ISO8601 без секунд; null — замера не было. */
+    val waterTempAt: String? = null,
     val createdAt: Long = System.currentTimeMillis()
 ) {
     /** Погода запрашивается по центру района. */

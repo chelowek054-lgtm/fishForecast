@@ -215,6 +215,91 @@ fun DayNightChart(
     }
 }
 
+/** Одна кривая на общем графике. */
+data class ChartSeries(
+    val values: List<Double>,
+    val color: Color,
+    /** Подписи сверху или снизу: две кривые рядом иначе сливаются. */
+    val labelAbove: Boolean = true
+)
+
+/**
+ * Несколько кривых в одном масштабе.
+ *
+ * Мель и яма имеют смысл только рядом: вся разница в том, насколько они
+ * разошлись.
+ */
+@Composable
+fun MultiLineChart(
+    labels: List<String>,
+    series: List<ChartSeries>,
+    valueSuffix: String,
+    modifier: Modifier = Modifier,
+    height: Dp = 150.dp,
+    labelEvery: Int = 6
+) {
+    if (series.isEmpty() || series.any { it.values.size < 2 }) return
+
+    val textMeasurer = rememberTextMeasurer()
+    val labelStyle = TextStyle(fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+
+    val all = series.flatMap { it.values }
+    val min = all.min()
+    val max = all.max()
+    val span = (max - min).takeIf { it > 0.5 } ?: 1.0
+
+    Canvas(
+        modifier = modifier
+            .fillMaxWidth()
+            .height(height)
+    ) {
+        val topInset = 22.dp.toPx()
+        val bottomInset = 18.dp.toPx()
+        val plotHeight = size.height - topInset - bottomInset
+        val step = size.width / (labels.size - 1).coerceAtLeast(1)
+
+        fun yOf(value: Double) =
+            topInset + plotHeight * (1 - ((value - min) / span)).toFloat()
+
+        series.forEach { line ->
+            val path = Path()
+            line.values.forEachIndexed { index, value ->
+                val x = index * step
+                val y = yOf(value)
+                if (index == 0) path.moveTo(x, y) else path.lineTo(x, y)
+            }
+            drawPath(path, color = line.color, style = Stroke(width = 2.dp.toPx()))
+
+            line.values.forEachIndexed { index, value ->
+                if (index % labelEvery != 0) return@forEachIndexed
+                val x = index * step
+                val y = yOf(value)
+                drawCircle(color = line.color, radius = 2.5.dp.toPx(), center = Offset(x, y))
+                drawCenteredText(
+                    textMeasurer = textMeasurer,
+                    text = "%.0f%s".format(value, valueSuffix),
+                    style = TextStyle(fontSize = 11.sp, color = line.color),
+                    centerX = x,
+                    top = if (line.labelAbove) y - 18.dp.toPx() else y + 6.dp.toPx(),
+                    maxWidth = size.width
+                )
+            }
+        }
+
+        labels.forEachIndexed { index, label ->
+            if (index % labelEvery != 0) return@forEachIndexed
+            drawCenteredText(
+                textMeasurer = textMeasurer,
+                text = label,
+                style = labelStyle,
+                centerX = index * step,
+                top = size.height - bottomInset + 2.dp.toPx(),
+                maxWidth = size.width
+            )
+        }
+    }
+}
+
 /** Подпись у точки: без центрирования цифры съезжают с колонок. */
 private fun DrawScope.drawCenteredText(
     textMeasurer: TextMeasurer,

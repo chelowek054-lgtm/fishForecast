@@ -15,6 +15,8 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
+import java.time.LocalDateTime
+import java.time.format.DateTimeFormatter
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -88,6 +90,20 @@ class FishingContextRepository @Inject constructor(
 
     suspend fun setNormalPressure(id: Int, normalPressureMmHg: Double?) =
         savedMapDao.updateNormalPressure(id, normalPressureMmHg)
+
+    suspend fun setDepths(id: Int, shallowM: Double?, deepM: Double?) =
+        savedMapDao.updateDepths(id, shallowM, deepM)
+
+    /**
+     * Замер воды термометром. Время берётся текущее: замер имеет смысл
+     * только вместе с моментом, иначе модель не знает, куда его подставить.
+     */
+    suspend fun measureWater(id: Int, temperatureC: Double?) {
+        val measuredAt = temperatureC?.let {
+            LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm"))
+        }
+        savedMapDao.updateWaterMeasurement(id, temperatureC, measuredAt)
+    }
 
     /** Норма точки уточняет норму карты; без обеих остаётся null. */
     fun normalPressureFor(map: SavedMapEntity?, spot: FishingSpotEntity?): Double? =

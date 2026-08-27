@@ -76,6 +76,15 @@ class SavedMapsViewModel @Inject constructor(
         viewModelScope.launch { fishingContext.setNormalPressure(map.id, value) }
     }
 
+    fun setDepths(map: SavedMapEntity, shallowM: Double?, deepM: Double?) {
+        viewModelScope.launch { fishingContext.setDepths(map.id, shallowM, deepM) }
+    }
+
+    /** Замер термометром: факт всегда главнее расчёта. */
+    fun measureWater(map: SavedMapEntity, temperatureC: Double?) {
+        viewModelScope.launch { fishingContext.measureWater(map.id, temperatureC) }
+    }
+
     fun deleteMap(map: SavedMapEntity) {
         viewModelScope.launch { offlineMapRepository.deleteRegion(map) }
     }

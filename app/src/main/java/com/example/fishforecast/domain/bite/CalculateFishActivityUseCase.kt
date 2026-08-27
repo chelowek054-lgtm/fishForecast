@@ -3,6 +3,10 @@ package com.example.fishforecast.domain.bite
 import com.example.fishforecast.data.local.entities.FishEntity
 import com.example.fishforecast.data.local.entities.WeatherEntity
 import com.example.fishforecast.domain.sensor.hPaToMmHg
+import com.example.fishforecast.domain.water.WaterState
+import com.example.fishforecast.domain.water.oxygenLevel
+import com.example.fishforecast.domain.water.oxygenLevelText
+import com.example.fishforecast.domain.water.oxygenSaturationMgL
 import javax.inject.Inject
 import kotlin.math.abs
 import kotlin.math.roundToInt
@@ -31,17 +35,29 @@ class CalculateFishActivityUseCase @Inject constructor() {
     operator fun invoke(
         fish: FishEntity,
         forecast: List<WeatherEntity>,
-        normalPressureMmHg: Double? = null
+        normalPressureMmHg: Double? = null,
+        water: WaterState? = null
     ): List<BiteForecast> {
         val sorted = forecast.sortedBy { it.time }
         val normal = normalPressureMmHg
             ?: ((fish.minPressure + fish.maxPressure) / 2.0)
 
         return sorted.mapIndexed { index, hour ->
-            val temperature = temperatureFactor(hour.temperature, fish)
+            // Рыба живёт в воде, а не в воздухе. Пока вода не посчитана,
+            // остаётся прежнее допущение — но оно именно допущение.
+            val waterNow = water?.shallowAt(hour.time)
+            val waterBefore = water?.let { state ->
+                sorted.getOrNull(index - TREND_WINDOW_HOURS)?.let { state.shallowAt(it.time) }
+            }
+
+            val temperature = temperatureFactor(waterNow ?: hour.temperature, fish, waterNow != null)
             val pressure = pressureFactor(hour.pressure.hPaToMmHg(), fish, normal)
             val trend = pressureTrendFactor(sorted, index, normal)
-            val oxygen = oxygenFactor(sorted, index, hour, fish)
+            val oxygen = if (waterNow != null) {
+                waterOxygenFactor(waterNow, waterBefore, fish)
+            } else {
+                oxygenFactor(sorted, index, hour, fish)
+            }
             val wind = windFactor(hour.windSpeed)
 
             val factors = listOf(temperature, oxygen, pressure, trend, wind)
@@ -62,19 +78,24 @@ class CalculateFishActivityUseCase @Inject constructor() {
         }
     }
 
-    private fun temperatureFactor(temperature: Double, fish: FishEntity): BiteFactor {
+    private fun temperatureFactor(
+        temperature: Double,
+        fish: FishEntity,
+        fromWater: Boolean
+    ): BiteFactor {
         val distance = distanceOutside(temperature, fish.minTemp.toDouble(), fish.maxTemp.toDouble())
         val value = falloff(distance, TEMPERATURE_TOLERANCE)
 
+        val what = if (fromWater) "Вода" else "Воздух"
         return BiteFactor(
-            name = "Температура",
+            name = if (fromWater) "Температура воды" else "Температура",
             value = value,
             weight = 0.0,
             limiting = true,
-            comment = when {
-                distance == 0.0 -> "${temperature.roundToInt()}°C — в комфортном диапазоне"
-                temperature < fish.minTemp -> "${temperature.roundToInt()}°C — холоднее комфорта"
-                else -> "${temperature.roundToInt()}°C — теплее комфорта"
+            comment = "$what ${temperature.roundToInt()}°C — " + when {
+                distance == 0.0 -> "в комфортном диапазоне"
+                temperature < fish.minTemp -> "холоднее комфорта"
+                else -> "теплее комфорта"
             }
         )
     }
@@ -202,6 +223,52 @@ class CalculateFishActivityUseCase @Inject constructor() {
         )
     }
 
+    /**
+     * Кислород по температуре воды.
+     *
+     * Растворимость — функция температуры, и теперь её можно назвать в
+     * мг/л, а не описывать словами. Но потолок растворимости ещё не
+     * комфорт: с прогревом растёт и потребность самой рыбы, поэтому отсчёт
+     * идёт от верхней границы её диапазона — в одной и той же воде амуру
+     * привольно, а карпу уже нечем дышать.
+     *
+     * Остывание идёт в плюс не само по себе, а потому что вместе с ним в
+     * воду приходит кислород.
+     */
+    private fun waterOxygenFactor(
+        waterNow: Double,
+        waterBefore: Double?,
+        fish: FishEntity
+    ): BiteFactor {
+        val oxygen = oxygenSaturationMgL(waterNow)
+        val warmWaterStarts = fish.maxTemp - OXYGEN_MARGIN
+        val warmthPenalty = falloff(
+            distance = (waterNow - warmWaterStarts).coerceAtLeast(0.0),
+            tolerance = HEAT_TOLERANCE
+        )
+
+        val cooling = waterBefore?.let { it - waterNow } ?: 0.0
+        val coolingBonus = when {
+            cooling >= WATER_COOLING_STEP -> COOLING_BONUS
+            cooling <= -WATER_COOLING_STEP -> -COOLING_BONUS
+            else -> 0.0
+        }
+
+        return BiteFactor(
+            name = "Кислород",
+            value = (warmthPenalty + coolingBonus).coerceIn(0.0, 1.0),
+            weight = 0.0,
+            limiting = true,
+            comment = "%.1f мг/л — %s".format(oxygen, oxygenLevelText(oxygenLevel(oxygen))) +
+                when {
+                    cooling >= WATER_COOLING_STEP -> ", вода остывает"
+                    cooling <= -WATER_COOLING_STEP -> ", вода прогревается"
+                    waterNow > warmWaterStarts -> ", для этой рыбы вода тёплая"
+                    else -> ""
+                }
+        )
+    }
+
     private fun windFactor(windSpeedKmh: Double): BiteFactor {
         val value = when {
             windSpeedKmh <= LIGHT_WIND_KMH -> 1.0
@@ -259,6 +326,9 @@ class CalculateFishActivityUseCase @Inject constructor() {
         const val OXYGEN_MARGIN = 4.0
         const val HEAT_TOLERANCE = 12.0
         const val NOTICEABLE_COOLING = 2.0
+
+        /** Насколько должна сдвинуться вода за окно, чтобы это было ходом. */
+        const val WATER_COOLING_STEP = 0.3
         const val COOLING_BONUS = 0.3
 
         const val LIGHT_WIND_KMH = 15.0

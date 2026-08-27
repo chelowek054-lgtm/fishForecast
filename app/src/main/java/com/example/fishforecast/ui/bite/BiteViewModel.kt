@@ -9,6 +9,7 @@ import com.example.fishforecast.data.repository.FishRepository
 import com.example.fishforecast.data.repository.FishingContextRepository
 import com.example.fishforecast.domain.bite.BiteForecast
 import com.example.fishforecast.domain.bite.CalculateFishActivityUseCase
+import com.example.fishforecast.domain.water.calculateWaterState
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -58,8 +59,11 @@ class BiteViewModel @Inject constructor(
         // «ехать или нет» не помогают.
         val spot = spots.firstOrNull { it.id == spotId }
         val normalPressure = fishingContext.normalPressureFor(map, spot)
+        // Вода считается по тому же прогнозу вместе с прошедшими сутками:
+        // без истории инерционная модель не разгоняется.
+        val water = calculateWaterState(weather, map)
         val calculated = selected
-            ?.let { calculateFishActivity(it, weather, normalPressure) }
+            ?.let { calculateFishActivity(it, weather, normalPressure, water) }
             .orEmpty()
         // Час усекается: текущий час ещё идёт, и выбрасывать его нельзя.
         val fromNow = LocalDateTime.now().truncatedTo(ChronoUnit.HOURS).format(HOUR_FORMAT)
