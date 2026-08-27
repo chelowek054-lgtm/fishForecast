@@ -23,5 +23,8 @@ data class HourlyWeatherDataDto(
     @SerialName("wind_direction_10m")
     val windDirections: List<Double>,
     @SerialName("weather_code")
-    val weatherCodes: List<Int>
+    val weatherCodes: List<Int>,
+    /** Открытое море и горы иногда остаются без вероятности осадков. */
+    @SerialName("precipitation_probability")
+    val precipitationChances: List<Int?> = emptyList()
 )

@@ -19,6 +19,8 @@ data class WeatherEntity(
     val windSpeed: Double,
     /** Откуда дует, градусы. Нужен для оценки прогрева и перемешивания воды. */
     val windDirection: Double = 0.0,
+    /** Вероятность осадков, %. Решает, брать ли с собой дождевик. */
+    val precipitationChance: Double = 0.0,
     val weatherCode: Int,
     val latitude: Double,
     val longitude: Double,

@@ -23,7 +23,7 @@ import com.example.fishforecast.data.local.entities.WeatherEntity
         FishingSpotEntity::class,
         CatchEntity::class
     ],
-    version = 6,
+    version = 7,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -176,6 +176,18 @@ abstract class AppDatabase : RoomDatabase() {
                         PRIMARY KEY(`mapId`, `time`)
                     )
                     """.trimIndent()
+                )
+            }
+        }
+
+        /**
+         * Вероятность осадков. Старым строкам достаётся ноль — это кэш,
+         * он всё равно перезапрашивается при первом обновлении погоды.
+         */
+        val MIGRATION_6_7 = object : Migration(6, 7) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "ALTER TABLE `weather_forecast` ADD COLUMN `precipitationChance` REAL NOT NULL DEFAULT 0.0"
                 )
             }
         }
