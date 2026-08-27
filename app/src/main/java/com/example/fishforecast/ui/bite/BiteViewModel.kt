@@ -46,9 +46,14 @@ class BiteViewModel @Inject constructor(
         fishRepository.getAllFish(),
         fishingContext.activeForecast,
         fishingContext.activeSpots,
-        combine(fishingContext.activeMap, fishingContext.activeWater) { map, water -> map to water },
+        combine(
+            fishingContext.activeMap,
+            fishingContext.activeWater,
+            fishingContext.activeSunTimes
+        ) { map, water, sun -> Triple(map, water, sun) },
         combine(selectedFishId, selectedSpotId) { fishId, spotId -> fishId to spotId }
-    ) { fishList, weather, spots, (map, water), (selectedId, spotId) ->
+    ) { fishList, weather, spots, context, (selectedId, spotId) ->
+        val (map, water, sunTimes) = context
         // Пока рыболов не выбрал рыбу, показываем первую из справочника:
         // экран должен отвечать на вопрос «ехать или нет» сразу.
         val selected = fishList.firstOrNull { it.id == selectedId } ?: fishList.firstOrNull()
@@ -59,7 +64,7 @@ class BiteViewModel @Inject constructor(
         val spot = spots.firstOrNull { it.id == spotId }
         val normalPressure = fishingContext.normalPressureFor(map)
         val calculated = selected
-            ?.let { calculateFishActivity(it, weather, normalPressure, water) }
+            ?.let { calculateFishActivity(it, weather, normalPressure, water, sunTimes) }
             .orEmpty()
         // Час усекается: текущий час ещё идёт, и выбрасывать его нельзя.
         val fromNow = LocalDateTime.now().truncatedTo(ChronoUnit.HOURS).format(HOUR_FORMAT)

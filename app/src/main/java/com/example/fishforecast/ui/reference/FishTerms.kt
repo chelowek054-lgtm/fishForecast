@@ -1,6 +1,7 @@
 package com.example.fishforecast.ui.reference
 
 import com.example.fishforecast.domain.fish.GroundbaitRule
+import com.example.fishforecast.domain.fish.Guild
 
 /**
  * Перевод словарных значений справочника на человеческий.
@@ -44,6 +45,12 @@ fun flavorText(value: String): String = when (value) {
     "meat_spicy" -> "мясной пряный аромат"
     "sweet_spicy" -> "сладко-пряный аромат"
     else -> value.replace('_', ' ')
+}
+
+/** Гильдия словами: рыболов думает «хищник», а не `predator`. */
+fun guildText(guild: Guild): String = when (guild) {
+    Guild.PREDATOR -> "хищник"
+    Guild.PEACEFUL -> "мирная"
 }
 
 fun horizonText(value: String): String = when (value) {

@@ -40,7 +40,13 @@ class CatchRepository @Inject constructor(
 
         val biteScore = if (fish != null && hour != null) {
             val forecast = fishingContext.activeForecast.first()
-            calculateFishActivity(fish, forecast, normalPressure, fishingContext.currentWater())
+            calculateFishActivity(
+                fish = fish,
+                forecast = forecast,
+                normalPressureMmHg = normalPressure,
+                water = fishingContext.currentWater(),
+                sunTimes = fishingContext.activeSunTimes.first()
+            )
                 .firstOrNull { it.time == hour.time }?.score
         } else {
             null

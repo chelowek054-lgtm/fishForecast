@@ -1,5 +1,6 @@
 package com.example.fishforecast.domain.bite
 
+import com.example.fishforecast.data.local.entities.DailySunEntity
 import com.example.fishforecast.data.local.entities.FishEntity
 import com.example.fishforecast.data.local.entities.WeatherEntity
 import com.example.fishforecast.domain.water.WaterHour
@@ -17,6 +18,7 @@ class CalculateFishActivityUseCaseTest {
         id = 1,
         name = "Щука",
         description = "",
+        guild = "predator",
         optMinTemp = 8f,
         optMaxTemp = 18f,
         absMinTemp = 2f,
@@ -109,6 +111,100 @@ class CalculateFishActivityUseCaseTest {
             "остывание добавляет кислорода: ${cooling.last().score} vs ${steady.last().score}",
             cooling.last().score > steady.last().score
         )
+    }
+
+    /** Рябь: ветер, который не мешает ни хищнику, ни мирной рыбе. */
+    private val RIPPLE_KMH = 12.0
+
+    /** Летние сутки под Москвой: рассвет в 5:11, закат в 20:30. */
+    private fun sunTimes(date: String = "2026-08-26") = listOf(
+        DailySunEntity(
+            mapId = 1,
+            date = date,
+            sunrise = "${date}T05:11",
+            sunset = "${date}T20:30"
+        )
+    )
+
+    @Test
+    fun `хищник и мирная рыба в одних условиях получают разные оценки`() {
+        // Ровно та беда, ради которой всё затевалось: до появления света
+        // щука и карп на одной воде получали одинаковый балл.
+        val carp = pike.copy(
+            id = 2,
+            name = "Карп",
+            guild = "peaceful",
+            optMinTemp = 8f,
+            optMaxTemp = 18f
+        )
+        val predator = pike
+        // Ветер держим в полосе ряби, чтобы сравнивать именно свет: штиль
+        // хищнику мешает сильнее, и он съел бы разницу.
+        val dawn = (0..23).map { hour(it, windSpeed = RIPPLE_KMH) }
+
+        val atDawn = { fish: FishEntity ->
+            useCase(fish, dawn, sunTimes = sunTimes())
+                .first { it.time == "2026-08-26T05:00" }
+                .score
+        }
+
+        assertTrue(
+            "на рассвете хищник должен опережать мирную рыбу: " +
+                "${atDawn(predator)} против ${atDawn(carp)}",
+            atDawn(predator) > atDawn(carp)
+        )
+    }
+
+    @Test
+    fun `у щуки разброс по времени суток больше, чем у карпа`() {
+        val carp = pike.copy(id = 2, name = "Карп", guild = "peaceful")
+        val forecast = (0..23).map { hour(it, windSpeed = RIPPLE_KMH) }
+
+        fun spread(fish: FishEntity): Int {
+            val day = useCase(fish, forecast, sunTimes = sunTimes())
+            val dawn = day.first { it.time == "2026-08-26T05:00" }.score
+            val noon = day.first { it.time == "2026-08-26T13:00" }.score
+            return dawn - noon
+        }
+
+        assertTrue(
+            "разброс щуки ${spread(pike)} должен быть больше разброса карпа ${spread(carp)}",
+            spread(pike) > spread(carp)
+        )
+    }
+
+    @Test
+    fun `ночной вид берёт ночью, а не на заре`() {
+        val burbot = pike.copy(
+            name = "Налим",
+            guild = "predator",
+            lightActivity = """{"night":1.0,"dawn":0.6,"morning":0.3,"day":0.2,"evening":0.5,"dusk":0.8}"""
+        )
+        val forecast = (0..23).map { hour(it, windSpeed = RIPPLE_KMH) }
+
+        val result = useCase(burbot, forecast, sunTimes = sunTimes())
+        val night = result.first { it.time == "2026-08-26T02:00" }.score
+        val dawn = result.first { it.time == "2026-08-26T05:00" }.score
+
+        assertTrue("свой профиль вида старше правила про зори: $night против $dawn", night > dawn)
+    }
+
+    @Test
+    fun `без данных о солнце оценка не проседает`() {
+        // Фактор света просто не участвует, а не обнуляет треть веса.
+        val forecast = (0..5).map { hour(it) }
+
+        val withoutSun = useCase(pike, forecast).last().score
+
+        assertTrue("оценка должна остаться разумной: $withoutSun", withoutSun >= 80)
+    }
+
+    @Test
+    fun `рябь лучше зеркальной глади`() {
+        val calm = useCase(pike, (0..5).map { hour(it, windSpeed = 1.0) }).last().score
+        val ripple = useCase(pike, (0..5).map { hour(it, windSpeed = 12.0) }).last().score
+
+        assertTrue("рябь прячет рыболова и ломает свет: $ripple против $calm", ripple > calm)
     }
 
     @Test

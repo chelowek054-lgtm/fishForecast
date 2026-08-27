@@ -63,6 +63,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.example.fishforecast.data.local.entities.FishEntity
+import com.example.fishforecast.domain.fish.Guild
 import com.example.fishforecast.domain.fish.decodeBaits
 import com.example.fishforecast.domain.fish.decodeGroundbait
 import kotlin.math.roundToInt
@@ -162,6 +163,13 @@ private fun FishCardItem(
 
             Spacer(modifier = Modifier.height(8.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                AssistChip(
+                    onClick = {},
+                    label = { Text(guildText(Guild.of(fish.guild))) }
+                )
+                card.lightPhase?.let { phase ->
+                    AssistChip(onClick = {}, label = { Text(phase.title) })
+                }
                 AssistChip(
                     onClick = {},
                     label = { Text(horizonText(fish.defaultHorizon)) }
@@ -383,8 +391,10 @@ private fun FishCard.verdict(): String {
 }
 
 private fun FishCard.oxygenText(): String {
-    val oxygen = oxygenMgL ?: return "кислород ≥ ${fish.oxygenComfortMgL} мг/л"
-    return "кислород %.1f из %.1f мг/л".format(oxygen, fish.oxygenComfortMgL)
+    // Коротко: чип рядом с тремя другими, и «мг/л» переносит его в три
+    // строки. Единицы всё равно названы в раскрытом столе.
+    val oxygen = oxygenMgL ?: return "O₂ от %.1f".format(fish.oxygenComfortMgL)
+    return "O₂ %.1f из %.1f".format(oxygen, fish.oxygenComfortMgL)
 }
 
 private fun FishCard.oxygenShort(): Boolean =

@@ -1,6 +1,7 @@
 package com.example.fishforecast.domain.bite
 
 import com.example.fishforecast.data.local.entities.FishEntity
+import com.example.fishforecast.data.local.entities.DailySunEntity
 import com.example.fishforecast.data.local.entities.WeatherEntity
 import com.example.fishforecast.domain.water.WaterState
 import java.time.LocalDateTime
@@ -30,13 +31,14 @@ class FindBiteWindowUseCase @Inject constructor(
         lookaheadHours: Long = DEFAULT_LOOKAHEAD_HOURS,
         minimumScore: Int = DEFAULT_MINIMUM_SCORE,
         normalPressureMmHg: Double? = null,
-        water: WaterState? = null
+        water: WaterState? = null,
+        sunTimes: List<DailySunEntity> = emptyList()
     ): BiteWindow? {
         val until = from.plusHours(lookaheadHours)
 
         return fishList
             .flatMap { fish ->
-                calculateFishActivity(fish, forecast, normalPressureMmHg, water)
+                calculateFishActivity(fish, forecast, normalPressureMmHg, water, sunTimes)
                     .filter { it.score >= minimumScore }
                     .filter { hour ->
                         val time = hour.time.toLocalDateTimeOrNull() ?: return@filter false

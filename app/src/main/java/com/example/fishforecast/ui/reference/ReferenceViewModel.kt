@@ -4,7 +4,10 @@ import androidx.compose.runtime.State
 import androidx.compose.runtime.mutableStateOf
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.fishforecast.data.local.entities.DailySunEntity
 import com.example.fishforecast.data.local.entities.FishEntity
+import com.example.fishforecast.domain.light.LightPhase
+import com.example.fishforecast.domain.light.lightPhaseAt
 import com.example.fishforecast.data.repository.FishRepository
 import com.example.fishforecast.data.repository.KnowledgeRepository
 import com.example.fishforecast.domain.knowledge.KnowledgeCatalog
@@ -36,7 +39,9 @@ data class FishCard(
     val score: Int?,
     /** Температура мели, °C; null — район не выбран. */
     val waterTemperature: Double?,
-    val oxygenMgL: Double?
+    val oxygenMgL: Double?,
+    /** Фаза света этого часа; null — данных о восходе ещё нет. */
+    val lightPhase: LightPhase? = null
 ) {
     /** Вода холоднее порога — у вида холодный стол. */
     val coldTable: Boolean
@@ -55,12 +60,13 @@ class ReferenceViewModel @Inject constructor(
         repository.getAllFish(),
         fishingContext.activeForecast,
         fishingContext.activeMap,
-        fishingContext.activeWater
-    ) { fishList, forecast, map, water ->
+        fishingContext.activeWater,
+        fishingContext.activeSunTimes
+    ) { fishList, forecast, map, water, sunTimes ->
         val normal = fishingContext.normalPressureFor(map)
 
         fishList
-            .map { fish -> fish.toCard(forecast, water, normal) }
+            .map { fish -> fish.toCard(forecast, water, normal, sunTimes) }
             // Кто сегодня активнее — тот и выше: справочник должен отвечать
             // на вопрос «за кем ехать», а не хранить алфавитный порядок.
             .sortedWith(compareByDescending<FishCard> { it.score ?: -1 }.thenBy { it.fish.name })
@@ -106,7 +112,8 @@ class ReferenceViewModel @Inject constructor(
     private fun FishEntity.toCard(
         forecast: List<com.example.fishforecast.data.local.entities.WeatherEntity>,
         water: WaterState,
-        normalPressureMmHg: Double?
+        normalPressureMmHg: Double?,
+        sunTimes: List<DailySunEntity>
     ): FishCard {
         if (forecast.isEmpty()) return FishCard(this, null, null, null)
 
@@ -117,17 +124,25 @@ class ReferenceViewModel @Inject constructor(
             )
         }
         val score = hour?.let {
-            calculateFishActivity(this, forecast, normalPressureMmHg, water)
+            calculateFishActivity(this, forecast, normalPressureMmHg, water, sunTimes)
                 .firstOrNull { forecastHour -> forecastHour.time == it.time }
                 ?.score
         }
         val waterNow = hour?.let { water.shallowAt(it.time) }
+        val phase = hour?.let {
+            val moment = LocalDateTime.parse(it.time)
+            lightPhaseAt(moment, sunTimes.firstOrNull { day -> day.date == moment.toLocalDate().toString() })
+        }
 
         return FishCard(
             fish = this,
             score = score,
             waterTemperature = waterNow,
-            oxygenMgL = waterNow?.let { oxygenSaturationMgL(it) }
+            // Кислород берётся у воды: он зависит от типа водоёма и ночи,
+            // а не только от температуры.
+            oxygenMgL = hour?.let { water.oxygenAt(it.time) }
+                ?: waterNow?.let { oxygenSaturationMgL(it) },
+            lightPhase = phase
         )
     }
 

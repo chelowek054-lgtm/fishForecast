@@ -2,7 +2,14 @@ package com.example.fishforecast.domain.bite
 
 import com.example.fishforecast.data.local.entities.FishEntity
 import com.example.fishforecast.data.local.entities.WeatherEntity
+import com.example.fishforecast.data.local.entities.DailySunEntity
+import com.example.fishforecast.domain.fish.Guild
+import com.example.fishforecast.domain.fish.decodeLightActivity
+import com.example.fishforecast.domain.light.lightActivity
+import com.example.fishforecast.domain.light.lightPhaseAt
 import com.example.fishforecast.domain.sensor.hPaToMmHg
+import com.example.fishforecast.domain.weather.kmhToMs
+import java.time.LocalDateTime
 import com.example.fishforecast.domain.water.WaterState
 import com.example.fishforecast.domain.water.oxygenLevel
 import com.example.fishforecast.domain.water.oxygenLevelText
@@ -38,7 +45,8 @@ class CalculateFishActivityUseCase @Inject constructor() {
         fish: FishEntity,
         forecast: List<WeatherEntity>,
         normalPressureMmHg: Double? = null,
-        water: WaterState? = null
+        water: WaterState? = null,
+        sunTimes: List<DailySunEntity> = emptyList()
     ): List<BiteForecast> {
         val sorted = forecast.sortedBy { it.time }
         val normal = normalPressureMmHg
@@ -66,15 +74,22 @@ class CalculateFishActivityUseCase @Inject constructor() {
             } else {
                 oxygenFactor(sorted, index, hour, fish)
             }
-            val wind = windFactor(hour.windSpeed)
+            val guild = Guild.of(fish.guild)
+            val wind = windFactor(hour.windSpeed, guild)
+            val light = lightFactor(hour.time, sunTimes, fish, guild)
 
-            val factors = listOf(temperature, oxygen, pressure, trend, wind)
+            val factors = listOfNotNull(temperature, oxygen, pressure, trend, wind, light)
 
             // Ограничители перемножаются: непригодную для рыбы воду не
             // компенсирует ни давление, ни ветер. Условия клёва складываются
             // с весами и лишь масштабируют то, что осталось возможным.
             val habitat = factors.filter { it.limiting }.fold(1.0) { acc, f -> acc * f.value }
-            val conditions = factors.filterNot { it.limiting }.sumOf { it.value * it.weight }
+            val scored = factors.filterNot { it.limiting }
+            // Веса нормируются по тем факторам, которые удалось посчитать:
+            // без данных о восходе оценка не должна проседать на треть
+            // просто потому, что фактор света отсутствует.
+            val weights = scored.sumOf { it.weight }.takeIf { it > 0 } ?: 1.0
+            val conditions = scored.sumOf { it.value * it.weight } / weights
             val score = (habitat * conditions * 100).roundToInt().coerceIn(0, 100)
 
             BiteForecast(
@@ -327,10 +342,54 @@ class CalculateFishActivityUseCase @Inject constructor() {
         )
     }
 
-    private fun windFactor(windSpeedKmh: Double): BiteFactor {
+    /**
+     * Свет — тот самый ритм, по которому рыба живёт.
+     *
+     * Профиль берётся у вида, а если его нет — у гильдии. Без данных о
+     * восходе фактор не участвует вовсе: выдумывать фазу по часам нельзя,
+     * летний рассвет и зимний расходятся на пять часов.
+     */
+    private fun lightFactor(
+        time: String,
+        sunTimes: List<DailySunEntity>,
+        fish: FishEntity,
+        guild: Guild
+    ): BiteFactor? {
+        val moment = runCatching { LocalDateTime.parse(time) }.getOrNull() ?: return null
+        val sun = sunTimes.firstOrNull { it.date == moment.toLocalDate().toString() }
+        val phase = lightPhaseAt(moment, sun) ?: return null
+
+        val value = lightActivity(phase, fish.lightActivity.decodeLightActivity(), guild)
+
+        return BiteFactor(
+            name = "Свет",
+            value = value,
+            weight = WEIGHT_LIGHT,
+            comment = phase.title.replaceFirstChar { it.uppercase() } + " — " + when {
+                value >= 0.9 -> "лучшее время этого вида"
+                value >= 0.7 -> "рабочее время"
+                value >= 0.4 -> "не лучший час"
+                else -> "вид в это время стоит"
+            }
+        )
+    }
+
+    /**
+     * Ветер.
+     *
+     * Зеркальная гладь — не идеал, а проблема: рябь ломает освещённость и
+     * прячет рыболова, а заодно гонит корм к подветренному берегу. Поэтому у
+     * ветра оптимум, а не монотонный штраф. Хищнику рябь важнее: он охотится
+     * глазами и в прозрачной тихой воде сам виден издалека.
+     */
+    private fun windFactor(windSpeedKmh: Double, guild: Guild): BiteFactor {
+        val ms = windSpeedKmh.kmhToMs()
+        val rippleBonus = if (guild == Guild.PREDATOR) PREDATOR_RIPPLE else PEACEFUL_RIPPLE
+
         val value = when {
-            windSpeedKmh <= LIGHT_WIND_KMH -> 1.0
-            windSpeedKmh <= STRONG_WIND_KMH -> 0.7
+            ms < CALM_MS -> 1.0 - rippleBonus
+            ms <= RIPPLE_MAX_MS -> 1.0
+            ms <= STRONG_WIND_MS -> 0.7
             else -> 0.3
         }
 
@@ -338,9 +397,10 @@ class CalculateFishActivityUseCase @Inject constructor() {
             name = "Ветер",
             value = value,
             weight = WEIGHT_WIND,
-            comment = "${windSpeedKmh.roundToInt()} км/ч" + when {
-                windSpeedKmh <= LIGHT_WIND_KMH -> " — рябь на воде, это в плюс"
-                windSpeedKmh <= STRONG_WIND_KMH -> " — заметный ветер, вода перемешивается"
+            comment = "%.1f м/с".format(ms) + when {
+                ms < CALM_MS -> " — штиль, вода как зеркало"
+                ms <= RIPPLE_MAX_MS -> " — рябь на воде, это в плюс"
+                ms <= STRONG_WIND_MS -> " — заметный ветер, вода перемешивается"
                 else -> " — сильный ветер, рыбалка трудная"
             }
         )
@@ -353,9 +413,15 @@ class CalculateFishActivityUseCase @Inject constructor() {
     private companion object {
         // Веса условий клёва в сумме дают единицу: они распределяют то, что
         // осталось после ограничителей среды.
-        const val WEIGHT_PRESSURE = 0.45
-        const val WEIGHT_TREND = 0.35
-        const val WEIGHT_WIND = 0.20
+        //
+        // Раньше 0.8 из этой единицы приходилось на давление и его
+        // тенденцию — на параметр, влияние которого спорнее всего. Свет
+        // бесспорен и при этом отличает виды друг от друга, поэтому часть
+        // веса ушла ему.
+        const val WEIGHT_PRESSURE = 0.35
+        const val WEIGHT_TREND = 0.20
+        const val WEIGHT_LIGHT = 0.30
+        const val WEIGHT_WIND = 0.15
 
         /** Ширина перехода не бывает нулевой: иначе деление на ноль. */
         const val MIN_TOLERANCE = 1.0
@@ -377,7 +443,15 @@ class CalculateFishActivityUseCase @Inject constructor() {
         const val WATER_COOLING_STEP = 0.3
         const val COOLING_BONUS = 0.3
 
-        const val LIGHT_WIND_KMH = 15.0
-        const val STRONG_WIND_KMH = 30.0
+        /** Ниже этого ветра ряби нет: вода стоит зеркалом. */
+        const val CALM_MS = 1.5
+
+        /** Верх приятной ряби. */
+        const val RIPPLE_MAX_MS = 5.0
+        const val STRONG_WIND_MS = 9.0
+
+        /** Насколько штиль хуже ряби: хищнику это важнее. */
+        const val PREDATOR_RIPPLE = 0.25
+        const val PEACEFUL_RIPPLE = 0.10
     }
 }

@@ -54,7 +54,8 @@ class BiteAlertWorker @AssistedInject constructor(
             forecast = forecast,
             from = LocalDateTime.now(),
             normalPressureMmHg = map.baselinePressureMmHg,
-            water = fishingContext.currentWater()
+            water = fishingContext.currentWater(),
+            sunTimes = fishingContext.activeSunTimes.first()
         ) ?: return Result.success()
 
         notify(
