@@ -5,6 +5,7 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.builtins.ListSerializer
+import kotlinx.serialization.builtins.MapSerializer
 import kotlinx.serialization.builtins.serializer
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.jsonObject
@@ -43,6 +44,17 @@ data class CatalogFish(
     val defaultHorizon: String = FishEntity.HORIZON_BOTTOM,
     @SerialName("cold_temp_threshold")
     val coldTempThreshold: Double = 12.0,
+    /** `predator` или `peaceful`. */
+    val guild: String = "peaceful",
+    /**
+     * Активность по фазам света: `night`, `dawn`, `morning`, `day`,
+     * `evening`, `dusk`. Пусто — берётся профиль гильдии.
+     */
+    @SerialName("light_activity")
+    val lightActivity: Map<String, Double> = emptyMap(),
+    /** Структуры из словаря знаний, где вид держится. */
+    @SerialName("preferred_structures")
+    val preferredStructures: List<String> = emptyList(),
     val baits: CatalogBaits = CatalogBaits(),
     @SerialName("groundbait_rules")
     val groundbaitRules: CatalogGroundbaitRules = CatalogGroundbaitRules()
@@ -152,6 +164,9 @@ fun CatalogFish.toEntity(existing: FishEntity? = null): FishEntity = FishEntity(
     oxygenCriticalMgL = oxygen.criticalMgL.toFloat(),
     defaultHorizon = defaultHorizon,
     coldTempThreshold = coldTempThreshold.toFloat(),
+    guild = guild,
+    lightActivity = lightActivity.encodeLightActivity(),
+    preferredStructures = preferredStructures.encodeBaits(),
     baitsCold = baits.cold.encodeBaits(),
     baitsWarm = baits.warm.encodeBaits(),
     groundbaitCold = FishCatalogCodec.json.encodeToString(
@@ -166,6 +181,16 @@ fun CatalogFish.toEntity(existing: FishEntity? = null): FishEntity = FishEntity(
 )
 
 private val BaitsSerializer = ListSerializer(String.serializer())
+
+private val LightSerializer = MapSerializer(String.serializer(), Double.serializer())
+
+fun Map<String, Double>.encodeLightActivity(): String =
+    FishCatalogCodec.json.encodeToString(LightSerializer, this)
+
+/** Профиль света из строки базы; пусто — значит, берётся профиль гильдии. */
+fun String.decodeLightActivity(): Map<String, Double> = runCatching {
+    FishCatalogCodec.json.decodeFromString(LightSerializer, this)
+}.getOrDefault(emptyMap())
 
 fun List<String>.encodeBaits(): String =
     FishCatalogCodec.json.encodeToString(BaitsSerializer, this)
@@ -206,6 +231,9 @@ fun FishEntity.toCatalogFish(): CatalogFish = CatalogFish(
     ),
     defaultHorizon = defaultHorizon,
     coldTempThreshold = coldTempThreshold.toDouble(),
+    guild = guild,
+    lightActivity = lightActivity.decodeLightActivity(),
+    preferredStructures = preferredStructures.decodeBaits(),
     baits = CatalogBaits(cold = baitsCold.decodeBaits(), warm = baitsWarm.decodeBaits()),
     groundbaitRules = CatalogGroundbaitRules(
         cold = groundbaitCold.decodeGroundbait(),

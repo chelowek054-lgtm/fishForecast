@@ -45,6 +45,16 @@ data class FishEntity(
     /** Кислорода критически мало, мг/л: рыбе не до еды. */
     val oxygenCriticalMgL: Float = 3f,
 
+    /**
+     * Хищник или мирная рыба — [com.example.fishforecast.domain.fish.Guild]
+     * строкой. Решает, чем рыба живёт: охотой по свету или поиском корма.
+     */
+    val guild: String = "peaceful",
+    /** Активность по фазам света, JSON: фаза — коэффициент от 0 до 1. */
+    val lightActivity: String = EMPTY_OBJECT,
+    /** Структуры, где вид держится, JSON-массив идентификаторов словаря. */
+    val preferredStructures: String = EMPTY_LIST,
+
     /** Где держится: `bottom`, `mid`, `top`. */
     val defaultHorizon: String = HORIZON_BOTTOM,
     /**

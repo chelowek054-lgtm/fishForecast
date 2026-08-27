@@ -1,4 +1,4 @@
-package com.example.fishforecast.ui.fishlist
+package com.example.fishforecast.ui.reference
 
 import com.example.fishforecast.domain.fish.GroundbaitRule
 

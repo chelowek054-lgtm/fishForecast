@@ -1,0 +1,250 @@
+{
+  "schema": "fishforecast.knowledge/1",
+  "version": 1,
+  "waterbodies": [
+    {
+      "id": "still_small",
+      "name": "Пруд, малое озеро",
+      "flow": "still",
+      "size": "small",
+      "thermal_inertia": 0.8,
+      "aeration": 0.85,
+      "night_oxygen_drop_mg_l": 0.8,
+      "wind_mixing": 0.6,
+      "notes": "Малый объём воды греется и остывает быстрее всего. Ночью растения дышат вместо того, чтобы отдавать кислород, и к рассвету его меньше всего за сутки."
+    },
+    {
+      "id": "still_large",
+      "name": "Большое озеро, водохранилище",
+      "flow": "still",
+      "size": "large",
+      "thermal_inertia": 1.4,
+      "aeration": 0.95,
+      "night_oxygen_drop_mg_l": 0.3,
+      "wind_mixing": 1.3,
+      "notes": "Инертен: за сутки почти не меняется, зато ветру есть где разогнать волну, и перемешивание идёт всерьёз."
+    },
+    {
+      "id": "flowing_small",
+      "name": "Малая река, ручей",
+      "flow": "flowing",
+      "size": "small",
+      "thermal_inertia": 1.1,
+      "aeration": 1.0,
+      "night_oxygen_drop_mg_l": 0.1,
+      "wind_mixing": 0.5,
+      "notes": "Течение аэрирует воду само и подпитывает её сверху: суточные колебания сглажены, кислорода хватает даже в жару."
+    },
+    {
+      "id": "flowing_large",
+      "name": "Река",
+      "flow": "flowing",
+      "size": "large",
+      "thermal_inertia": 1.6,
+      "aeration": 1.0,
+      "night_oxygen_drop_mg_l": 0.0,
+      "wind_mixing": 0.9,
+      "notes": "Самый устойчивый водоём: температура и кислород меняются медленно, зато рельеф и струи решают всё."
+    },
+    {
+      "id": "sea",
+      "name": "Море",
+      "flow": "flowing",
+      "size": "large",
+      "behavior_defined": false,
+      "notes": "Значение объявлено, но поведение не описано: солёность, приливы и течения в модель пока не заложены."
+    },
+    {
+      "id": "ocean",
+      "name": "Океан",
+      "flow": "flowing",
+      "size": "large",
+      "behavior_defined": false,
+      "notes": "Значение объявлено, но поведение не описано."
+    }
+  ],
+  "structures": [
+    {
+      "id": "snags",
+      "name": "Коряжник, затопленные стволы",
+      "gives": ["shelter", "food"],
+      "predator_bonus": 0.25,
+      "peaceful_bonus": 0.10,
+      "notes": "Работает как искусственный риф: в корягах держатся раки, личинки и малёк, за ними подтягивается хищник."
+    },
+    {
+      "id": "bridge_piles",
+      "name": "Сваи мостков",
+      "gives": ["shelter", "food", "shade"],
+      "predator_bonus": 0.20,
+      "peaceful_bonus": 0.10,
+      "notes": "Тот же коряжник, только рукотворный: тень, обрастания и постоянный корм."
+    },
+    {
+      "id": "undercut_bank",
+      "name": "Подмытый берег",
+      "gives": ["shelter", "shade", "food"],
+      "predator_bonus": 0.20,
+      "peaceful_bonus": 0.15,
+      "notes": "Нависший дёрн и обнажённые корни дают тень, прохладу и постоянный сброс насекомых в воду."
+    },
+    {
+      "id": "point",
+      "name": "Мыс, выступ берега",
+      "gives": ["food"],
+      "predator_bonus": 0.20,
+      "peaceful_bonus": 0.05,
+      "notes": "Кормовые потоки сходятся с двух сторон, и хищник патрулирует сразу два фланга."
+    },
+    {
+      "id": "bay",
+      "name": "Заводь, бухта",
+      "gives": ["food", "calm"],
+      "predator_bonus": 0.05,
+      "peaceful_bonus": 0.25,
+      "notes": "Спокойная вода с планктоном и мутью: столовая леща, карася и плотвы."
+    },
+    {
+      "id": "steep_bank",
+      "name": "Крутой обрыв",
+      "gives": ["depth"],
+      "predator_bonus": 0.15,
+      "peaceful_bonus": 0.05,
+      "notes": "Признак того, что свал и глубина начинаются прямо от берега."
+    },
+    {
+      "id": "drop_off",
+      "name": "Бровка, свал",
+      "gives": ["depth", "food"],
+      "predator_bonus": 0.20,
+      "peaceful_bonus": 0.20,
+      "notes": "Граница глубин: тропа, по которой рыба выходит кормиться и по которой уходит пережидать."
+    },
+    {
+      "id": "hump",
+      "name": "Банка, подводный пупок",
+      "gives": ["depth", "food"],
+      "predator_bonus": 0.25,
+      "peaceful_bonus": 0.10,
+      "notes": "Локальное поднятие дна: хищник стоит на нём выше добычи и бьёт сверху."
+    },
+    {
+      "id": "inflow",
+      "name": "Приток, впадающий ручей",
+      "gives": ["food", "oxygen"],
+      "predator_bonus": 0.15,
+      "peaceful_bonus": 0.20,
+      "oxygen_bonus_mg_l": 0.5,
+      "notes": "Несёт корм и кислород, намывает конус донных отложений."
+    },
+    {
+      "id": "outflow",
+      "name": "Исток, вытекающая протока",
+      "gives": ["food", "oxygen"],
+      "predator_bonus": 0.30,
+      "peaceful_bonus": 0.05,
+      "oxygen_bonus_mg_l": 0.3,
+      "notes": "Течение вытягивает малька из озера, и в этой воронке дежурят щука и судак."
+    },
+    {
+      "id": "spring",
+      "name": "Донный ключ, родник",
+      "gives": ["thermal_refuge", "oxygen"],
+      "predator_bonus": 0.10,
+      "peaceful_bonus": 0.10,
+      "water_offset_c": -3.0,
+      "notes": "Локальный терморегулятор: в жару и в мороз рыба собирается вокруг выхода ключа."
+    },
+    {
+      "id": "reeds",
+      "name": "Тростник, кромка травы",
+      "gives": ["shelter", "food", "shade"],
+      "predator_bonus": 0.20,
+      "peaceful_bonus": 0.25,
+      "notes": "Укрытие и кормовая база разом: мальку есть где прятаться, мирной рыбе есть что есть."
+    },
+    {
+      "id": "foam_line",
+      "name": "Пена и ряска в подветренном углу",
+      "gives": ["food", "shade"],
+      "predator_bonus": 0.05,
+      "peaceful_bonus": 0.20,
+      "notes": "Ветер сгоняет сюда планктон и насекомых, а плёнка ряски даёт тень."
+    },
+    {
+      "id": "rotten_silt",
+      "name": "Гнилой ил, радужная плёнка",
+      "gives": ["oxygen_deficit"],
+      "predator_bonus": -0.30,
+      "peaceful_bonus": -0.30,
+      "oxygen_bonus_mg_l": -1.5,
+      "notes": "Пузыри газа и маслянистые разводы выдают гниение: кислорода тут нет, рыба уходит."
+    },
+    {
+      "id": "water",
+      "name": "Вода без особенностей",
+      "gives": [],
+      "predator_bonus": 0.0,
+      "peaceful_bonus": 0.0,
+      "notes": "Обычный участок воды: контур обведён, но ничем не выделяется."
+    },
+    {
+      "id": "shore",
+      "name": "Берег, подход",
+      "gives": [],
+      "predator_bonus": 0.0,
+      "peaceful_bonus": 0.0,
+      "notes": "Место, где можно встать и подойти к воде."
+    }
+  ],
+  "observations": [
+    {
+      "id": "bait_fish_panic",
+      "name": "Всплески и паника малька",
+      "guild": "predator",
+      "effect": 0.30,
+      "hours": 2,
+      "notes": "Круги и хаотичные прыжки малька: прямой признак боя окуня, щуки или жереха."
+    },
+    {
+      "id": "birds_diving",
+      "name": "Птицы бьют над водой",
+      "guild": "predator",
+      "effect": 0.35,
+      "hours": 2,
+      "notes": "Чайки и крачки пикируют туда, где хищник поджал малька к поверхности."
+    },
+    {
+      "id": "fish_rolling",
+      "name": "Рыба плавится на поверхности",
+      "guild": "peaceful",
+      "effect": 0.25,
+      "hours": 3,
+      "notes": "Мирная рыба выходит к поверхности: она здесь и она кормится."
+    },
+    {
+      "id": "foam_ryaska",
+      "name": "Нанесло пену и ряску",
+      "guild": "peaceful",
+      "effect": 0.15,
+      "hours": 6,
+      "notes": "Ветер собрал в углу планктон и насекомых, под плёнкой тень."
+    },
+    {
+      "id": "rainbow_film",
+      "name": "Радужная плёнка, пузыри газа",
+      "guild": "any",
+      "effect": -0.40,
+      "hours": 12,
+      "notes": "Гниение ила: кислорода нет, рыба отсюда ушла."
+    },
+    {
+      "id": "muddy_water",
+      "name": "Вода помутнела после дождя",
+      "guild": "any",
+      "effect": -0.15,
+      "hours": 12,
+      "notes": "Ливневый смыв сбивает рыбу с привычных мест; мирная переносит муть легче хищника."
+    }
+  ]
+}

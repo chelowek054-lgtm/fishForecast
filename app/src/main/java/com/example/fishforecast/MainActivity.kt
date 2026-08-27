@@ -34,7 +34,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.example.fishforecast.ui.addeditfish.AddEditFishScreen
-import com.example.fishforecast.ui.fishlist.FishListScreen
+import com.example.fishforecast.ui.reference.ReferenceScreen
 import com.example.fishforecast.ui.navigation.AddEditFishRoute
 import com.example.fishforecast.ui.bite.BiteScreen
 import com.example.fishforecast.ui.journal.JournalScreen
@@ -73,7 +73,7 @@ private data class BottomNavItem(
 
 /** Карта в центре: с неё начинается любой сценарий — она задаёт контекст. */
 private val bottomNavItems = listOf(
-    BottomNavItem(FishListRoute, FishListRoute::class, "Рыбы", Icons.AutoMirrored.Filled.List),
+    BottomNavItem(FishListRoute, FishListRoute::class, "Знания", Icons.AutoMirrored.Filled.List),
     BottomNavItem(BiteRoute, BiteRoute::class, "Клёв", Icons.Default.Insights),
     BottomNavItem(MapRoute, MapRoute::class, "Карта", Icons.Default.Map),
     BottomNavItem(WeatherRoute, WeatherRoute::class, "Погода", Icons.Default.Cloud),
@@ -140,7 +140,7 @@ fun FishForecastAppNavigation() {
             modifier = Modifier.padding(innerPadding)
         ) {
             composable<FishListRoute> {
-                FishListScreen(
+                ReferenceScreen(
                     onAddFish = {
                         navController.navigate(AddEditFishRoute())
                     },

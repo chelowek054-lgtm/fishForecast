@@ -1,4 +1,4 @@
-package com.example.fishforecast.ui.fishlist
+package com.example.fishforecast.ui.reference
 
 import androidx.compose.runtime.State
 import androidx.compose.runtime.mutableStateOf
@@ -6,6 +6,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.fishforecast.data.local.entities.FishEntity
 import com.example.fishforecast.data.repository.FishRepository
+import com.example.fishforecast.data.repository.KnowledgeRepository
+import com.example.fishforecast.domain.knowledge.KnowledgeCatalog
 import com.example.fishforecast.data.repository.FishingContextRepository
 import com.example.fishforecast.domain.bite.CalculateFishActivityUseCase
 import com.example.fishforecast.domain.water.WaterState
@@ -43,8 +45,9 @@ data class FishCard(
 }
 
 @HiltViewModel
-class FishListViewModel @Inject constructor(
+class ReferenceViewModel @Inject constructor(
     private val repository: FishRepository,
+    private val knowledge: KnowledgeRepository,
     private val fishingContext: FishingContextRepository,
     private val calculateFishActivity: CalculateFishActivityUseCase
 ) : ViewModel() {
@@ -67,6 +70,16 @@ class FishListViewModel @Inject constructor(
         started = SharingStarted.WhileSubscribed(5000),
         initialValue = emptyList()
     )
+
+    /** Словари знаний: типы водоёмов, структуры, наблюдения. */
+    val knowledgeCatalog: StateFlow<KnowledgeCatalog> = knowledge.catalog
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), KnowledgeCatalog())
+
+    val knowledgeUrl: StateFlow<String?> = knowledge.knowledgeUrl
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+
+    val knowledgeVersion: StateFlow<Int> = knowledge.knowledgeVersion
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
 
     val catalogUrl: StateFlow<String?> = repository.catalogUrl
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
@@ -136,6 +149,37 @@ class FishListViewModel @Inject constructor(
                 onFailure = { _messages.send("Не удалось обновить: ${it.message}") }
             )
             _busy.value = false
+        }
+    }
+
+    /** Обновляет словари знаний с сервера, если задан адрес. */
+    fun refreshKnowledge() {
+        viewModelScope.launch {
+            _busy.value = true
+            knowledge.refreshFromServer().fold(
+                onSuccess = { update ->
+                    _messages.send(
+                        if (update.upToDate) {
+                            "Словари актуальны (версия ${update.version})"
+                        } else {
+                            "Словари обновлены до версии ${update.version}"
+                        }
+                    )
+                },
+                onFailure = { _messages.send("Не удалось обновить словари: ${it.message}") }
+            )
+            _busy.value = false
+        }
+    }
+
+    fun setKnowledgeUrl(url: String?) {
+        viewModelScope.launch { knowledge.setKnowledgeUrl(url) }
+    }
+
+    fun restoreBuiltInKnowledge() {
+        viewModelScope.launch {
+            knowledge.restoreBuiltIn()
+            _messages.send("Встроенные словари восстановлены")
         }
     }
 

@@ -95,6 +95,62 @@ class FishCatalogTest {
     }
 
     @Test
+    fun `у каждого вида есть гильдия и профиль света`() {
+        val catalog = FishCatalogCodec.decode(assetCatalog).getOrThrow()
+
+        catalog.fish.forEach { fish ->
+            assertTrue(
+                "${fish.id}: гильдия должна быть указана",
+                fish.guild == "predator" || fish.guild == "peaceful"
+            )
+            assertEquals("${fish.id}: шесть фаз света", 6, fish.lightActivity.size)
+        }
+
+        assertEquals("predator", catalog.fish.first { it.id == "pike" }.guild)
+        assertEquals("peaceful", catalog.fish.first { it.id == "carp" }.guild)
+    }
+
+    @Test
+    fun `ночные виды отличаются от дневных профилем света`() {
+        val catalog = FishCatalogCodec.decode(assetCatalog).getOrThrow()
+        val burbot = catalog.fish.first { it.id == "burbot" }
+        val roach = catalog.fish.first { it.id == "roach" }
+
+        assertTrue("налим ночной", burbot.lightActivity["night"]!! > burbot.lightActivity["day"]!!)
+        assertTrue("плотва дневная", roach.lightActivity["day"]!! > roach.lightActivity["night"]!!)
+    }
+
+    @Test
+    fun `гильдия и структуры переживают перенос в базу и обратно`() {
+        val pike = FishCatalogCodec.decode(assetCatalog).getOrThrow().fish.first { it.id == "pike" }
+
+        val restored = pike.toEntity().toCatalogFish()
+
+        assertEquals(pike.guild, restored.guild)
+        assertEquals(pike.lightActivity, restored.lightActivity)
+        assertEquals(pike.preferredStructures, restored.preferredStructures)
+    }
+
+    @Test
+    fun `виды ссылаются только на известные структуры`() {
+        // Справочник видов и словарь структур правятся порознь: расхождение
+        // здесь означает опечатку, которую иначе заметит только рыболов.
+        val catalog = FishCatalogCodec.decode(assetCatalog).getOrThrow()
+        val known = com.example.fishforecast.domain.knowledge.KnowledgeCodec
+            .decode(File("src/main/assets/knowledge.json").readText())
+            .getOrThrow()
+            .structures
+            .map { it.id }
+            .toSet()
+
+        catalog.fish.forEach { fish ->
+            fish.preferredStructures.forEach { id ->
+                assertTrue("${fish.id}: неизвестная структура $id", id in known)
+            }
+        }
+    }
+
+    @Test
     fun `старая запись узнаётся по имени`() {
         // До общего справочника у видов были случайные идентификаторы. После
         // обновления рыболов не должен получить двух щук.

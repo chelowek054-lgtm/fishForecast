@@ -1,4 +1,4 @@
-package com.example.fishforecast.ui.fishlist
+package com.example.fishforecast.ui.reference
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.Canvas
@@ -67,101 +67,49 @@ import com.example.fishforecast.domain.fish.decodeBaits
 import com.example.fishforecast.domain.fish.decodeGroundbait
 import kotlin.math.roundToInt
 
-@OptIn(ExperimentalMaterial3Api::class)
+/**
+ * Раздел «Виды»: справочник рыб, сопоставленный с сегодняшней водой.
+ *
+ * Сам список ничего не решает — решает порядок: сверху те, кто сейчас
+ * кормится. Поэтому раздел получает уже посчитанные карточки, а не сырые
+ * записи справочника.
+ */
 @Composable
-fun FishListScreen(
-    onAddFish: () -> Unit,
+fun FishSection(
+    cards: List<FishCard>,
+    error: String?,
+    busy: Boolean,
     onEditFish: (Int) -> Unit,
-    viewModel: FishListViewModel = hiltViewModel()
+    onDeleteFish: (FishEntity) -> Unit,
+    modifier: Modifier = Modifier
 ) {
-    val cards by viewModel.cards.collectAsState()
-    val catalogUrl by viewModel.catalogUrl.collectAsState()
-    val catalogVersion by viewModel.catalogVersion.collectAsState()
-    val busy = viewModel.busy.value
-    val snackbarHostState = remember { SnackbarHostState() }
-    var showSourceDialog by remember { mutableStateOf(false) }
-
-    LaunchedEffect(Unit) {
-        viewModel.messages.collect { snackbarHostState.showSnackbar(it) }
-    }
-
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = {
-                    Column {
-                        Text("Кто сегодня берёт")
-                        Text(
-                            text = "Справочник: ${cards.size} видов" +
-                                if (catalogVersion > 0) " · версия $catalogVersion" else "",
-                            style = MaterialTheme.typography.bodySmall
-                        )
-                    }
-                },
-                actions = {
-                    IconButton(onClick = { showSourceDialog = true }) {
-                        Icon(Icons.Default.CloudDownload, contentDescription = "Общий справочник")
-                    }
-                }
+    Box(modifier = modifier.fillMaxSize()) {
+        if (cards.isEmpty()) {
+            Text(
+                text = error ?: "Справочник пуст. Добавьте первый вид.",
+                color = if (error != null) MaterialTheme.colorScheme.error else Color.Unspecified,
+                modifier = Modifier
+                    .align(Alignment.Center)
+                    .padding(16.dp)
             )
-        },
-        floatingActionButton = {
-            FloatingActionButton(onClick = onAddFish) {
-                Icon(Icons.Default.Add, contentDescription = "Добавить вид")
-            }
-        },
-        snackbarHost = { SnackbarHost(snackbarHostState) }
-    ) { paddingValues ->
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(paddingValues)
+        }
+
+        LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            val error = viewModel.error.value
-            if (cards.isEmpty()) {
-                Text(
-                    text = error ?: "Справочник пуст. Добавьте первый вид.",
-                    color = if (error != null) MaterialTheme.colorScheme.error else Color.Unspecified,
-                    modifier = Modifier
-                        .align(Alignment.Center)
-                        .padding(16.dp)
+            if (busy) {
+                item { LinearProgressIndicator(modifier = Modifier.fillMaxWidth()) }
+            }
+            items(cards, key = { it.fish.id }) { card ->
+                FishCardItem(
+                    card = card,
+                    onEdit = { onEditFish(card.fish.id) },
+                    onDelete = { onDeleteFish(card.fish) }
                 )
             }
-
-            LazyColumn(
-                modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                if (busy) {
-                    item { LinearProgressIndicator(modifier = Modifier.fillMaxWidth()) }
-                }
-                items(cards, key = { it.fish.id }) { card ->
-                    FishCardItem(
-                        card = card,
-                        onEdit = { onEditFish(card.fish.id) },
-                        onDelete = { viewModel.deleteFish(card.fish) }
-                    )
-                }
-            }
         }
-    }
-
-    if (showSourceDialog) {
-        CatalogSourceDialog(
-            url = catalogUrl.orEmpty(),
-            version = catalogVersion,
-            onDismiss = { showSourceDialog = false },
-            onSave = { viewModel.setCatalogUrl(it) },
-            onRefresh = {
-                showSourceDialog = false
-                viewModel.refreshCatalog()
-            },
-            onRestore = {
-                showSourceDialog = false
-                viewModel.restoreBuiltInCatalog()
-            }
-        )
     }
 }
 
@@ -419,65 +367,6 @@ private fun ScoreBadge(score: Int) {
             color = color
         )
     }
-}
-
-@Composable
-private fun CatalogSourceDialog(
-    url: String,
-    version: Int,
-    onDismiss: () -> Unit,
-    onSave: (String?) -> Unit,
-    onRefresh: () -> Unit,
-    onRestore: () -> Unit
-) {
-    var value by remember { mutableStateOf(url) }
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Общий справочник") },
-        text = {
-            Column {
-                Text(
-                    text = "Знания о рыбе пополняются быстрее, чем выходят обновления " +
-                        "приложения. Укажите адрес общего справочника — и виды, их пороги, " +
-                        "наживки и правила прикормки будут приходить оттуда.",
-                    style = MaterialTheme.typography.bodySmall
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-                OutlinedTextField(
-                    value = value,
-                    onValueChange = { value = it },
-                    label = { Text("Адрес JSON-справочника") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
-                )
-                Text(
-                    text = if (version > 0) {
-                        "Скачанная версия: $version. Своё описание вида и виды, " +
-                            "заведённые вручную, обновление не тронет."
-                    } else {
-                        "Пока используется справочник, встроенный в приложение."
-                    },
-                    style = MaterialTheme.typography.bodySmall
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-                TextButton(onClick = onRestore) { Text("Вернуть встроенный справочник") }
-            }
-        },
-        confirmButton = {
-            TextButton(
-                onClick = {
-                    onSave(value.takeIf { it.isNotBlank() })
-                    onRefresh()
-                }
-            ) {
-                Text("Сохранить и обновить")
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Закрыть") }
-        }
-    )
 }
 
 /** Что означает эта рыба для сегодняшней воды — одной строкой. */

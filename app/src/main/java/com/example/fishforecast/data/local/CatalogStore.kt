@@ -55,9 +55,48 @@ class CatalogStore @Inject constructor(
         context.catalogSettings.edit { preferences -> preferences[CATALOG_VERSION] = version }
     }
 
+    /**
+     * Скачанные словари знаний целиком, как пришли.
+     *
+     * Виды лежат в Room построчно: их правит рыболов, на них ссылаются
+     * точки. Словари же документ — их не редактируют по одному значению и
+     * не запрашивают выборками, поэтому хранить их таблицами незачем.
+     */
+    val knowledgeDocument: Flow<String?> = context.catalogSettings.data
+        .map { it[KNOWLEDGE_DOCUMENT] }
+
+    val knowledgeUrl: Flow<String?> = context.catalogSettings.data.map { it[KNOWLEDGE_URL] }
+
+    val knowledgeVersion: Flow<Int> = context.catalogSettings.data
+        .map { it[KNOWLEDGE_VERSION] ?: 0 }
+
+    suspend fun setKnowledgeDocument(text: String?, version: Int) {
+        context.catalogSettings.edit { preferences ->
+            if (text == null) {
+                preferences.remove(KNOWLEDGE_DOCUMENT)
+                preferences.remove(KNOWLEDGE_VERSION)
+            } else {
+                preferences[KNOWLEDGE_DOCUMENT] = text
+                preferences[KNOWLEDGE_VERSION] = version
+            }
+        }
+    }
+
+    suspend fun setKnowledgeUrl(url: String?) {
+        context.catalogSettings.edit { preferences ->
+            if (url.isNullOrBlank()) preferences.remove(KNOWLEDGE_URL) else {
+                preferences[KNOWLEDGE_URL] = url.trim()
+            }
+            preferences.remove(KNOWLEDGE_VERSION)
+        }
+    }
+
     private companion object {
         val CATALOG_URL = stringPreferencesKey("catalog_url")
         val CATALOG_VERSION = intPreferencesKey("catalog_version")
         val BUILT_IN_FINGERPRINT = intPreferencesKey("built_in_fingerprint")
+        val KNOWLEDGE_DOCUMENT = stringPreferencesKey("knowledge_document")
+        val KNOWLEDGE_URL = stringPreferencesKey("knowledge_url")
+        val KNOWLEDGE_VERSION = intPreferencesKey("knowledge_version")
     }
 }

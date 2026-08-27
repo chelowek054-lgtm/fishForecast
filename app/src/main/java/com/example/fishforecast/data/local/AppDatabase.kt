@@ -33,7 +33,7 @@ import com.example.fishforecast.data.local.entities.WeatherEntity
         ZoneEntity::class,
         SectorEntity::class
     ],
-    version = 15,
+    version = 16,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -535,6 +535,27 @@ abstract class AppDatabase : RoomDatabase() {
                 )
                 db.execSQL("DROP TABLE `fish`")
                 db.execSQL("ALTER TABLE `fish_new` RENAME TO `fish`")
+            }
+        }
+
+        /**
+         * Вид получает гильдию, профиль света и любимые структуры.
+         *
+         * Хищник и мирная рыба живут по-разному: первый охотится глазами и
+         * привязан к свету и укрытиям, вторая ищет корм. Без этого деления
+         * расчёт выдавал всем видам один и тот же балл на одной и той же
+         * воде — различать их было попросту нечем.
+         *
+         * Старым строкам достаются умолчания; настоящие значения приезжают
+         * с первым же обновлением справочника.
+         */
+        val MIGRATION_15_16 = object : Migration(15, 16) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `fish` ADD COLUMN `guild` TEXT NOT NULL DEFAULT 'peaceful'")
+                db.execSQL("ALTER TABLE `fish` ADD COLUMN `lightActivity` TEXT NOT NULL DEFAULT '{}'")
+                db.execSQL(
+                    "ALTER TABLE `fish` ADD COLUMN `preferredStructures` TEXT NOT NULL DEFAULT '[]'"
+                )
             }
         }
     }

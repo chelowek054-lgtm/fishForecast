@@ -18,6 +18,9 @@
     },
     "default_horizon": "bottom",
     "cold_temp_threshold": 14.0,
+    "guild": "peaceful",
+    "light_activity": { "night": 0.7, "dawn": 1.0, "morning": 0.9, "day": 0.5, "evening": 0.9, "dusk": 1.0 },
+    "preferred_structures": ["bay", "reeds", "drop_off", "snags"],
     "baits": {
       "cold": ["Мотыль", "Опарыш", "Навозный червь"],
       "warm": ["Кукуруза", "Бойлы", "Горох", "Тесто", "Тигровый орех"]
@@ -58,6 +61,9 @@
     },
     "default_horizon": "bottom",
     "cold_temp_threshold": 13.0,
+    "guild": "peaceful",
+    "light_activity": { "night": 0.5, "dawn": 1.0, "morning": 0.9, "day": 0.6, "evening": 0.9, "dusk": 0.9 },
+    "preferred_structures": ["bay", "reeds", "foam_line"],
     "baits": {
       "cold": ["Мотыль", "Опарыш", "Червь"],
       "warm": ["Манная болтушка", "Перловка", "Хлебный мякиш", "Чесночное тесто", "Опарыш"]
@@ -98,6 +104,9 @@
     },
     "default_horizon": "bottom",
     "cold_temp_threshold": 12.0,
+    "guild": "peaceful",
+    "light_activity": { "night": 0.9, "dawn": 1.0, "morning": 0.7, "day": 0.4, "evening": 0.8, "dusk": 1.0 },
+    "preferred_structures": ["drop_off", "bay", "inflow"],
     "baits": {
       "cold": ["Мотыль (пучок)", "Опарыш", "Червь"],
       "warm": ["Опарыш + кукуруза", "Гороховая мастырка", "Перловка", "Пучок червей"]
@@ -138,6 +147,9 @@
     },
     "default_horizon": "midwater",
     "cold_temp_threshold": 10.0,
+    "guild": "peaceful",
+    "light_activity": { "night": 0.2, "dawn": 0.9, "morning": 1.0, "day": 0.8, "evening": 0.9, "dusk": 0.7 },
+    "preferred_structures": ["reeds", "foam_line", "bay"],
     "baits": {
       "cold": ["Мотыль", "Опарыш"],
       "warm": ["Тесто", "Перловка", "Шелковица (зелень)", "Опарыш", "Конопля"]
@@ -178,6 +190,9 @@
     },
     "default_horizon": "bottom",
     "cold_temp_threshold": 11.0,
+    "guild": "predator",
+    "light_activity": { "night": 0.1, "dawn": 1.0, "morning": 0.9, "day": 0.7, "evening": 0.9, "dusk": 0.9 },
+    "preferred_structures": ["snags", "hump", "drop_off", "bridge_piles"],
     "baits": {
       "cold": ["Мотыль", "Пиявка", "Мелкий живец", "Микроджиг (силикон 1.5-2\")"],
       "warm": ["Червь", "Живец", "Вращающиеся блесны", "Тейл-спиннеры", "Силикон"]
@@ -218,6 +233,9 @@
     },
     "default_horizon": "midwater",
     "cold_temp_threshold": 10.0,
+    "guild": "predator",
+    "light_activity": { "night": 0.2, "dawn": 1.0, "morning": 0.8, "day": 0.6, "evening": 0.9, "dusk": 1.0 },
+    "preferred_structures": ["snags", "reeds", "point", "outflow"],
     "baits": {
       "cold": ["Живец (карась, плотва)", "Крупный силикон (slow roll)", "Колеблющиеся блесны"],
       "warm": ["Живец", "Воблеры minnow", "Попперы", "Спиннербейты", "Силикон"]
@@ -258,6 +276,9 @@
     },
     "default_horizon": "bottom",
     "cold_temp_threshold": 12.0,
+    "guild": "predator",
+    "light_activity": { "night": 0.9, "dawn": 1.0, "morning": 0.6, "day": 0.3, "evening": 0.8, "dusk": 1.0 },
+    "preferred_structures": ["drop_off", "hump", "snags", "steep_bank"],
     "baits": {
       "cold": ["Узкий живец (уклейка, пескарь)", "Поролоновые рыбки", "Мандула", "Силикон 3-4\""],
       "warm": ["Живец", "Воблеры (ночной проход)", "Джиг (силикон)", "Узкие пилькеры"]
@@ -298,6 +319,9 @@
     },
     "default_horizon": "surface",
     "cold_temp_threshold": 18.0,
+    "guild": "peaceful",
+    "light_activity": { "night": 0.4, "dawn": 0.8, "morning": 1.0, "day": 0.9, "evening": 0.8, "dusk": 0.6 },
+    "preferred_structures": ["reeds", "bay"],
     "baits": {
       "cold": ["Мотыль", "Опарыш", "Червь"],
       "warm": ["Молодой камыш", "Лист огурца", "Кукуруза (плавающая)", "Технопланктон", "Горох"]
@@ -338,6 +362,9 @@
     },
     "default_horizon": "bottom",
     "cold_temp_threshold": 14.0,
+    "guild": "predator",
+    "light_activity": { "night": 1.0, "dawn": 0.8, "morning": 0.4, "day": 0.3, "evening": 0.7, "dusk": 0.9 },
+    "preferred_structures": ["snags", "drop_off", "bridge_piles"],
     "baits": {
       "cold": ["Пучок выползков", "Живец"],
       "warm": ["Пучок выползков", "Жареная птица", "Пиявки", "Печень", "Крупный живец", "Квок-приманки"]
@@ -378,6 +405,9 @@
     },
     "default_horizon": "bottom",
     "cold_temp_threshold": 12.0,
+    "guild": "predator",
+    "light_activity": { "night": 1.0, "dawn": 0.6, "morning": 0.3, "day": 0.2, "evening": 0.5, "dusk": 0.8 },
+    "preferred_structures": ["spring", "steep_bank", "snags", "inflow"],
     "baits": {
       "cold": ["Выползок", "Пучок мелких червей", "Резаная рыбка (ерш, плотва)", "Лягушонок", "Кусочек печени"],
       "warm": ["Не клюет (впадает в оцепенение при T > 15°C)"]
