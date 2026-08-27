@@ -31,8 +31,10 @@ import kotlin.math.roundToInt
 data class FishingStrategy(
     val fish: FishEntity,
     val guild: Guild,
-    /** Где ловить: слой и почему. */
+    /** Где ловить: слой и почему. Приложение выбирает его само. */
     val place: StrategyAdvice,
+    /** Куда рыба пойдёт в течение суток и что делать в каждый отрезок. */
+    val day: List<DayPart> = emptyList(),
     /** На каком горизонте держать насадку. */
     val horizon: StrategyAdvice,
     /** Основная и запасная насадка либо приманка. */
@@ -55,12 +57,46 @@ data class StrategyAdvice(
     val reason: String
 )
 
-/** Что рыболов задал перед выездом. */
+/**
+ * Отрезок суток с одинаковым советом.
+ *
+ * Рыба не стоит на месте: с рассветом выходит на мель кормиться, в полдень
+ * уходит на глубину пережидать, к вечеру возвращается. Раскладка показывает
+ * этот ход заранее — тогда рыболов приезжает не «на клёв вообще», а к
+ * своему часу и на своё место.
+ */
+data class DayPart(
+    val fromTime: String,
+    val toTime: String,
+    val phase: LightPhase?,
+    val layer: WaterLayerChoice,
+    val horizon: String,
+    val score: Int,
+    val waterC: Double?,
+    val note: String
+)
+
+/** Час со всем, что о нём известно: по ним и строится раскладка суток. */
+data class HourContext(
+    val time: String,
+    val phase: LightPhase?,
+    val shallowC: Double?,
+    val deepC: Double?,
+    val oxygenMgL: Double?,
+    val scoreShallow: Int,
+    val scoreDeep: Int
+)
+
+/**
+ * Что рыболов задал перед выездом.
+ *
+ * Про место его не спрашивают: куда пойдёт рыба, приложение считает само —
+ * оно знает воду по слоям, кислород и ход света лучше, чем можно вспомнить
+ * на берегу.
+ */
 data class SessionPlanInput(
     val fish: FishEntity,
     val methodId: String?,
-    val layer: WaterLayerChoice,
-    val structureIds: List<String> = emptyList(),
     /** Есть ли с собой прикормка: без неё советы про закорм бессмысленны. */
     val hasGroundbait: Boolean = true
 )
@@ -73,6 +109,8 @@ data class SessionConditions(
     val oxygenMgL: Double?,
     val lightPhase: LightPhase?,
     val forecast: List<BiteForecast> = emptyList(),
+    /** Ближайшие сутки по часам: из них строится раскладка. */
+    val hours: List<HourContext> = emptyList(),
     /** Осадки за прошедшие сутки, мм: по ним судим о мутности. */
     val rainLastDayMm: Double = 0.0
 )
@@ -92,19 +130,22 @@ fun buildStrategy(
     val guild = Guild.of(fish.guild)
     val method = knowledge.method(input.methodId)
 
-    val water = when (input.layer) {
+    // Слой выбирается по нынешнему часу: там, где рыбе сейчас лучше.
+    val layer = conditions.hours.firstOrNull()?.betterLayer() ?: WaterLayerChoice.SHALLOW
+    val water = when (layer) {
         WaterLayerChoice.SHALLOW -> conditions.waterShallowC
         WaterLayerChoice.DEEP -> conditions.waterDeepC
     }
     val cold = (water ?: Double.MAX_VALUE) < fish.coldTempThreshold
 
     val horizon = horizonAdvice(fish, guild, conditions, method)
-    val warnings = warnings(fish, guild, conditions, method, horizon, input)
+    val warnings = warnings(fish, guild, conditions, method, horizon)
 
     return FishingStrategy(
         fish = fish,
         guild = guild,
-        place = placeAdvice(input, conditions),
+        place = placeAdvice(layer, conditions),
+        day = dayParts(fish, guild, conditions),
         horizon = horizon,
         bait = baitAdvice(fish, guild, cold, conditions, knowledge, backup = false),
         backupBait = baitAdvice(fish, guild, cold, conditions, knowledge, backup = true),
@@ -115,25 +156,109 @@ fun buildStrategy(
     )
 }
 
+/**
+ * Куда пойдёт рыба.
+ *
+ * Раньше это спрашивали у рыболова. Но выбор между мелью и ямой — не дело
+ * вкуса: он следует из того, где рыбе сегодня легче дышать и кормиться, а
+ * это приложение считает по обоим слоям.
+ */
 private fun placeAdvice(
-    input: SessionPlanInput,
+    layer: WaterLayerChoice,
     conditions: SessionConditions
 ): StrategyAdvice {
     val shallow = conditions.waterShallowC
     val deep = conditions.waterDeepC
+    val now = conditions.hours.firstOrNull()
+
     val reason = when {
         shallow == null || deep == null -> "Вода ещё не посчитана: обновите прогноз при сети"
-        shallow > deep + 1 -> "Мель прогрета до %.0f°, в яме %.0f°".format(shallow, deep)
-        deep > shallow + 1 -> "В яме теплее: %.0f° против %.0f° на мели".format(deep, shallow)
-        else -> "Слои сравнялись: разницы между мелью и ямой сегодня нет"
+        now != null && kotlin.math.abs(now.scoreShallow - now.scoreDeep) >= LAYER_DIFFERENCE ->
+            if (layer == WaterLayerChoice.SHALLOW) {
+                "На мели %.0f°, в яме %.0f°: у берега рыбе сейчас лучше (%d против %d)"
+                    .format(shallow, deep, now.scoreShallow, now.scoreDeep)
+            } else {
+                "На мели %.0f°, в яме %.0f°: рыба ушла на глубину (%d против %d)"
+                    .format(shallow, deep, now.scoreDeep, now.scoreShallow)
+            }
+
+        else -> "Мель %.0f°, яма %.0f° — слои почти сравнялись, решает не глубина, а укрытие"
+            .format(shallow, deep)
     }
 
     return StrategyAdvice(
-        title = "Место",
-        value = input.layer.title.replaceFirstChar { it.uppercase() },
+        title = "Куда идти",
+        value = if (layer == WaterLayerChoice.SHALLOW) "Ближе к берегу, на мель" else "На глубину, в яму",
         reason = reason
     )
 }
+
+/**
+ * Раскладка суток: где рыба будет и что делать в каждый отрезок.
+ *
+ * Соседние часы с одинаковым советом склеиваются — рыболову нужен ход дня,
+ * а не двадцать четыре строки.
+ */
+private fun dayParts(
+    fish: FishEntity,
+    guild: Guild,
+    conditions: SessionConditions
+): List<DayPart> {
+    if (conditions.hours.isEmpty()) return emptyList()
+
+    val parts = mutableListOf<DayPart>()
+    conditions.hours.take(HOURS_AHEAD).forEach { hour ->
+        val layer = hour.betterLayer()
+        val water = if (layer == WaterLayerChoice.SHALLOW) hour.shallowC else hour.deepC
+        val horizon = horizonFor(fish, guild, water, hour.oxygenMgL, hour.phase)
+        val score = maxOf(hour.scoreShallow, hour.scoreDeep)
+
+        val last = parts.lastOrNull()
+        if (last != null && last.layer == layer && last.horizon == horizon &&
+            last.phase == hour.phase
+        ) {
+            parts[parts.lastIndex] = last.copy(
+                toTime = hour.time.takeLast(5),
+                score = maxOf(last.score, score)
+            )
+        } else {
+            parts += DayPart(
+                fromTime = hour.time.takeLast(5),
+                toTime = hour.time.takeLast(5),
+                phase = hour.phase,
+                layer = layer,
+                horizon = horizon,
+                score = score,
+                waterC = water,
+                note = dayNote(guild, hour, layer, horizon)
+            )
+        }
+    }
+    return parts
+}
+
+private fun dayNote(
+    guild: Guild,
+    hour: HourContext,
+    layer: WaterLayerChoice,
+    horizon: String
+): String = when {
+    horizon != "Дно" -> "Рыба выше дна: донная снасть промолчит"
+    layer == WaterLayerChoice.DEEP && hour.phase == LightPhase.DAY ->
+        "Пережидает жару на глубине, кормится вяло"
+    hour.phase == LightPhase.DAWN || hour.phase == LightPhase.DUSK ->
+        if (guild == Guild.PREDATOR) "Зорька: хищник выходит на охоту" else "Зорька: выход на кормёжку"
+    layer == WaterLayerChoice.SHALLOW -> "Выходит к берегу кормиться"
+    else -> "Держится глубины"
+}
+
+/** Кому сегодня лучше: мели или яме. */
+private fun HourContext.betterLayer(): WaterLayerChoice =
+    if (scoreDeep - scoreShallow >= LAYER_DIFFERENCE) {
+        WaterLayerChoice.DEEP
+    } else {
+        WaterLayerChoice.SHALLOW
+    }
 
 /**
  * Горизонт — то, чего приложению не хватало.
@@ -150,22 +275,21 @@ private fun horizonAdvice(
 ): StrategyAdvice {
     val water = conditions.waterShallowC
     val oxygen = conditions.oxygenMgL
+    val value = horizonFor(fish, guild, water, oxygen, conditions.lightPhase)
     val warmForFish = water != null && water > fish.optMaxTemp
     val poorOxygen = oxygen != null && oxygenLevel(oxygen) != OxygenLevel.RICH &&
         oxygen < fish.oxygenComfortMgL + 1
 
-    val (value, reason) = when {
-        warmForFish && poorOxygen -> "Толща воды" to
+    val reason = when {
+        warmForFish && poorOxygen ->
             "Вода %.0f° теплее оптимума и кислорода %.1f мг/л: у дна душно, рыба выше"
                 .format(water, oxygen)
 
-        warmForFish -> "Толща воды" to
-            "Вода %.0f° теплее оптимума вида: у дна ей тяжелее, чем в полводы".format(water)
+        warmForFish -> "Вода %.0f° теплее оптимума вида: у дна ей тяжелее, чем в полводы"
+            .format(water)
 
-        conditions.lightPhase == LightPhase.DUSK && guild == Guild.PEACEFUL ->
-            "Верх и полводы" to "Сумерки: мирная рыба поднимается к поверхности"
-
-        else -> "Дно" to "Вода в пределах комфорта: рыба кормится со дна"
+        value != "Дно" -> "Сумерки: мирная рыба поднимается к поверхности"
+        else -> "Вода в пределах комфорта: рыба кормится со дна"
     }
 
     val mismatch = method != null && method.horizon == "bottom" && value != "Дно"
@@ -178,6 +302,31 @@ private fun horizonAdvice(
             reason
         }
     )
+}
+
+/**
+ * На каком горизонте держать насадку в этот час.
+ *
+ * В прогретой воде рыба поднимается над дном, и донная снасть в этот момент
+ * бесполезна: насадка лежит там, где рыбы нет.
+ */
+private fun horizonFor(
+    fish: FishEntity,
+    guild: Guild,
+    water: Double?,
+    oxygen: Double?,
+    phase: LightPhase?
+): String {
+    val warmForFish = water != null && water > fish.optMaxTemp
+    val poorOxygen = oxygen != null && oxygenLevel(oxygen) != OxygenLevel.RICH &&
+        oxygen < fish.oxygenComfortMgL + 1
+
+    return when {
+        warmForFish -> "Толща воды"
+        phase == LightPhase.DUSK && guild == Guild.PEACEFUL -> "Верх и полводы"
+        poorOxygen && water != null && water > fish.optMaxTemp - 2 -> "Толща воды"
+        else -> "Дно"
+    }
 }
 
 private fun baitAdvice(
@@ -331,8 +480,7 @@ private fun warnings(
     guild: Guild,
     conditions: SessionConditions,
     method: FishingMethod?,
-    horizon: StrategyAdvice,
-    input: SessionPlanInput
+    horizon: StrategyAdvice
 ): List<String> = buildList {
     val oxygen = conditions.oxygenMgL
     if (oxygen != null && oxygen < fish.oxygenComfortMgL) {
@@ -346,9 +494,7 @@ private fun warnings(
         add("Снасть работает по дну, а рыба сегодня выше: возьмите с собой снасть для толщи")
     }
 
-    if (input.structureIds.isEmpty()) {
-        add("Место без промера: пройдите точку грузилом, иначе корм ляжет вслепую")
-    }
+    add("Точку стоит пройти грузилом: без промера корм ложится вслепую")
 
     val water = conditions.waterShallowC
     if (water != null && water > fish.absMaxTemp) {
@@ -397,3 +543,9 @@ private const val HEAT_MARGIN_C = 2.0
 
 /** Насколько лучший час должен опережать нынешний, чтобы его ждать. */
 private const val WINDOW_DIFFERENCE = 10
+
+/** Разрыв между слоями, ниже которого выбирать глубину незачем. */
+private const val LAYER_DIFFERENCE = 5
+
+/** На сколько часов вперёд расписывается ход суток. */
+private const val HOURS_AHEAD = 24

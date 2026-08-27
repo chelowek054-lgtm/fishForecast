@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.AlertDialog
@@ -31,7 +32,7 @@ import com.example.fishforecast.data.local.entities.FishEntity
 import com.example.fishforecast.data.local.entities.FishingSessionEntity
 import com.example.fishforecast.domain.bite.WaterLayerChoice
 import com.example.fishforecast.domain.knowledge.FishingMethod
-import com.example.fishforecast.domain.knowledge.StructureType
+import com.example.fishforecast.domain.session.DayPart
 import com.example.fishforecast.domain.session.FishingStrategy
 import com.example.fishforecast.domain.session.StrategyAdvice
 import java.text.SimpleDateFormat
@@ -51,7 +52,6 @@ fun SessionSetup(
     form: SessionForm,
     fishList: List<FishEntity>,
     methods: List<FishingMethod>,
-    structures: List<StructureType>,
     strategy: FishingStrategy?,
     busy: Boolean,
     onChange: ((SessionForm) -> SessionForm) -> Unit,
@@ -96,41 +96,6 @@ fun SessionSetup(
                 }
                 methods.firstOrNull { it.id == form.methodId }?.let { method ->
                     Text(text = method.notes, style = MaterialTheme.typography.bodySmall)
-                }
-            }
-
-            Spacer(modifier = Modifier.height(12.dp))
-            Text(text = "Где встанем", style = MaterialTheme.typography.labelLarge)
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                WaterLayerChoice.entries.forEach { layer ->
-                    FilterChip(
-                        selected = form.layer == layer,
-                        onClick = { onChange { it.copy(layer = layer) } },
-                        label = { Text(layer.title.replaceFirstChar { c -> c.uppercase() }) }
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(text = "Что там за место", style = MaterialTheme.typography.labelLarge)
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                structures.forEach { structure ->
-                    FilterChip(
-                        selected = structure.id in form.structureIds,
-                        onClick = {
-                            onChange { current ->
-                                val ids = current.structureIds
-                                current.copy(
-                                    structureIds = if (structure.id in ids) {
-                                        ids - structure.id
-                                    } else {
-                                        ids + structure.id
-                                    }
-                                )
-                            }
-                        },
-                        label = { Text(structure.name) }
-                    )
                 }
             }
 
@@ -187,6 +152,19 @@ fun StrategyCard(strategy: FishingStrategy) {
             strategy.window
         ).forEach { advice -> AdviceRow(advice) }
 
+        if (strategy.day.isNotEmpty()) {
+            Spacer(modifier = Modifier.height(12.dp))
+            Text(text = "Как пройдут сутки", style = MaterialTheme.typography.labelLarge)
+            Text(
+                text = "Рыба не стоит на месте: с рассветом выходит кормиться, в полдень " +
+                    "уходит пережидать. Вот её ход по часам.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            strategy.day.forEach { part -> DayPartRow(part) }
+        }
+
         if (strategy.lookFor.isNotEmpty()) {
             Spacer(modifier = Modifier.height(8.dp))
             Text(text = "Искать на месте", style = MaterialTheme.typography.labelLarge)
@@ -201,6 +179,49 @@ fun StrategyCard(strategy: FishingStrategy) {
                 color = MaterialTheme.colorScheme.error
             )
         }
+    }
+}
+
+/** Отрезок суток: когда, куда и на какой глубине. */
+@Composable
+private fun DayPartRow(part: DayPart) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        Text(
+            text = if (part.fromTime == part.toTime) part.fromTime else
+                "${part.fromTime}–${part.toTime}",
+            style = MaterialTheme.typography.bodyMedium,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.width(96.dp)
+        )
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = listOfNotNull(
+                    if (part.layer == WaterLayerChoice.SHALLOW) "у берега" else "на глубине",
+                    part.horizon.lowercase(),
+                    part.waterC?.let { "%.0f°".format(it) }
+                ).joinToString(" · "),
+                style = MaterialTheme.typography.bodyMedium
+            )
+            Text(
+                text = part.note,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        Text(
+            text = "${part.score}",
+            style = MaterialTheme.typography.titleSmall,
+            color = if (part.score >= 70) {
+                MaterialTheme.colorScheme.primary
+            } else {
+                MaterialTheme.colorScheme.onSurfaceVariant
+            }
+        )
     }
 }
 

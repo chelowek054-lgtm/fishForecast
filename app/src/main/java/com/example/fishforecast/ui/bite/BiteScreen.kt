@@ -20,6 +20,10 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Tab
+import androidx.compose.material3.TabRow
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.LaunchedEffect
@@ -53,10 +57,12 @@ fun BiteScreen(
     val state by viewModel.state.collectAsState()
     val activeSession by sessionViewModel.active.collectAsState()
     val sessionFish by sessionViewModel.fishList.collectAsState()
-    val structures by sessionViewModel.structures.collectAsState()
     val form = sessionViewModel.form.value
     val strategy = sessionViewModel.strategy.value
     val snackbarHostState = remember { SnackbarHostState() }
+    // Клёв показывается первым: он отвечает на вопрос, который задают чаще
+    // всего, — стоит ли вообще ехать.
+    var section by remember { mutableStateOf(FishingSection.BITE) }
 
     LaunchedEffect(Unit) {
         sessionViewModel.messages.collect { snackbarHostState.showSnackbar(it) }
@@ -66,10 +72,20 @@ fun BiteScreen(
         topBar = { TopAppBar(title = { Text("Рыбалка") }) },
         snackbarHost = { SnackbarHost(snackbarHostState) }
     ) { paddingValues ->
+        Column(modifier = Modifier.fillMaxSize().padding(paddingValues)) {
+            TabRow(selectedTabIndex = section.ordinal) {
+                FishingSection.entries.forEach { item ->
+                    Tab(
+                        selected = section == item,
+                        onClick = { section = item },
+                        text = { Text(item.title) }
+                    )
+                }
+            }
+
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(paddingValues)
                 .verticalScroll(rememberScrollState())
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
@@ -88,8 +104,8 @@ fun BiteScreen(
                 return@Column
             }
 
-            // Сборы и план идут первыми: прогноз отвечает «ехать ли», а
-            // рыболову, который уже собрался, нужнее «что делать на воде».
+            // Идущая рыбалка показывается в обоих подразделах: когда выезд
+            // начался, план нужен под рукой, а не за вкладкой.
             activeSession?.let { session ->
                 ActiveSession(
                     session = session,
@@ -99,16 +115,22 @@ fun BiteScreen(
                     },
                     onCancel = { sessionViewModel.cancel() }
                 )
-            } ?: SessionSetup(
-                form = form,
-                fishList = sessionFish,
-                methods = sessionViewModel.methodsForSelected(),
-                structures = structures,
-                strategy = strategy,
-                busy = sessionViewModel.busy.value,
-                onChange = sessionViewModel::update,
-                onStart = { sessionViewModel.start() }
-            )
+            }
+
+            if (section == FishingSection.SETUP) {
+                if (activeSession == null) {
+                    SessionSetup(
+                        form = form,
+                        fishList = sessionFish,
+                        methods = sessionViewModel.methodsForSelected(),
+                        strategy = strategy,
+                        busy = sessionViewModel.busy.value,
+                        onChange = sessionViewModel::update,
+                        onStart = { sessionViewModel.start() }
+                    )
+                }
+                return@Column
+            }
 
             Row(
                 modifier = Modifier.horizontalScroll(rememberScrollState()),
@@ -166,7 +188,14 @@ fun BiteScreen(
             )
             BiteChart(forecast = state.forecast)
         }
+        }
     }
+}
+
+/** Подразделы «Рыбалки»: сначала ответ «ехать ли», потом сборы. */
+enum class FishingSection(val title: String) {
+    BITE("Клёв"),
+    SETUP("Собраться на рыбалку")
 }
 
 @Composable

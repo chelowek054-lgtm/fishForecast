@@ -3,11 +3,12 @@ package com.example.fishforecast.data.repository
 import com.example.fishforecast.data.local.dao.FishingSessionDao
 import com.example.fishforecast.data.local.entities.FishingSessionEntity
 import com.example.fishforecast.domain.bite.CalculateFishActivityUseCase
+import com.example.fishforecast.domain.bite.PlaceContext
 import com.example.fishforecast.domain.bite.WaterLayerChoice
-import com.example.fishforecast.domain.fish.encodeBaits
 import com.example.fishforecast.domain.light.lightPhaseAt
 import com.example.fishforecast.domain.sensor.hPaToMmHg
 import com.example.fishforecast.domain.session.FishingStrategy
+import com.example.fishforecast.domain.session.HourContext
 import com.example.fishforecast.domain.session.SessionConditions
 import com.example.fishforecast.domain.session.SessionPlanInput
 import com.example.fishforecast.domain.session.buildStrategy
@@ -52,15 +53,20 @@ class FishingSessionRepository @Inject constructor(
         val strategy = buildStrategy(input, conditions, knowledgeRepository.current())
         val map = fishingContext.currentMap()
 
+        // Слой не спрашивают у рыболова — его выбрал план, и в архив
+        // записывается именно то, что было советовано.
+        val layer = conditions.hours.firstOrNull()
+            ?.let { if (it.scoreDeep - it.scoreShallow >= 5) WaterLayerChoice.DEEP else null }
+            ?: WaterLayerChoice.SHALLOW
+
         dao.insert(
             FishingSessionEntity(
                 mapId = map?.id,
                 targetFishId = input.fish.id,
                 methodId = input.methodId,
-                layer = input.layer.name,
-                structures = input.structureIds.encodeBaits(),
+                layer = layer.name,
                 hasGroundbait = input.hasGroundbait,
-                waterTempC = when (input.layer) {
+                waterTempC = when (layer) {
                     WaterLayerChoice.SHALLOW -> conditions.waterShallowC
                     WaterLayerChoice.DEEP -> conditions.waterDeepC
                 },
@@ -113,14 +119,52 @@ class FishingSessionRepository @Inject constructor(
             kotlin.math.abs(Duration.between(LocalDateTime.parse(it.time), now).toMinutes())
         }
 
+        val normal = fishingContext.normalPressureFor(map)
+
+        // Считаем оба слоя: раскладка суток и есть сравнение мели с ямой
+        // час за часом.
+        fun scores(layer: WaterLayerChoice) = calculateFishActivity(
+            fish = input.fish,
+            forecast = forecast,
+            normalPressureMmHg = normal,
+            water = water,
+            sunTimes = sunTimes,
+            place = PlaceContext(layer = layer)
+        ).associate { it.time to it.score }
+
+        val shallowScores = scores(WaterLayerChoice.SHALLOW)
+        val deepScores = scores(WaterLayerChoice.DEEP)
+
         val bite = hour?.let {
             calculateFishActivity(
                 fish = input.fish,
                 forecast = forecast,
-                normalPressureMmHg = fishingContext.normalPressureFor(map),
+                normalPressureMmHg = normal,
                 water = water,
                 sunTimes = sunTimes
             ).dropWhile { forecastHour -> forecastHour.time < it.time }
+        }.orEmpty()
+
+        val hours = hour?.let { current ->
+            forecast
+                .filter { it.time >= current.time }
+                .map { entry ->
+                    val moment = LocalDateTime.parse(entry.time)
+                    HourContext(
+                        time = entry.time,
+                        phase = lightPhaseAt(
+                            moment,
+                            sunTimes.firstOrNull { day ->
+                                day.date == moment.toLocalDate().toString()
+                            }
+                        ),
+                        shallowC = water.shallowAt(entry.time),
+                        deepC = water.deepAt(entry.time),
+                        oxygenMgL = water.oxygenAt(entry.time),
+                        scoreShallow = shallowScores[entry.time] ?: 0,
+                        scoreDeep = deepScores[entry.time] ?: 0
+                    )
+                }
         }.orEmpty()
 
         // Муть после ливня держится примерно сутки — по ней подбирается
@@ -145,6 +189,7 @@ class FishingSessionRepository @Inject constructor(
                 )
             },
             forecast = bite,
+            hours = hours,
             rainLastDayMm = rain
         )
     }

@@ -1,6 +1,7 @@
 package com.example.fishforecast.domain.session
 
 import com.example.fishforecast.domain.bite.WaterLayerChoice
+import com.example.fishforecast.domain.session.HourContext
 import com.example.fishforecast.domain.fish.FishCatalogCodec
 import com.example.fishforecast.domain.fish.toEntity
 import com.example.fishforecast.domain.knowledge.KnowledgeCodec
@@ -29,27 +30,34 @@ class FishingStrategyTest {
         deep: Double = shallow - 2,
         oxygen: Double = 8.0,
         phase: LightPhase = LightPhase.EVENING,
-        rain: Double = 0.0
+        rain: Double = 0.0,
+        scoreShallow: Int = 70,
+        scoreDeep: Int = 60
     ) = SessionConditions(
         hour = null,
         waterShallowC = shallow,
         waterDeepC = deep,
         oxygenMgL = oxygen,
         lightPhase = phase,
+        hours = (0 until 6).map { index ->
+            HourContext(
+                time = "2026-08-28T%02d:00".format(index + 18),
+                phase = phase,
+                shallowC = shallow,
+                deepC = deep,
+                oxygenMgL = oxygen,
+                scoreShallow = scoreShallow,
+                scoreDeep = scoreDeep
+            )
+        },
         rainLastDayMm = rain
     )
 
     private fun carpPlan(
         conditions: SessionConditions,
-        methodId: String? = "feeder_flat",
-        structures: List<String> = listOf("drop_off")
+        methodId: String? = "feeder_flat"
     ) = buildStrategy(
-        input = SessionPlanInput(
-            fish = carp,
-            methodId = methodId,
-            layer = WaterLayerChoice.SHALLOW,
-            structureIds = structures
-        ),
+        input = SessionPlanInput(fish = carp, methodId = methodId),
         conditions = conditions,
         knowledge = knowledge
     )
@@ -85,19 +93,41 @@ class FishingStrategyTest {
     }
 
     @Test
-    fun `без промера предупреждает, что корм ляжет вслепую`() {
-        val plan = carpPlan(conditions(shallow = 22.0), structures = emptyList())
+    fun `всегда напоминает промерить точку`() {
+        val plan = carpPlan(conditions(shallow = 22.0))
 
         assertTrue(
-            "нужно предупреждение о промере: ${plan.warnings}",
+            "нужно напоминание о промере: ${plan.warnings}",
             plan.warnings.any { it.contains("промер") }
         )
     }
 
     @Test
+    fun `место выбирается само по лучшему слою`() {
+        val toShore = carpPlan(conditions(shallow = 22.0, scoreShallow = 80, scoreDeep = 60))
+        val toDeep = carpPlan(conditions(shallow = 28.0, scoreShallow = 55, scoreDeep = 80))
+
+        assertTrue("к берегу: ${toShore.place.value}", toShore.place.value.contains("берегу"))
+        assertTrue("на глубину: ${toDeep.place.value}", toDeep.place.value.contains("глубину"))
+    }
+
+    @Test
+    fun `раскладка суток склеивает соседние часы с одинаковым советом`() {
+        val plan = carpPlan(conditions(shallow = 22.0))
+
+        assertTrue("раскладка не пустая", plan.day.isNotEmpty())
+        assertTrue(
+            "шесть одинаковых часов должны склеиться в один отрезок: ${plan.day.size}",
+            plan.day.size == 1
+        )
+        assertEquals("18:00", plan.day.first().fromTime)
+        assertEquals("23:00", plan.day.first().toTime)
+    }
+
+    @Test
     fun `хищнику советует приманку, а не прикормку`() {
         val plan = buildStrategy(
-            input = SessionPlanInput(pike, "spinning", WaterLayerChoice.SHALLOW),
+            input = SessionPlanInput(pike, "spinning"),
             conditions = conditions(shallow = 16.0),
             knowledge = knowledge
         )
@@ -110,13 +140,13 @@ class FishingStrategyTest {
     @Test
     fun `в мутной воде после ливня приманка ярче и крупнее`() {
         val clear = buildStrategy(
-            input = SessionPlanInput(pike, "spinning", WaterLayerChoice.SHALLOW),
+            input = SessionPlanInput(pike, "spinning"),
             conditions = conditions(shallow = 16.0, rain = 0.0, phase = LightPhase.DAY),
             knowledge = knowledge
         ).bait!!
 
         val muddy = buildStrategy(
-            input = SessionPlanInput(pike, "spinning", WaterLayerChoice.SHALLOW),
+            input = SessionPlanInput(pike, "spinning"),
             conditions = conditions(shallow = 16.0, rain = 20.0, phase = LightPhase.DAY),
             knowledge = knowledge
         ).bait!!
@@ -129,7 +159,7 @@ class FishingStrategyTest {
     @Test
     fun `в холодной воде подача медленная`() {
         val plan = buildStrategy(
-            input = SessionPlanInput(pike, "spinning", WaterLayerChoice.SHALLOW),
+            input = SessionPlanInput(pike, "spinning"),
             conditions = conditions(shallow = 8.0, phase = LightPhase.DAY),
             knowledge = knowledge
         )

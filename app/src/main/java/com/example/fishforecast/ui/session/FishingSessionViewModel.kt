@@ -9,9 +9,7 @@ import com.example.fishforecast.data.local.entities.FishingSessionEntity
 import com.example.fishforecast.data.repository.FishRepository
 import com.example.fishforecast.data.repository.FishingSessionRepository
 import com.example.fishforecast.data.repository.KnowledgeRepository
-import com.example.fishforecast.domain.bite.WaterLayerChoice
 import com.example.fishforecast.domain.knowledge.FishingMethod
-import com.example.fishforecast.domain.knowledge.StructureType
 import com.example.fishforecast.domain.session.FishingStrategy
 import com.example.fishforecast.domain.session.SessionPlanInput
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -28,8 +26,6 @@ import javax.inject.Inject
 data class SessionForm(
     val fish: FishEntity? = null,
     val methodId: String? = null,
-    val layer: WaterLayerChoice = WaterLayerChoice.SHALLOW,
-    val structureIds: List<String> = emptyList(),
     val hasGroundbait: Boolean = true
 )
 
@@ -48,10 +44,6 @@ class FishingSessionViewModel @Inject constructor(
 
     val methods: StateFlow<List<FishingMethod>> = knowledge.catalog
         .map { it.methods }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
-
-    val structures: StateFlow<List<StructureType>> = knowledge.catalog
-        .map { it.structures }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     private val _form = mutableStateOf(SessionForm())
@@ -125,8 +117,6 @@ class FishingSessionViewModel @Inject constructor(
     private fun SessionForm.toInput(fish: FishEntity) = SessionPlanInput(
         fish = fish,
         methodId = methodId,
-        layer = layer,
-        structureIds = structureIds,
         hasGroundbait = hasGroundbait
     )
 }
