@@ -45,6 +45,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.example.fishforecast.data.local.entities.DailySunEntity
+import com.example.fishforecast.data.local.entities.PressureLogEntity
 import com.example.fishforecast.data.local.entities.WeatherEntity
 import com.example.fishforecast.domain.sensor.hPaToMmHg
 import com.example.fishforecast.domain.water.WaterState
@@ -98,6 +99,7 @@ fun WeatherScreen(
     val localPressure by viewModel.localPressure.collectAsState()
     val sunTimes by viewModel.sunTimes.collectAsState()
     val water by viewModel.water.collectAsState()
+    val pressureLog by viewModel.pressureLog.collectAsState()
     val normalPressure by viewModel.normalPressureMmHg.collectAsState()
     val isLoading = viewModel.isLoading.value
     val error = viewModel.error.value
@@ -280,7 +282,8 @@ fun WeatherScreen(
                             LocalBarometerCard(
                                 localPressure = localPressure,
                                 forecastPressureHpa = current?.pressure,
-                                normalPressureMmHg = normalPressure
+                                normalPressureMmHg = normalPressure,
+                                dayAgoPressureHpa = pressureLog.pressureDayAgo()
                             )
                         }
                     }
@@ -765,7 +768,8 @@ private fun DayColumnHeader(day: DailyForecast, modifier: Modifier = Modifier) {
 private fun LocalBarometerCard(
     localPressure: Float?,
     forecastPressureHpa: Double?,
-    normalPressureMmHg: Double?
+    normalPressureMmHg: Double?,
+    dayAgoPressureHpa: Double?
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -812,8 +816,31 @@ private fun LocalBarometerCard(
                     style = MaterialTheme.typography.bodySmall
                 )
             }
+            // Собственные показания суточной давности точнее сетевых: они
+            // сняты там, где рыболов стоял.
+            dayAgoPressureHpa?.let { dayAgo ->
+                Text(
+                    text = "Сутки назад по датчику: %d мм (%+.0f)".format(
+                        dayAgo.hPaToMmHg().roundToInt(),
+                        localMmHg - dayAgo.hPaToMmHg().toFloat()
+                    ),
+                    style = MaterialTheme.typography.bodySmall
+                )
+            }
         }
     }
+}
+
+/**
+ * Показание барометра примерно сутки назад. Ряд рваный — датчик работает
+ * только с открытым приложением, поэтому берётся ближайшее к суткам, но не
+ * дальше пары часов от них.
+ */
+private fun List<PressureLogEntity>.pressureDayAgo(): Double? {
+    val target = LocalDateTime.now().minusDays(1)
+    return minByOrNull { abs(Duration.between(LocalDateTime.parse(it.time), target).toMinutes()) }
+        ?.takeIf { abs(Duration.between(LocalDateTime.parse(it.time), target).toHours()) <= 2 }
+        ?.pressure
 }
 
 /** «05:42» из полной отметки времени, которую отдаёт Open-Meteo. */

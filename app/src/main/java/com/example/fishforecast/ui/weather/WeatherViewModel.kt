@@ -7,6 +7,8 @@ import androidx.lifecycle.viewModelScope
 import com.example.fishforecast.data.local.entities.DailySunEntity
 import com.example.fishforecast.data.local.entities.SavedMapEntity
 import com.example.fishforecast.data.local.entities.WeatherEntity
+import com.example.fishforecast.data.local.entities.PressureLogEntity
+import com.example.fishforecast.data.repository.BarometerRepository
 import com.example.fishforecast.data.repository.FishingContextRepository
 import com.example.fishforecast.domain.sensor.PressureProvider
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -23,8 +25,28 @@ import javax.inject.Inject
 @HiltViewModel
 class WeatherViewModel @Inject constructor(
     private val fishingContext: FishingContextRepository,
+    private val barometer: BarometerRepository,
     pressureProvider: PressureProvider
 ) : ViewModel() {
+
+    init {
+        // Датчик работает, только пока экран открыт, поэтому показания
+        // складываются в базу сразу: своя история давления точнее сетевой и
+        // не требует связи.
+        if (pressureProvider.isAvailable) {
+            viewModelScope.launch {
+                pressureProvider.pressureFlow().collect { barometer.record(it) }
+            }
+        }
+    }
+
+    /** Показания барометра за прошедшие дни; ряд рваный — это нормально. */
+    val pressureLog: StateFlow<List<PressureLogEntity>> = barometer.log
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = emptyList()
+        )
 
     /** Прогноз выбранного района, а не места, где сейчас телефон. */
     val forecast: StateFlow<List<WeatherEntity>> = fishingContext.activeForecast

@@ -7,12 +7,14 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 import com.example.fishforecast.data.local.dao.CatchDao
 import com.example.fishforecast.data.local.dao.FishDao
 import com.example.fishforecast.data.local.dao.FishingSpotDao
+import com.example.fishforecast.data.local.dao.PressureLogDao
 import com.example.fishforecast.data.local.dao.SavedMapDao
 import com.example.fishforecast.data.local.dao.WeatherDao
 import com.example.fishforecast.data.local.entities.CatchEntity
 import com.example.fishforecast.data.local.entities.DailySunEntity
 import com.example.fishforecast.data.local.entities.FishEntity
 import com.example.fishforecast.data.local.entities.FishingSpotEntity
+import com.example.fishforecast.data.local.entities.PressureLogEntity
 import com.example.fishforecast.data.local.entities.SavedMapEntity
 import com.example.fishforecast.data.local.entities.WeatherEntity
 
@@ -23,9 +25,10 @@ import com.example.fishforecast.data.local.entities.WeatherEntity
         SavedMapEntity::class,
         FishingSpotEntity::class,
         CatchEntity::class,
-        DailySunEntity::class
+        DailySunEntity::class,
+        PressureLogEntity::class
     ],
-    version = 10,
+    version = 11,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -34,6 +37,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun savedMapDao(): SavedMapDao
     abstract fun fishingSpotDao(): FishingSpotDao
     abstract fun catchDao(): CatchDao
+    abstract fun pressureLogDao(): PressureLogDao
 
     companion object {
         /** Офлайн-области (Фаза 3). Справочник рыб пересоздавать нельзя — он правится вручную. */
@@ -279,6 +283,24 @@ abstract class AppDatabase : RoomDatabase() {
                 db.execSQL("ALTER TABLE `saved_maps` ADD COLUMN `deepDepthM` REAL")
                 db.execSQL("ALTER TABLE `saved_maps` ADD COLUMN `waterTempC` REAL")
                 db.execSQL("ALTER TABLE `saved_maps` ADD COLUMN `waterTempAt` TEXT")
+            }
+        }
+
+        /**
+         * История собственного барометра. Показания датчика точнее сетевого
+         * прогноза и не требуют связи: они сняты там, где рыболов стоял.
+         */
+        val MIGRATION_10_11 = object : Migration(10, 11) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `barometer_log` (
+                        `time` TEXT NOT NULL,
+                        `pressure` REAL NOT NULL,
+                        PRIMARY KEY(`time`)
+                    )
+                    """.trimIndent()
+                )
             }
         }
     }
