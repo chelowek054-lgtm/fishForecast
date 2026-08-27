@@ -30,6 +30,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import com.example.fishforecast.ui.session.ActiveSession
 import com.example.fishforecast.ui.session.FishingSessionViewModel
+import com.example.fishforecast.ui.session.RegionInfo
 import com.example.fishforecast.ui.session.SessionSetup
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
@@ -58,6 +59,7 @@ fun BiteScreen(
     val activeSession by sessionViewModel.active.collectAsState()
     val sessionFish by sessionViewModel.fishList.collectAsState()
     val form = sessionViewModel.form.value
+    val region by sessionViewModel.region.collectAsState()
     val strategy = sessionViewModel.strategy.value
     val snackbarHostState = remember { SnackbarHostState() }
     // Клёв показывается первым: он отвечает на вопрос, который задают чаще
@@ -69,7 +71,22 @@ fun BiteScreen(
     }
 
     Scaffold(
-        topBar = { TopAppBar(title = { Text("Рыбалка") }) },
+        topBar = {
+            TopAppBar(
+                title = {
+                    Column {
+                        Text("Рыбалка")
+                        // Расчёт идёт по выбранному району, а не по месту,
+                        // где сейчас телефон: без этой строки цифры легко
+                        // принять за «здесь и сейчас».
+                        Text(
+                            text = region?.name ?: "Район не выбран",
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    }
+                }
+            )
+        },
         snackbarHost = { SnackbarHost(snackbarHostState) }
     ) { paddingValues ->
         Column(modifier = Modifier.fillMaxSize().padding(paddingValues)) {
@@ -116,6 +133,8 @@ fun BiteScreen(
                     onCancel = { sessionViewModel.cancel() }
                 )
             }
+
+            region?.let { RegionNote(it) }
 
             if (section == FishingSection.SETUP) {
                 if (activeSession == null) {
@@ -190,6 +209,29 @@ fun BiteScreen(
         }
         }
     }
+}
+
+/**
+ * Для какой воды считается всё на экране.
+ *
+ * Мель и яма — не абстракция: это те самые глубины, которые задал рыболов.
+ * Если он их не задавал, приложение говорит прямо, что взяло типовые, —
+ * иначе непонятно, откуда в раскладке «на глубине» взялись градусы.
+ */
+@Composable
+private fun RegionNote(region: RegionInfo) {
+    Text(
+        text = buildString {
+            append("Считаем для района «${region.name}», ")
+            // Тип водоёма меняет и воду, и кислород: молчать о том, что он
+            // не выбран, значит выдавать допущение за факт.
+            append(region.waterBodyName ?: "тип водоёма не выбран — считаем прудом")
+            append(". Мель %.1f м, яма %.1f м".format(region.shallowDepthM, region.deepDepthM))
+            append(if (region.depthsAssumed) " — глубины типовые, задайте свои в списке карт" else "")
+        },
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant
+    )
 }
 
 /** Подразделы «Рыбалки»: сначала ответ «ехать ли», потом сборы. */
