@@ -5,8 +5,7 @@
     "minTemp": 8.0,
     "maxTemp": 18.0,
     "minPressure": 740.0,
-    "maxPressure": 760.0,
-    "moonPhaseImpact": "None"
+    "maxPressure": 760.0
   },
   {
     "name": "Окунь",
@@ -14,8 +13,7 @@
     "minTemp": 10.0,
     "maxTemp": 22.0,
     "minPressure": 745.0,
-    "maxPressure": 755.0,
-    "moonPhaseImpact": "None"
+    "maxPressure": 755.0
   },
   {
     "name": "Карп",
@@ -23,7 +21,6 @@
     "minTemp": 15.0,
     "maxTemp": 28.0,
     "minPressure": 740.0,
-    "maxPressure": 750.0,
-    "moonPhaseImpact": "Full Moon"
+    "maxPressure": 750.0
   }
 ]

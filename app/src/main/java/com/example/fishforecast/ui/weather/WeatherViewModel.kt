@@ -4,6 +4,7 @@ import androidx.compose.runtime.State
 import androidx.compose.runtime.mutableStateOf
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.fishforecast.data.local.entities.DailySunEntity
 import com.example.fishforecast.data.local.entities.SavedMapEntity
 import com.example.fishforecast.data.local.entities.WeatherEntity
 import com.example.fishforecast.data.repository.FishingContextRepository
@@ -24,6 +25,14 @@ class WeatherViewModel @Inject constructor(
 
     /** Прогноз выбранного района, а не места, где сейчас телефон. */
     val forecast: StateFlow<List<WeatherEntity>> = fishingContext.activeForecast
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = emptyList()
+        )
+
+    /** Восход и закат по дням: зори — главные окна клёва. */
+    val sunTimes: StateFlow<List<DailySunEntity>> = fishingContext.activeSunTimes
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),

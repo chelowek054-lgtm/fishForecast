@@ -44,6 +44,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.example.fishforecast.data.local.entities.DailySunEntity
 import com.example.fishforecast.data.local.entities.WeatherEntity
 import com.example.fishforecast.domain.sensor.hPaToMmHg
 import com.example.fishforecast.domain.weather.DailyForecast
@@ -57,6 +58,7 @@ import com.example.fishforecast.domain.weather.windArrowRotation
 import com.example.fishforecast.domain.weather.windDescription
 import com.example.fishforecast.domain.weather.windDirectionLabel
 import com.example.fishforecast.ui.common.NoActiveMapMessage
+import java.time.Duration
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
@@ -66,6 +68,9 @@ import kotlin.math.roundToInt
 
 /** Сколько часов показывать на графиках ближайшего времени. */
 private const val HOURLY_WINDOW = 24
+
+/** Насколько порыв должен превысить ветер, чтобы о нём стоило говорить. */
+private const val GUST_MARGIN_KMH = 8.0
 
 /** Окно, по которому оценивается движение давления. */
 private const val TREND_WINDOW_HOURS = 6
@@ -82,6 +87,7 @@ fun WeatherScreen(
     val forecast by viewModel.forecast.collectAsState()
     val activeMap by viewModel.activeMap.collectAsState()
     val localPressure by viewModel.localPressure.collectAsState()
+    val sunTimes by viewModel.sunTimes.collectAsState()
     val normalPressure by viewModel.normalPressureMmHg.collectAsState()
     val isLoading = viewModel.isLoading.value
     val error = viewModel.error.value
@@ -100,7 +106,17 @@ fun WeatherScreen(
     val upcoming = remember(forecast, currentIndex) {
         forecast.drop(currentIndex).take(HOURLY_WINDOW)
     }
-    val days = remember(forecast) { forecast.toDailyForecast() }
+    // Неделя считается от сегодняшнего дня: в кэше теперь лежат и прошедшие
+    // сутки, но прогноз на вчера рыболову ни к чему.
+    val days = remember(forecast) {
+        val today = LocalDate.now()
+        forecast.filter { !LocalDateTime.parse(it.time).toLocalDate().isBefore(today) }
+            .toDailyForecast()
+    }
+    val yesterday = remember(forecast, currentIndex) {
+        forecast.hourNearest(LocalDateTime.now().minusDays(1))
+    }
+    val todaySun = sunTimes.firstOrNull { it.date == LocalDate.now().toString() }
 
     Scaffold(
         topBar = {
@@ -154,6 +170,8 @@ fun WeatherScreen(
                     item {
                         CurrentWeatherCard(
                             weather = current,
+                            yesterday = yesterday,
+                            sun = todaySun,
                             normalPressureMmHg = normalPressure,
                             trend = pressureTrend(upcoming.take(TREND_WINDOW_HOURS))
                         )
@@ -234,6 +252,8 @@ fun WeatherScreen(
 @Composable
 private fun CurrentWeatherCard(
     weather: WeatherEntity?,
+    yesterday: WeatherEntity?,
+    sun: DailySunEntity?,
     normalPressureMmHg: Double?,
     trend: com.example.fishforecast.domain.weather.PressureTrend?
 ) {
@@ -265,6 +285,17 @@ private fun CurrentWeatherCard(
                         text = weatherCodeText(weather.weatherCode),
                         style = MaterialTheme.typography.bodyLarge
                     )
+                    // Похолодание после жары — момент, когда рыба оживает.
+                    // Увидеть его можно только в сравнении со вчерашним днём.
+                    yesterday?.let { past ->
+                        Text(
+                            text = "Вчера в это время %+d°, %d мм".format(
+                                past.temperature.roundToInt(),
+                                past.pressure.hPaToMmHg().roundToInt()
+                            ),
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    }
                 }
             }
 
@@ -285,17 +316,59 @@ private fun CurrentWeatherCard(
                     title = "Ветер",
                     value = "%.1f м/с".format(weather.windSpeed.kmhToMs()),
                     detail = "${windDirectionLabel(weather.windDirection)}, " +
-                        windDescription(weather.windSpeed),
+                        if (weather.windGusts > weather.windSpeed + GUST_MARGIN_KMH) {
+                            "порывы до %.0f".format(weather.windGusts.kmhToMs())
+                        } else {
+                            windDescription(weather.windSpeed)
+                        },
                     windDirection = weather.windDirection
+                )
+                WeatherFact(
+                    title = "Осадки",
+                    value = "${weather.precipitationChance.roundToInt()}%",
+                    detail = if (weather.precipitation > 0) {
+                        "%.1f мм за час".format(weather.precipitation)
+                    } else {
+                        "сухо"
+                    }
+                )
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                WeatherFact(
+                    title = "Облачность",
+                    value = "${weather.cloudCover.roundToInt()}%",
+                    detail = cloudDetail(weather.cloudCover)
                 )
                 WeatherFact(
                     title = "Влажность",
                     value = "${weather.humidity.roundToInt()}%",
-                    detail = "осадки ${weather.precipitationChance.roundToInt()}%"
+                    detail = yesterday?.let {
+                        "вчера ${it.humidity.roundToInt()}%"
+                    } ?: "—"
+                )
+                // Зори — главные окна клёва, и рассвет сдвигается быстрее,
+                // чем кажется: за месяц набегает больше часа.
+                WeatherFact(
+                    title = "Зори",
+                    value = sun?.let { it.sunrise.timeOnly() } ?: "—",
+                    detail = sun?.let { "закат ${it.sunset.timeOnly()}" } ?: "нет данных"
                 )
             }
         }
     }
+}
+
+/** Облачность решает, будет ли солнце греть воду. */
+private fun cloudDetail(cloudCover: Double): String = when {
+    cloudCover < 20 -> "солнце греет воду"
+    cloudCover < 60 -> "солнце с перерывами"
+    else -> "вода не прогревается"
 }
 
 /**
@@ -610,6 +683,15 @@ private fun LocalBarometerCard(
         }
     }
 }
+
+/** «05:42» из полной отметки времени, которую отдаёт Open-Meteo. */
+private fun String.timeOnly(): String =
+    LocalDateTime.parse(this).format(TIME_FORMATTER)
+
+/** Ближайший к заданному моменту час прогноза; null, если история не дошла. */
+private fun List<WeatherEntity>.hourNearest(moment: LocalDateTime): WeatherEntity? =
+    minByOrNull { abs(Duration.between(LocalDateTime.parse(it.time), moment).toMinutes()) }
+        ?.takeIf { abs(Duration.between(LocalDateTime.parse(it.time), moment).toHours()) <= 1 }
 
 private fun WeatherEntity.hourLabel(): String =
     LocalDateTime.parse(time).format(TIME_FORMATTER)

@@ -1,9 +1,11 @@
 package com.example.fishforecast.data.repository
 
 import com.example.fishforecast.data.local.dao.WeatherDao
+import com.example.fishforecast.data.local.entities.DailySunEntity
 import com.example.fishforecast.data.local.entities.WeatherEntity
 import com.example.fishforecast.data.remote.WeatherApi
 import kotlinx.coroutines.flow.Flow
+import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 import javax.inject.Inject
@@ -17,37 +19,66 @@ class WeatherRepository @Inject constructor(
     /** Прогноз конкретной карты: у каждой свой, чтобы работать без сети. */
     fun forecastForMap(mapId: Int): Flow<List<WeatherEntity>> = dao.getForecastForMap(mapId)
 
+    fun sunTimesForMap(mapId: Int): Flow<List<DailySunEntity>> = dao.getSunTimesForMap(mapId)
+
     suspend fun fetchWeather(mapId: Int, lat: Double, lon: Double): Result<Unit> {
         return try {
             val response = api.getWeatherData(lat, lon)
-            val entities = response.hourly.time.mapIndexed { index, time ->
+            val hourly = response.hourly
+            val entities = hourly.time.mapIndexed { index, time ->
                 WeatherEntity(
                     mapId = mapId,
                     time = time,
-                    temperature = response.hourly.temperatures[index],
-                    humidity = response.hourly.humidities[index],
-                    pressure = response.hourly.pressures[index],
-                    windSpeed = response.hourly.windSpeeds[index],
-                    windDirection = response.hourly.windDirections[index],
+                    temperature = hourly.temperatures[index],
+                    humidity = hourly.humidities[index],
+                    pressure = hourly.pressures[index],
+                    windSpeed = hourly.windSpeeds[index],
+                    windDirection = hourly.windDirections[index],
+                    windGusts = hourly.windGusts.getOrNull(index) ?: 0.0,
                     precipitationChance =
-                        response.hourly.precipitationChances.getOrNull(index)?.toDouble() ?: 0.0,
-                    weatherCode = response.hourly.weatherCodes[index],
+                        hourly.precipitationChances.getOrNull(index)?.toDouble() ?: 0.0,
+                    precipitation = hourly.precipitation.getOrNull(index) ?: 0.0,
+                    cloudCover = hourly.cloudCover.getOrNull(index) ?: 0.0,
+                    shortwaveRadiation = hourly.shortwaveRadiation.getOrNull(index) ?: 0.0,
+                    weatherCode = hourly.weatherCodes[index],
                     latitude = lat,
                     longitude = lon
                 )
             }
             dao.clearForecast(mapId)
             dao.insertForecast(entities)
+
+            response.daily?.let { daily ->
+                dao.insertSunTimes(
+                    daily.time.mapIndexedNotNull { index, date ->
+                        val sunrise = daily.sunrise.getOrNull(index) ?: return@mapIndexedNotNull null
+                        val sunset = daily.sunset.getOrNull(index) ?: return@mapIndexedNotNull null
+                        DailySunEntity(mapId, date, sunrise, sunset)
+                    }
+                )
+            }
             Result.success(Unit)
         } catch (e: Exception) {
             Result.failure(e)
         }
     }
 
+    /**
+     * Чистка кэша. Прошедшие сутки остаются намеренно: без них не видно
+     * похолодания после жары, а модель воды теряет разгон. Уходит только то,
+     * что старше окна истории.
+     */
     suspend fun cleanOldData(mapId: Int) {
         // Open-Meteo отдаёт время без секунд, а сравнение в запросе строковое,
         // поэтому формат отсечки должен совпадать с форматом хранения.
-        val now = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm"))
-        dao.deleteOldForecast(mapId, now)
+        val cutoff = LocalDateTime.now().minusDays(WeatherApi.PAST_DAYS.toLong())
+        dao.deleteOldForecast(
+            mapId = mapId,
+            currentTime = cutoff.format(DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm"))
+        )
+        dao.deleteOldSunTimes(
+            mapId = mapId,
+            currentDate = LocalDate.now().minusDays(WeatherApi.PAST_DAYS.toLong()).toString()
+        )
     }
 }

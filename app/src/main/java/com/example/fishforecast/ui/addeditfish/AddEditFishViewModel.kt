@@ -80,8 +80,7 @@ class AddEditFishViewModel @Inject constructor(
                                 minTemp = minTemp.value.toFloatOrNull() ?: 0f,
                                 maxTemp = maxTemp.value.toFloatOrNull() ?: 0f,
                                 minPressure = minPressure.value.toFloatOrNull() ?: 0f,
-                                maxPressure = maxPressure.value.toFloatOrNull() ?: 0f,
-                                moonPhaseImpact = "None"
+                                maxPressure = maxPressure.value.toFloatOrNull() ?: 0f
                             )
                         )
                         _eventFlow.emit(UiEvent.SaveFish)

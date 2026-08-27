@@ -4,6 +4,7 @@ import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import com.example.fishforecast.data.local.entities.DailySunEntity
 import com.example.fishforecast.data.local.entities.WeatherEntity
 import kotlinx.coroutines.flow.Flow
 
@@ -21,4 +22,13 @@ interface WeatherDao {
 
     @Query("DELETE FROM weather_forecast WHERE mapId = :mapId")
     suspend fun clearForecast(mapId: Int)
+
+    @Query("SELECT * FROM daily_sun WHERE mapId = :mapId ORDER BY date ASC")
+    fun getSunTimesForMap(mapId: Int): Flow<List<DailySunEntity>>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertSunTimes(days: List<DailySunEntity>)
+
+    @Query("DELETE FROM daily_sun WHERE mapId = :mapId AND date < :currentDate")
+    suspend fun deleteOldSunTimes(mapId: Int, currentDate: String)
 }

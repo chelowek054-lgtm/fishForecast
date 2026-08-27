@@ -15,16 +15,14 @@ class FindBiteWindowUseCaseTest {
     private val pike = FishEntity(
         id = 1, name = "Щука", description = "",
         minTemp = 8f, maxTemp = 18f,
-        minPressure = 740f, maxPressure = 760f,
-        moonPhaseImpact = "None"
+        minPressure = 740f, maxPressure = 760f
     )
 
     /** Карп любит теплее: в холодной воде его окно не откроется. */
     private val carp = FishEntity(
         id = 2, name = "Карп", description = "",
         minTemp = 20f, maxTemp = 28f,
-        minPressure = 740f, maxPressure = 750f,
-        moonPhaseImpact = "None"
+        minPressure = 740f, maxPressure = 750f
     )
 
     private val comfortablePressureHpa = 750.0 * 1.333224

@@ -10,6 +10,7 @@ import com.example.fishforecast.data.local.dao.FishingSpotDao
 import com.example.fishforecast.data.local.dao.SavedMapDao
 import com.example.fishforecast.data.local.dao.WeatherDao
 import com.example.fishforecast.data.local.entities.CatchEntity
+import com.example.fishforecast.data.local.entities.DailySunEntity
 import com.example.fishforecast.data.local.entities.FishEntity
 import com.example.fishforecast.data.local.entities.FishingSpotEntity
 import com.example.fishforecast.data.local.entities.SavedMapEntity
@@ -21,9 +22,10 @@ import com.example.fishforecast.data.local.entities.WeatherEntity
         WeatherEntity::class,
         SavedMapEntity::class,
         FishingSpotEntity::class,
-        CatchEntity::class
+        CatchEntity::class,
+        DailySunEntity::class
     ],
-    version = 7,
+    version = 9,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -188,6 +190,80 @@ abstract class AppDatabase : RoomDatabase() {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL(
                     "ALTER TABLE `weather_forecast` ADD COLUMN `precipitationChance` REAL NOT NULL DEFAULT 0.0"
+                )
+            }
+        }
+
+        /**
+         * Фаза луны убрана из справочника. Влияние на пресноводную рыбу
+         * спорное, в расчёт клёва поле никогда не входило и заполнялось
+         * заглушкой — параметром оно только притворялось.
+         *
+         * Справочник правится вручную, поэтому таблица не пересоздаётся с
+         * нуля, а переливается: пользовательские виды должны пережить
+         * обновление.
+         */
+        val MIGRATION_7_8 = object : Migration(7, 8) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `fish_new` (
+                        `id` INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+                        `name` TEXT NOT NULL,
+                        `description` TEXT NOT NULL,
+                        `minTemp` REAL NOT NULL,
+                        `maxTemp` REAL NOT NULL,
+                        `minPressure` REAL NOT NULL,
+                        `maxPressure` REAL NOT NULL,
+                        `imageUrl` TEXT
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL(
+                    """
+                    INSERT INTO `fish_new` (
+                        `id`, `name`, `description`, `minTemp`, `maxTemp`,
+                        `minPressure`, `maxPressure`, `imageUrl`
+                    )
+                    SELECT `id`, `name`, `description`, `minTemp`, `maxTemp`,
+                           `minPressure`, `maxPressure`, `imageUrl`
+                    FROM `fish`
+                    """.trimIndent()
+                )
+                db.execSQL("DROP TABLE `fish`")
+                db.execSQL("ALTER TABLE `fish_new` RENAME TO `fish`")
+            }
+        }
+
+        /**
+         * Погода начинает описывать воду, а не только воздух.
+         *
+         * Давление переезжает на станционное: приведённое к уровню моря не
+         * сходится ни с барометром устройства, ни с нормой водоёма, которую
+         * рыболов снял со своего прибора. Старые часы поэтому не переносятся
+         * — в них лежит другая величина, а прогноз это кэш.
+         *
+         * Заодно появляются облачность, порывы, осадки в миллиметрах и приход
+         * солнца: без них не посчитать прогрев воды. Восход и закат живут
+         * отдельной таблицей — это свойство дня, а не часа.
+         */
+        val MIGRATION_8_9 = object : Migration(8, 9) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `weather_forecast` ADD COLUMN `windGusts` REAL NOT NULL DEFAULT 0.0")
+                db.execSQL("ALTER TABLE `weather_forecast` ADD COLUMN `precipitation` REAL NOT NULL DEFAULT 0.0")
+                db.execSQL("ALTER TABLE `weather_forecast` ADD COLUMN `cloudCover` REAL NOT NULL DEFAULT 0.0")
+                db.execSQL("ALTER TABLE `weather_forecast` ADD COLUMN `shortwaveRadiation` REAL NOT NULL DEFAULT 0.0")
+                db.execSQL("DELETE FROM `weather_forecast`")
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `daily_sun` (
+                        `mapId` INTEGER NOT NULL,
+                        `date` TEXT NOT NULL,
+                        `sunrise` TEXT NOT NULL,
+                        `sunset` TEXT NOT NULL,
+                        PRIMARY KEY(`mapId`, `date`)
+                    )
+                    """.trimIndent()
                 )
             }
         }

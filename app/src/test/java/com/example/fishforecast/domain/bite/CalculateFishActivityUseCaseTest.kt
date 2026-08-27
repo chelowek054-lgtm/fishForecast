@@ -18,8 +18,7 @@ class CalculateFishActivityUseCaseTest {
         minTemp = 8f,
         maxTemp = 18f,
         minPressure = 740f,
-        maxPressure = 760f,
-        moonPhaseImpact = "None"
+        maxPressure = 760f
     )
 
     /** 750 мм рт. ст. в гПа — единицы у справочника и погоды разные. */

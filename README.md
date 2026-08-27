@@ -6,6 +6,9 @@ Android-приложение, которое отвечает на один во
 
 Дорожная карта и решения по архитектуре — в [app/docs/Roadmap.md](app/docs/Roadmap.md).
 
+Какие данные нужны, чтобы подсказать место, прикормку и наживку, и что из этого
+уже есть на устройстве — в [app/docs/BiteFactors.md](app/docs/BiteFactors.md).
+
 ## Сборка
 
 Нужен JDK 17+ (подойдёт тот, что идёт с Android Studio) и Android SDK.

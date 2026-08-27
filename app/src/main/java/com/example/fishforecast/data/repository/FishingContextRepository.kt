@@ -2,6 +2,7 @@ package com.example.fishforecast.data.repository
 
 import com.example.fishforecast.data.local.ActiveMapStore
 import com.example.fishforecast.data.local.dao.SavedMapDao
+import com.example.fishforecast.data.local.entities.DailySunEntity
 import com.example.fishforecast.data.local.entities.FishingSpotEntity
 import com.example.fishforecast.data.local.entities.SavedMapEntity
 import com.example.fishforecast.data.local.entities.WeatherEntity
@@ -48,6 +49,11 @@ class FishingContextRepository @Inject constructor(
     /** Прогноз выбранной карты; пусто, пока карты нет. */
     val activeForecast: Flow<List<WeatherEntity>> = activeMap.flatMapLatest { map ->
         if (map == null) flowOf(emptyList()) else weatherRepository.forecastForMap(map.id)
+    }
+
+    /** Восход и закат выбранной карты: зори — главные окна клёва. */
+    val activeSunTimes: Flow<List<DailySunEntity>> = activeMap.flatMapLatest { map ->
+        if (map == null) flowOf(emptyList()) else weatherRepository.sunTimesForMap(map.id)
     }
 
     /**

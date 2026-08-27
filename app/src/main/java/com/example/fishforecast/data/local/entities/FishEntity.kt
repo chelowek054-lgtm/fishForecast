@@ -15,6 +15,5 @@ data class FishEntity(
     val maxTemp: Float,
     val minPressure: Float,
     val maxPressure: Float,
-    val moonPhaseImpact: String, // e.g., "Full Moon", "New Moon", "None"
     val imageUrl: String? = null
 )
