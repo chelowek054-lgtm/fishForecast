@@ -29,9 +29,10 @@ class CalculateFishActivityUseCase @Inject constructor() {
 
     /**
      * [normalPressureMmHg] — норма давления конкретного водоёма, посчитанная
-     * по наблюдениям за место. Общей цифры не существует, и пока район ни
-     * разу не видел сети, ориентиром служит середина привычного рыбе
-     * диапазона — свойство рыбы вместо свойства места.
+     * по наблюдениям за место или по его высоте над уровнем моря. Пока её
+     * нет, давление и тенденция не оцениваются: отклонение не от чего
+     * считать. Подставлять сюда диапазон рыбы нельзя — норма это свойство
+     * места, рыба к ней отношения не имеет.
      */
     operator fun invoke(
         fish: FishEntity,
@@ -41,7 +42,6 @@ class CalculateFishActivityUseCase @Inject constructor() {
     ): List<BiteForecast> {
         val sorted = forecast.sortedBy { it.time }
         val normal = normalPressureMmHg
-            ?: ((fish.minPressure + fish.maxPressure) / 2.0)
 
         return sorted.mapIndexed { index, hour ->
             // Рыба живёт в воде, а не в воздухе. Пока вода не посчитана,
@@ -52,7 +52,7 @@ class CalculateFishActivityUseCase @Inject constructor() {
             }
 
             val temperature = temperatureFactor(waterNow ?: hour.temperature, fish, waterNow != null)
-            val pressure = pressureFactor(hour.pressure.hPaToMmHg(), fish, normal)
+            val pressure = pressureFactor(hour.pressure.hPaToMmHg(), normal)
             val trend = pressureTrendFactor(sorted, index, normal)
             val oxygen = if (waterNow != null) {
                 waterOxygenFactor(waterNow, waterBefore, fish)
@@ -104,9 +104,20 @@ class CalculateFishActivityUseCase @Inject constructor() {
     /** Отклонение от нормы водоёма важнее абсолютного значения. */
     private fun pressureFactor(
         pressureMmHg: Double,
-        fish: FishEntity,
-        normal: Double
+        normal: Double?
     ): BiteFactor {
+        // Без нормы места отклонение не от чего считать. Честнее не
+        // оценивать фактор вовсе, чем выдумать точку отсчёта.
+        if (normal == null) {
+            return BiteFactor(
+                name = "Давление",
+                value = 1.0,
+                weight = WEIGHT_PRESSURE,
+                comment = "${pressureMmHg.roundToInt()} мм рт. ст. — норма места " +
+                    "ещё не посчитана, нужна сеть"
+            )
+        }
+
         val deviation = abs(pressureMmHg - normal)
         val value = falloff(deviation, PRESSURE_TOLERANCE)
 
@@ -132,7 +143,7 @@ class CalculateFishActivityUseCase @Inject constructor() {
     private fun pressureTrendFactor(
         forecast: List<WeatherEntity>,
         index: Int,
-        normal: Double
+        normal: Double?
     ): BiteFactor {
         val previousIndex = index - TREND_WINDOW_HOURS
         if (previousIndex < 0) {
@@ -147,12 +158,15 @@ class CalculateFishActivityUseCase @Inject constructor() {
         val current = forecast[index].pressure.hPaToMmHg()
         val previous = forecast[previousIndex].pressure.hPaToMmHg()
         val change = abs(current - previous)
-        val deviationNow = abs(current - normal)
-        val deviationBefore = abs(previous - normal)
-        val movingToNormal = deviationNow < deviationBefore
+        // Без нормы остаётся только величина скачка: куда движется
+        // давление — к привычному фону или от него — сказать нечем.
+        val deviationNow = normal?.let { abs(current - it) }
+        val deviationBefore = normal?.let { abs(previous - it) }
+        val movingToNormal = deviationNow != null && deviationBefore != null &&
+            deviationNow < deviationBefore
 
         val value = when {
-            change <= STABLE_PRESSURE_MMHG && deviationNow <= AT_NORMAL_MMHG -> 1.0
+            change <= STABLE_PRESSURE_MMHG && (deviationNow ?: 0.0) <= AT_NORMAL_MMHG -> 1.0
             change <= STABLE_PRESSURE_MMHG -> 0.8
             movingToNormal -> 0.9
             change <= NOTICEABLE_PRESSURE_MMHG -> 0.5
@@ -165,6 +179,7 @@ class CalculateFishActivityUseCase @Inject constructor() {
             weight = WEIGHT_TREND,
             comment = when {
                 change <= STABLE_PRESSURE_MMHG -> "Давление стабильно за 3 часа"
+                normal == null -> "Меняется на ${change.roundToInt()} мм за 3 часа"
                 movingToNormal -> "Возвращается к норме (${change.roundToInt()} мм за 3 часа)"
                 current > previous -> "Уходит вверх от нормы на ${change.roundToInt()} мм"
                 else -> "Уходит вниз от нормы на ${change.roundToInt()} мм"

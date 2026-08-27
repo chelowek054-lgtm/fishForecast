@@ -121,14 +121,22 @@ class CalculateFishActivityUseCaseTest {
     }
 
     @Test
-    fun `давление вне привычного диапазона снижает оценку`() {
-        val normal = useCase(pike, (0..5).map { hour(it) }).last().score
+    fun `давление вдали от нормы места снижает оценку`() {
+        val atNormal = useCase(
+            pike,
+            (0..5).map { hour(it) },
+            normalPressureMmHg = 750.0
+        ).last().score
         val lowPressure = useCase(
             pike,
-            (0..5).map { hour(it, pressureHpa = 720.0 * 1.333224) }
+            (0..5).map { hour(it, pressureHpa = 720.0 * 1.333224) },
+            normalPressureMmHg = 750.0
         ).last().score
 
-        assertTrue("низкое давление должно снижать оценку: $lowPressure vs $normal", lowPressure < normal)
+        assertTrue(
+            "давление ниже нормы должно снижать оценку: $lowPressure vs $atNormal",
+            lowPressure < atNormal
+        )
     }
 
     @Test
@@ -213,12 +221,27 @@ class CalculateFishActivityUseCaseTest {
     }
 
     @Test
-    fun `без нормы водоёма ориентиром служит диапазон рыбы`() {
-        // Щуке привычны 740–760, середина — 750; давление ровно там.
+    fun `без нормы места давление не оценивается`() {
         val result = useCase(pike, (0..5).map { hour(it) })
 
+        val pressure = result.last().factors.first { it.name == "Давление" }
         assertTrue(
-            result.last().factors.first { it.name == "Давление" }.comment.contains("норма водоёма")
+            "должно быть сказано, что нормы ещё нет: ${pressure.comment}",
+            pressure.comment.contains("не посчитана")
+        )
+    }
+
+    @Test
+    fun `норма не зависит от диапазона давления рыбы`() {
+        // Раньше без нормы места подставлялась середина диапазона рыбы, и
+        // две рыбы с одинаковым комфортом по температуре получали разную
+        // оценку из-за справочника. Норма — свойство места, рыба ни при чём.
+        val lowlandFish = pike.copy(minPressure = 700f, maxPressure = 720f)
+        val forecast = (0..5).map { hour(it) }
+
+        assertEquals(
+            useCase(pike, forecast).last().score,
+            useCase(lowlandFish, forecast).last().score
         )
     }
 

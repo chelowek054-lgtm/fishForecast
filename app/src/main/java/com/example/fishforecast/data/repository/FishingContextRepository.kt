@@ -81,9 +81,19 @@ class FishingContextRepository @Inject constructor(
 
     suspend fun setActiveMap(id: Int) = activeMapStore.setActiveMapId(id)
 
-    /** Делает активной последнюю сохранённую карту. */
+    /**
+     * Делает активной последнюю сохранённую карту и сразу считает её норму
+     * давления.
+     *
+     * Момент выбран не случайно: тайлы только что скачались, значит сеть
+     * есть. Иначе карта, сохранённая дома и увезённая на воду, осталась бы
+     * без точки отсчёта — а без неё давление, главный фактор клёва, нечем
+     * мерить.
+     */
     suspend fun activateLatestMap() {
-        savedMapDao.getLatestMap()?.let { activeMapStore.setActiveMapId(it.id) }
+        val map = savedMapDao.getLatestMap() ?: return
+        activeMapStore.setActiveMapId(map.id)
+        refreshNormalPressure(map.id)
     }
 
     suspend fun renameMap(id: Int, name: String) = savedMapDao.rename(id, name)
@@ -142,9 +152,10 @@ class FishingContextRepository @Inject constructor(
     }
 
     /**
-     * Пересчитывает норму давления по истории наблюдений. Молча ничего не
-     * делает, если сети нет: прикидка по высоте уже стоит, а без неё карта
-     * работает как раньше.
+     * Считает норму давления места: по истории наблюдений, а если ряд
+     * оказался коротким — по высоте района над уровнем моря. Без сети
+     * молча ничего не делает: подставлять вместо нормы что попало нельзя,
+     * это свойство места, а не догадка.
      */
     suspend fun refreshNormalPressure(mapId: Int): Result<Double> {
         val map = savedMapDao.getRegionById(mapId)
