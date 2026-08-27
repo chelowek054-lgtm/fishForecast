@@ -1,6 +1,7 @@
 package com.example.fishforecast.domain.water
 
 import com.example.fishforecast.data.local.entities.WeatherEntity
+import com.example.fishforecast.domain.knowledge.WaterBodyType
 import com.example.fishforecast.domain.weather.kmhToMs
 import java.time.LocalDateTime
 import kotlin.math.ln
@@ -54,7 +55,8 @@ val DEFAULT_DEEP = WaterLayer(4.0)
 fun simulateWaterTemperature(
     hours: List<WeatherEntity>,
     layer: WaterLayer,
-    anchor: WaterMeasurement? = null
+    anchor: WaterMeasurement? = null,
+    waterBody: WaterBodyType? = null
 ): List<WaterHour> {
     if (hours.isEmpty()) return emptyList()
 
@@ -74,7 +76,7 @@ fun simulateWaterTemperature(
             water = anchor.temperature
         }
 
-        water = stepHour(water, hour, layer)
+        water = stepHour(water, hour, layer, waterBody)
         WaterHour(time = hour.time, temperature = water)
     }
 }
@@ -83,18 +85,31 @@ fun simulateWaterTemperature(
 data class WaterMeasurement(val time: String, val temperature: Double)
 
 /** Один час модели. */
-private fun stepHour(water: Double, hour: WeatherEntity, layer: WaterLayer): Double {
+private fun stepHour(
+    water: Double,
+    hour: WeatherEntity,
+    layer: WaterLayer,
+    waterBody: WaterBodyType?
+): Double {
     val dewPoint = dewPoint(hour.temperature, hour.humidity)
     val windMs = hour.windSpeed.kmhToMs()
 
-    val exchange = heatExchangeCoefficient(water, dewPoint, windMs)
+    // Ветер перемешивает воду тем сильнее, чем длиннее его разгон: на
+    // большом озере волна работает всерьёз, в пруду её негде разогнать.
+    val exchange = heatExchangeCoefficient(
+        water = water,
+        dewPoint = dewPoint,
+        windMs = windMs * (waterBody?.windMixing ?: 1.0)
+    )
     // Часть солнца отражается поверхностью, в воду уходит около 94 %.
     val absorbedSolar = hour.shortwaveRadiation * (1 - ALBEDO)
     val equilibrium = dewPoint + absorbedSolar / exchange
 
     // Постоянная времени слоя: ρ·c·h / K. Полтора метра отзываются за пару
-    // суток, пять — почти за неделю.
-    val timeConstantSeconds = WATER_HEAT_CAPACITY * layer.depthM / exchange
+    // суток, пять — почти за неделю. Тип водоёма растягивает это время:
+    // реку сверху подпитывает своя вода, и суточный ход в ней сглажен.
+    val inertia = waterBody?.thermalInertia?.takeIf { it > 0 } ?: 1.0
+    val timeConstantSeconds = WATER_HEAT_CAPACITY * layer.depthM * inertia / exchange
     val relaxation = 1 - kotlin.math.exp(-SECONDS_PER_HOUR / timeConstantSeconds)
 
     return water + (equilibrium - water) * relaxation

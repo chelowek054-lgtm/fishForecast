@@ -11,7 +11,6 @@ import com.example.fishforecast.domain.knowledge.KnowledgeCatalog
 import com.example.fishforecast.data.repository.FishingContextRepository
 import com.example.fishforecast.domain.bite.CalculateFishActivityUseCase
 import com.example.fishforecast.domain.water.WaterState
-import com.example.fishforecast.domain.water.calculateWaterState
 import com.example.fishforecast.domain.water.oxygenSaturationMgL
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.channels.Channel
@@ -55,9 +54,9 @@ class ReferenceViewModel @Inject constructor(
     val cards: StateFlow<List<FishCard>> = combine(
         repository.getAllFish(),
         fishingContext.activeForecast,
-        fishingContext.activeMap
-    ) { fishList, forecast, map ->
-        val water = calculateWaterState(forecast, map)
+        fishingContext.activeMap,
+        fishingContext.activeWater
+    ) { fishList, forecast, map, water ->
         val normal = fishingContext.normalPressureFor(map)
 
         fishList

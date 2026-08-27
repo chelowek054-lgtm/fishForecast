@@ -11,7 +11,10 @@ import com.example.fishforecast.data.repository.FishRepository
 import com.example.fishforecast.data.repository.FishingContextRepository
 import com.example.fishforecast.data.repository.FishingSpotRepository
 import com.example.fishforecast.data.repository.RegionPackRepository
+import com.example.fishforecast.data.repository.KnowledgeRepository
 import com.example.fishforecast.data.repository.OfflineMapRepository
+import com.example.fishforecast.domain.knowledge.WaterBodyType
+import kotlinx.coroutines.flow.map
 import com.example.fishforecast.domain.share.GpxParser
 import com.example.fishforecast.domain.share.GpxWriter
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -41,7 +44,8 @@ class SavedMapsViewModel @Inject constructor(
     private val spotRepository: FishingSpotRepository,
     private val fishRepository: FishRepository,
     private val fishingContext: FishingContextRepository,
-    private val offlineMapRepository: OfflineMapRepository
+    private val offlineMapRepository: OfflineMapRepository,
+    private val knowledge: KnowledgeRepository
 ) : ViewModel() {
 
     val maps: StateFlow<List<SavedMapEntity>> = fishingContext.savedMaps
@@ -70,6 +74,15 @@ class SavedMapsViewModel @Inject constructor(
 
     fun renameMap(map: SavedMapEntity, name: String) {
         viewModelScope.launch { fishingContext.renameMap(map.id, name.ifBlank { map.name }) }
+    }
+
+    /** Типы водоёмов из словаря знаний: рыболов выбирает свой. */
+    val waterBodyTypes: StateFlow<List<WaterBodyType>> = knowledge.catalog
+        .map { it.waterbodies }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    fun setWaterBodyType(map: SavedMapEntity, type: String?) {
+        viewModelScope.launch { fishingContext.setWaterBodyType(map.id, type) }
     }
 
     fun setDepths(map: SavedMapEntity, shallowM: Double?, deepM: Double?) {

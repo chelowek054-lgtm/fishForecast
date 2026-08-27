@@ -25,6 +25,7 @@ class RegionPackCodecTest {
         minZoom = 10.0,
         maxZoom = 14.0,
         sizeBytes = 12345,
+        waterBodyType = "flowing_large",
         baselinePressureMmHg = 745.8,
         elevationM = 152.0,
         shallowDepthM = 1.5,
@@ -98,6 +99,7 @@ class RegionPackCodecTest {
         assertEquals("region-1", restored.region.id)
         assertEquals(745.8, restored.region.normalPressureMmHg!!, 0.001)
         assertEquals(1.5, restored.region.shallowDepthM!!, 0.001)
+        assertEquals("flowing_large", restored.region.waterBodyType)
         assertEquals(1, restored.zones.size)
         assertEquals(1, restored.zones.first().sectors.size)
         assertEquals(3, restored.zones.first().outline.size)
@@ -143,7 +145,7 @@ class RegionPackCodecTest {
 
     @Test
     fun `пакет из будущей версии отвергается с понятной причиной`() {
-        val future = RegionPackCodec.encode(pack()).replace("region-pack/2", "region-pack/3")
+        val future = RegionPackCodec.encode(pack()).replace("region-pack/3", "region-pack/4")
 
         val error = RegionPackCodec.decode(future).exceptionOrNull()!!
 

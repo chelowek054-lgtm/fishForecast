@@ -31,6 +31,9 @@ interface SavedMapDao {
     @Query("UPDATE saved_maps SET name = :name WHERE id = :id")
     suspend fun rename(id: Int, name: String)
 
+    @Query("UPDATE saved_maps SET waterBodyType = :type WHERE id = :id")
+    suspend fun updateWaterBodyType(id: Int, type: String?)
+
     @Query("UPDATE saved_maps SET shallowDepthM = :shallow, deepDepthM = :deep WHERE id = :id")
     suspend fun updateDepths(id: Int, shallow: Double?, deep: Double?)
 

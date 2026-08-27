@@ -1,5 +1,6 @@
 package com.example.fishforecast.domain.water
 
+import com.example.fishforecast.domain.knowledge.WaterBodyType
 import kotlin.math.exp
 
 /**
@@ -58,3 +59,45 @@ private const val KELVIN_OFFSET = 273.15
 private fun Double.pow2() = this * this
 private fun Double.pow3() = this * this * this
 private fun Double.pow4() = pow2() * pow2()
+
+/**
+ * Сколько кислорода в воде на самом деле, мг/л.
+ *
+ * Насыщение — это потолок. Дотягивается ли вода до него, решают течение и
+ * ветер: проточная вода аэрируется сама, а стоячий пруд в штиль — нет.
+ *
+ * Отдельно вычитается ночной провал. Днём растения отдают кислород, ночью
+ * дышат наравне со всеми, и к рассвету его меньше всего за сутки. В малом
+ * заросшем пруду это решает исход утренней рыбалки, на реке незаметно.
+ *
+ * @param darkHours сколько часов подряд перед этим не было солнца.
+ */
+fun availableOxygenMgL(
+    waterTemperatureC: Double,
+    waterBody: WaterBodyType? = null,
+    darkHours: Int = 0,
+    windMs: Double = 0.0
+): Double {
+    val saturation = oxygenSaturationMgL(waterTemperatureC)
+
+    val base = waterBody?.aeration ?: 1.0
+    // Рябь и волнение подгоняют воду к насыщению тем сильнее, чем длиннее
+    // разгон ветра: на большом озере это заметно, в пруду почти нет.
+    val fromWind = (windMs / WIND_FULL_AERATION_MS).coerceIn(0.0, 1.0) *
+        WIND_AERATION_GAIN * (waterBody?.windMixing ?: 1.0)
+    val aeration = (base + fromWind).coerceIn(0.0, 1.0)
+
+    val sag = (waterBody?.nightOxygenDropMgL ?: 0.0) *
+        (darkHours.toDouble() / NIGHT_LENGTH_HOURS).coerceIn(0.0, 1.0)
+
+    return (saturation * aeration - sag).coerceAtLeast(0.0)
+}
+
+/** Ветер, при котором перемешивание уже даёт всё, что может. */
+private const val WIND_FULL_AERATION_MS = 8.0
+
+/** Насколько ветер способен поднять аэрацию стоячей воды. */
+private const val WIND_AERATION_GAIN = 0.15
+
+/** За столько тёмных часов ночной провал набирает полную силу. */
+private const val NIGHT_LENGTH_HOURS = 8.0

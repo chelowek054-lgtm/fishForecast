@@ -78,6 +78,7 @@ object RegionPackCodec {
                 maxZoom = map.maxZoom,
                 normalPressureMmHg = map.baselinePressureMmHg,
                 elevationM = map.elevationM,
+                waterBodyType = map.waterBodyType,
                 shallowDepthM = map.shallowDepthM,
                 deepDepthM = map.deepDepthM
             ),
@@ -140,6 +141,7 @@ object RegionPackCodec {
             maxZoom = pack.region.maxZoom,
             baselinePressureMmHg = pack.region.normalPressureMmHg,
             elevationM = pack.region.elevationM,
+            waterBodyType = pack.region.waterBodyType,
             shallowDepthM = pack.region.shallowDepthM,
             deepDepthM = pack.region.deepDepthM
         ),

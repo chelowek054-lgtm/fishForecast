@@ -5,7 +5,6 @@ import com.example.fishforecast.data.local.dao.CatchDao
 import com.example.fishforecast.data.local.entities.CatchEntity
 import com.example.fishforecast.data.local.entities.FishEntity
 import com.example.fishforecast.domain.bite.CalculateFishActivityUseCase
-import com.example.fishforecast.domain.water.calculateWaterState
 import com.example.fishforecast.domain.sensor.hPaToMmHg
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
@@ -41,7 +40,7 @@ class CatchRepository @Inject constructor(
 
         val biteScore = if (fish != null && hour != null) {
             val forecast = fishingContext.activeForecast.first()
-            calculateFishActivity(fish, forecast, normalPressure, calculateWaterState(forecast, map))
+            calculateFishActivity(fish, forecast, normalPressure, fishingContext.currentWater())
                 .firstOrNull { it.time == hour.time }?.score
         } else {
             null

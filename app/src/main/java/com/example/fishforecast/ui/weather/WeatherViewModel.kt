@@ -88,16 +88,12 @@ class WeatherViewModel @Inject constructor(
      * Ход воды в двух слоях. Считается по уже скачанному прогнозу вместе с
      * прошедшими сутками: без истории инерционная модель не разгоняется.
      */
-    val water: StateFlow<WaterState> = combine(
-        fishingContext.activeForecast,
-        fishingContext.activeMap
-    ) { forecast, map ->
-        calculateWaterState(forecast, map)
-    }.stateIn(
-        scope = viewModelScope,
-        started = SharingStarted.WhileSubscribed(5000),
-        initialValue = calculateWaterState(emptyList(), null)
-    )
+    val water: StateFlow<WaterState> = fishingContext.activeWater
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = calculateWaterState(emptyList(), null)
+        )
 
     val hasBarometer: Boolean = pressureProvider.isAvailable
 

@@ -33,7 +33,7 @@ import com.example.fishforecast.data.local.entities.WeatherEntity
         ZoneEntity::class,
         SectorEntity::class
     ],
-    version = 16,
+    version = 17,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -556,6 +556,22 @@ abstract class AppDatabase : RoomDatabase() {
                 db.execSQL(
                     "ALTER TABLE `fish` ADD COLUMN `preferredStructures` TEXT NOT NULL DEFAULT '[]'"
                 )
+            }
+        }
+
+        /**
+         * Тип водоёма у района.
+         *
+         * Течение и размер меняют физику: река аэрируется сама и почти не
+         * колеблется за сутки, а малый пруд перегревается за день и
+         * задыхается к рассвету. Одной моделью стоячей воды это не описать.
+         *
+         * Пусто у старых районов — значит, тип не выбран, и расчёт считает
+         * их прудом, как и раньше.
+         */
+        val MIGRATION_16_17 = object : Migration(16, 17) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `saved_maps` ADD COLUMN `waterBodyType` TEXT")
             }
         }
     }

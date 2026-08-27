@@ -42,7 +42,11 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.material3.FilterChip
 import com.example.fishforecast.data.local.entities.SavedMapEntity
+import com.example.fishforecast.domain.knowledge.WaterBodyType
 import com.example.fishforecast.ui.map.shareRegionPack
 import com.example.fishforecast.ui.map.shareSpotsAsGpx
 import kotlinx.coroutines.launch
@@ -50,7 +54,7 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun SavedMapsScreen(
     onOpenMap: () -> Unit = {},
@@ -61,6 +65,7 @@ fun SavedMapsScreen(
     val maps by viewModel.maps.collectAsState()
     val activeMap by viewModel.activeMap.collectAsState()
     val spots by viewModel.spots.collectAsState()
+    val waterBodyTypes by viewModel.waterBodyTypes.collectAsState()
     val busy = viewModel.busy.value
     val snackbarHostState = remember { SnackbarHostState() }
 
@@ -122,6 +127,8 @@ fun SavedMapsScreen(
                     onSelect = { viewModel.selectMap(map) },
                     onRename = { viewModel.renameMap(map, it) },
                     onDepthsChange = { shallow, deep -> viewModel.setDepths(map, shallow, deep) },
+                    waterBodyTypes = waterBodyTypes,
+                    onWaterBodyChange = { viewModel.setWaterBodyType(map, it) },
                     onShareRegion = { viewModel.exportRegion(map) },
                     onRecalculateNormal = { viewModel.recalculateNormalPressure(map) },
                     onWaterMeasured = { viewModel.measureWater(map, it) },
@@ -225,6 +232,8 @@ private fun SavedMapCard(
     onSelect: () -> Unit,
     onRename: (String) -> Unit,
     onDepthsChange: (Double?, Double?) -> Unit,
+    waterBodyTypes: List<WaterBodyType>,
+    onWaterBodyChange: (String?) -> Unit,
     onShareRegion: () -> Unit,
     onRecalculateNormal: () -> Unit,
     onWaterMeasured: (Double?) -> Unit,
@@ -270,6 +279,12 @@ private fun SavedMapCard(
                     style = MaterialTheme.typography.bodySmall
                 )
             }
+            waterBodyTypes.firstOrNull { it.id == map.waterBodyType }?.let { type ->
+                Text(
+                    text = "Тип водоёма: ${type.name}",
+                    style = MaterialTheme.typography.bodySmall
+                )
+            }
             if (map.shallowDepthM != null || map.deepDepthM != null) {
                 Text(
                     text = "Глубины: мель %s, яма %s".format(
@@ -298,6 +313,8 @@ private fun SavedMapCard(
                     map = map,
                     onRename = onRename,
                     onDepthsChange = onDepthsChange,
+                    waterBodyTypes = waterBodyTypes,
+                    onWaterBodyChange = onWaterBodyChange,
                     onRecalculateNormal = onRecalculateNormal,
                     onWaterMeasured = onWaterMeasured,
                     onDelete = onDelete
@@ -307,11 +324,14 @@ private fun SavedMapCard(
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun MapSettings(
     map: SavedMapEntity,
     onRename: (String) -> Unit,
     onDepthsChange: (Double?, Double?) -> Unit,
+    waterBodyTypes: List<WaterBodyType>,
+    onWaterBodyChange: (String?) -> Unit,
     onRecalculateNormal: () -> Unit,
     onWaterMeasured: (Double?) -> Unit,
     onDelete: () -> Unit
@@ -344,6 +364,26 @@ private fun MapSettings(
     TextButton(onClick = onRecalculateNormal) {
         Text("Пересчитать норму")
     }
+
+    // Тип водоёма меняет физику: течение аэрирует воду, размер задаёт
+    // инертность. Пока не выбран, район считается прудом.
+    Spacer(modifier = Modifier.height(8.dp))
+    Text(text = "Тип водоёма", style = MaterialTheme.typography.labelLarge)
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        waterBodyTypes.forEach { type ->
+            FilterChip(
+                selected = map.waterBodyType == type.id,
+                onClick = { onWaterBodyChange(type.id) },
+                enabled = type.behaviorDefined,
+                label = { Text(type.name) }
+            )
+        }
+    }
+    Text(
+        text = waterBodyTypes.firstOrNull { it.id == map.waterBodyType }?.notes
+            ?: "Не выбран — район считается прудом. Море и океан пока не описаны.",
+        style = MaterialTheme.typography.bodySmall
+    )
 
     Spacer(modifier = Modifier.height(8.dp))
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {

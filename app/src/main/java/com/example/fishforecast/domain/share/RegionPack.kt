@@ -45,7 +45,7 @@ data class RegionPack(
     val fish: List<CatalogFish> = emptyList()
 ) {
     companion object {
-        const val SCHEMA = "fishforecast.region-pack/2"
+        const val SCHEMA = "fishforecast.region-pack/3"
 
         /** Расширение файла: по нему система предлагает открыть приложением. */
         const val FILE_EXTENSION = "ffpack"
@@ -79,6 +79,11 @@ data class PackRegion(
     @SerialName("normalPressureMmHg")
     val normalPressureMmHg: Double? = null,
     val elevationM: Double? = null,
+    /**
+     * Тип водоёма из словаря знаний: течение и размер. Такое же знание о
+     * месте, как глубины, — получателю незачем выяснять его заново.
+     */
+    val waterBodyType: String? = null,
     /** Глубины мели и ямы, м — без них не считается температура воды. */
     val shallowDepthM: Double? = null,
     val deepDepthM: Double? = null

@@ -55,7 +55,14 @@ class CalculateFishActivityUseCase @Inject constructor() {
             val pressure = pressureFactor(hour.pressure.hPaToMmHg(), normal)
             val trend = pressureTrendFactor(sorted, index, normal)
             val oxygen = if (waterNow != null) {
-                waterOxygenFactor(waterNow, waterBefore, fish)
+                waterOxygenFactor(
+                    waterNow = waterNow,
+                    waterBefore = waterBefore,
+                    fish = fish,
+                    // Кислород считает вода: он свойство водоёма, а не рыбы,
+                    // и зависит от течения, ветра и того, была ли ночь.
+                    oxygenMgL = water?.oxygenAt(hour.time) ?: oxygenSaturationMgL(waterNow)
+                )
             } else {
                 oxygenFactor(sorted, index, hour, fish)
             }
@@ -275,9 +282,10 @@ class CalculateFishActivityUseCase @Inject constructor() {
     private fun waterOxygenFactor(
         waterNow: Double,
         waterBefore: Double?,
-        fish: FishEntity
+        fish: FishEntity,
+        oxygenMgL: Double
     ): BiteFactor {
-        val oxygen = oxygenSaturationMgL(waterNow)
+        val oxygen = oxygenMgL
         // Пороги берутся у вида: карасю хватает трёх миллиграммов, налиму
         // нужно шесть. Общая шкала уравняла бы их и соврала бы про обоих.
         val comfort = fish.oxygenComfortMgL.toDouble()

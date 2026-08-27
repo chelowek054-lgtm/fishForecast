@@ -7,6 +7,10 @@ import com.example.fishforecast.data.local.entities.FishingSpotEntity
 import com.example.fishforecast.data.local.entities.SavedMapEntity
 import com.example.fishforecast.data.local.entities.WeatherEntity
 import com.example.fishforecast.domain.bite.standardPressureMmHg
+import com.example.fishforecast.domain.knowledge.KnowledgeCatalog
+import com.example.fishforecast.domain.knowledge.WaterBodyType
+import com.example.fishforecast.domain.water.WaterState
+import com.example.fishforecast.domain.water.calculateWaterState
 import com.example.fishforecast.ui.map.BaseLayer
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
@@ -34,6 +38,7 @@ class FishingContextRepository @Inject constructor(
     private val savedMapDao: SavedMapDao,
     private val activeMapStore: ActiveMapStore,
     private val weatherRepository: WeatherRepository,
+    private val knowledgeRepository: KnowledgeRepository,
     private val spotRepository: FishingSpotRepository
 ) {
     val savedMaps: Flow<List<SavedMapEntity>> = savedMapDao.getRegions()
@@ -52,6 +57,28 @@ class FishingContextRepository @Inject constructor(
     val activeForecast: Flow<List<WeatherEntity>> = activeMap.flatMapLatest { map ->
         if (map == null) flowOf(emptyList()) else weatherRepository.forecastForMap(map.id)
     }
+
+    /**
+     * Тип выбранного района из словаря знаний. Пока рыболов не выбрал,
+     * считаем район прудом: это самый частый и самый капризный случай.
+     */
+    val activeWaterBody: Flow<WaterBodyType?> =
+        combine(activeMap, knowledgeRepository.catalog) { map, catalog ->
+            catalog.waterBody(map?.waterBodyType ?: KnowledgeCatalog.DEFAULT_WATERBODY)
+        }
+
+    /**
+     * Ход воды выбранного района: температура двух слоёв и кислород.
+     *
+     * Считается в одном месте, а не в каждом экране порознь: вода — свойство
+     * района, и трёх разных ответов о ней быть не может.
+     */
+    val activeWater: Flow<WaterState> =
+        combine(activeForecast, activeMap, activeWaterBody) { forecast, map, waterBody ->
+            calculateWaterState(forecast, map, waterBody)
+        }
+
+    suspend fun currentWater(): WaterState = activeWater.first()
 
     /** Восход и закат выбранной карты: зори — главные окна клёва. */
     val activeSunTimes: Flow<List<DailySunEntity>> = activeMap.flatMapLatest { map ->
@@ -100,6 +127,9 @@ class FishingContextRepository @Inject constructor(
 
     suspend fun setDepths(id: Int, shallowM: Double?, deepM: Double?) =
         savedMapDao.updateDepths(id, shallowM, deepM)
+
+    suspend fun setWaterBodyType(id: Int, type: String?) =
+        savedMapDao.updateWaterBodyType(id, type)
 
     /**
      * Замер воды термометром. Время берётся текущее: замер имеет смысл

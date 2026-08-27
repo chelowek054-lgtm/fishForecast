@@ -427,6 +427,7 @@ private fun CurrentWeatherCard(
 private fun WaterCard(water: WaterState, currentTime: String) {
     val shallowNow = water.shallowAt(currentTime) ?: return
     val deepNow = water.deepAt(currentTime) ?: return
+    val oxygenNow = water.oxygenAt(currentTime) ?: oxygenSaturationMgL(shallowNow)
     val trend = waterTrend(water.shallow.fromNow())
 
     Card(
@@ -437,7 +438,10 @@ private fun WaterCard(water: WaterState, currentTime: String) {
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Text(
-                text = if (water.anchored) "Вода (от вашего замера)" else "Вода (расчёт по погоде)",
+                text = buildString {
+                    append(if (water.anchored) "Вода (от вашего замера)" else "Вода (расчёт по погоде)")
+                    water.waterBody?.let { append(" · ${it.name}") }
+                },
                 style = MaterialTheme.typography.labelLarge
             )
             Spacer(modifier = Modifier.height(8.dp))
@@ -456,8 +460,8 @@ private fun WaterCard(water: WaterState, currentTime: String) {
                 )
                 WeatherFact(
                     title = "Кислород",
-                    value = "%.1f".format(oxygenSaturationMgL(shallowNow)),
-                    detail = oxygenLevelText(oxygenLevel(oxygenSaturationMgL(shallowNow)))
+                    value = "%.1f".format(oxygenNow),
+                    detail = oxygenLevelText(oxygenLevel(oxygenNow))
                 )
             }
 
