@@ -32,6 +32,7 @@ import com.example.fishforecast.data.local.entities.FishEntity
 import com.example.fishforecast.data.local.entities.FishingSessionEntity
 import com.example.fishforecast.domain.bite.WaterLayerChoice
 import com.example.fishforecast.domain.knowledge.FishingMethod
+import com.example.fishforecast.domain.session.CatchGoal
 import com.example.fishforecast.domain.session.DayPart
 import com.example.fishforecast.domain.session.FishingStrategy
 import com.example.fishforecast.domain.session.StrategyAdvice
@@ -100,6 +101,24 @@ fun SessionSetup(
             }
 
             if (form.fish?.let { it.guild != "predator" } == true) {
+                Spacer(modifier = Modifier.height(12.dp))
+                Text(text = "За кем едем", style = MaterialTheme.typography.labelLarge)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    CatchGoal.entries.forEach { goal ->
+                        FilterChip(
+                            selected = form.goal == goal,
+                            onClick = { onChange { it.copy(goal = goal) } },
+                            label = { Text(goal.title) }
+                        )
+                    }
+                }
+                Text(
+                    text = "Стая молодняка и одиночная крупная рыба зовутся разным столом: " +
+                        "от ответа зависит и схема закорма, и размер насадки.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+
                 Spacer(modifier = Modifier.height(8.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     FilterChip(
@@ -149,6 +168,9 @@ fun StrategyCard(strategy: FishingStrategy) {
             strategy.bait,
             strategy.backupBait,
             strategy.groundbait,
+            strategy.baiting,
+            strategy.selection,
+            strategy.rig,
             strategy.window
         ).forEach { advice -> AdviceRow(advice) }
 
@@ -169,6 +191,17 @@ fun StrategyCard(strategy: FishingStrategy) {
             Spacer(modifier = Modifier.height(8.dp))
             Text(text = "Искать на месте", style = MaterialTheme.typography.labelLarge)
             FlowRowChips(strategy.lookFor.map { it.name })
+
+            // Место требует своего от снасти: в коряжнике решает фрикцион, в
+            // иле — длина поводка. Об этом узнают на берегу, когда уже поздно.
+            strategy.lookFor.filter { it.gearNote.isNotBlank() }.forEach { structure ->
+                Text(
+                    text = "${structure.name}: ${structure.gearNote}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 4.dp)
+                )
+            }
         }
 
         strategy.warnings.forEach { warning ->

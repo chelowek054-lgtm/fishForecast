@@ -35,6 +35,8 @@ data class FishingSessionEntity(
     /** Структуры места, JSON-массив идентификаторов. */
     val structures: String = "[]",
     val hasGroundbait: Boolean = true,
+    /** За кем ехали: `NUMBERS` или `TROPHY`. */
+    val goal: String = "NUMBERS",
 
     // Снимок условий на старте: прогноз в кэше живёт неделю, а разбирать
     // выезд можно и через год.

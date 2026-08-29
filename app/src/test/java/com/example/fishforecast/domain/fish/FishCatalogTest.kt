@@ -27,6 +27,16 @@ class FishCatalogTest {
     }
 
     @Test
+    fun `у карпа описано, чем мелкий отличается от крупного`() {
+        // От этого зависит и схема закорма, и размер насадки — без объяснения
+        // вопрос «за кем едем» выглядит вопросом об амбициях.
+        val carp = FishCatalogCodec.decode(assetCatalog).getOrThrow().fish.first { it.id == "carp" }
+
+        assertTrue(carp.description.contains("стаей"))
+        assertTrue("карп ищет корм на границе дна", "gravel_silt_edge" in carp.preferredStructures)
+    }
+
+    @Test
     fun `справочник с сервера приходит с версией`() {
         val wrapped = """
             {

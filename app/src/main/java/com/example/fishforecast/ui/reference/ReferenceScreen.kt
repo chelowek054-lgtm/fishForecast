@@ -125,6 +125,7 @@ fun ReferenceScreen(
 
                 ReferenceSection.WATERBODIES -> WaterBodiesSection(knowledge)
                 ReferenceSection.STRUCTURES -> StructuresSection(knowledge)
+                ReferenceSection.BAITING -> BaitingSection(knowledge)
                 ReferenceSection.OBSERVATIONS -> ObservationsSection(knowledge)
             }
         }
@@ -153,17 +154,19 @@ fun ReferenceScreen(
     }
 }
 
-/** Разделы справочника по важности: вид, водоём, место, факт с берега. */
+/** Разделы справочника по важности: вид, водоём, место, стол, факт с берега. */
 enum class ReferenceSection(val title: String) {
     FISH("Виды"),
     WATERBODIES("Водоёмы"),
     STRUCTURES("Структуры"),
+    BAITING("Закорм"),
     OBSERVATIONS("Наблюдения");
 
     fun subtitle(fishCount: Int, knowledgeVersion: Int?): String = when (this) {
         FISH -> "Кто сегодня берёт · видов: $fishCount"
         WATERBODIES -> "Течение и размер меняют воду и кислород"
         STRUCTURES -> "Что делает место местом"
+        BAITING -> "Как ложится корм и кого он зовёт"
         OBSERVATIONS -> "Что видно с берега прямо сейчас"
     } + (knowledgeVersion?.let { " · словари v$it" } ?: "")
 }

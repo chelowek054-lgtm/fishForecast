@@ -8,6 +8,7 @@ import com.example.fishforecast.domain.knowledge.KnowledgeCodec
 import com.example.fishforecast.domain.light.LightPhase
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.File
@@ -32,7 +33,8 @@ class FishingStrategyTest {
         phase: LightPhase = LightPhase.EVENING,
         rain: Double = 0.0,
         scoreShallow: Int = 70,
-        scoreDeep: Int = 60
+        scoreDeep: Int = 60,
+        waterBody: String? = "still_small"
     ) = SessionConditions(
         hour = null,
         waterShallowC = shallow,
@@ -50,14 +52,22 @@ class FishingStrategyTest {
                 scoreDeep = scoreDeep
             )
         },
-        rainLastDayMm = rain
+        rainLastDayMm = rain,
+        waterBodyId = waterBody
     )
 
     private fun carpPlan(
         conditions: SessionConditions,
-        methodId: String? = "feeder_flat"
+        methodId: String? = "feeder_flat",
+        goal: CatchGoal = CatchGoal.NUMBERS,
+        hasGroundbait: Boolean = true
     ) = buildStrategy(
-        input = SessionPlanInput(fish = carp, methodId = methodId),
+        input = SessionPlanInput(
+            fish = carp,
+            methodId = methodId,
+            hasGroundbait = hasGroundbait,
+            goal = goal
+        ),
         conditions = conditions,
         knowledge = knowledge
     )
@@ -176,6 +186,91 @@ class FishingStrategyTest {
 
         assertTrue("у карпа есть любимые структуры", plan.lookFor.isNotEmpty())
         assertTrue(plan.lookFor.any { it.id == "reeds" || it.id == "bay" })
+    }
+
+    @Test
+    fun `за количеством кормят ковром, за трофеем — программой`() {
+        // Стая молодняка кормится наперегонки, крупная рыба садится за
+        // точку, к которой привыкла. Одним столом обеих не позвать.
+        val numbers = carpPlan(conditions(shallow = 22.0), goal = CatchGoal.NUMBERS).baiting!!
+        val trophy = carpPlan(conditions(shallow = 22.0), goal = CatchGoal.TROPHY).baiting!!
+
+        assertTrue("за количеством — ковёр: ${numbers.value}", numbers.value.contains("Ковёр"))
+        assertTrue("за трофеем — программа: ${trophy.value}", trophy.value.contains("программа"))
+        assertTrue(
+            "программу начинают заранее: ${trophy.reason}",
+            trophy.reason.contains("дней до выезда")
+        )
+    }
+
+    @Test
+    fun `на большой воде за трофеем кормят дорожкой, а не точкой`() {
+        // На водохранилище точка ничего не значит: рыба идёт мимо, и
+        // перехватить её можно только полосой поперёк маршрута.
+        val plan = carpPlan(
+            conditions(shallow = 22.0, waterBody = "still_large"),
+            goal = CatchGoal.TROPHY
+        )
+
+        assertTrue("нужна дорожка: ${plan.baiting?.value}", plan.baiting!!.value.contains("орожка"))
+    }
+
+    @Test
+    fun `в холодной воде обе цели сводятся к точечному пятну`() {
+        val numbers = carpPlan(conditions(shallow = 9.0), goal = CatchGoal.NUMBERS).baiting!!
+        val trophy = carpPlan(conditions(shallow = 9.0), goal = CatchGoal.TROPHY).baiting!!
+
+        assertTrue("холодная вода — точка: ${numbers.value}", numbers.value.contains("Точечное"))
+        assertTrue("и за трофеем тоже: ${trophy.value}", trophy.value.contains("Точечное"))
+        assertTrue(
+            "надо объяснить, почему не трофейная схема: ${trophy.reason}",
+            trophy.reason.contains("тёплую воду")
+        )
+    }
+
+    @Test
+    fun `крупная сушёная насадка отсекает мелочь`() {
+        val numbers = carpPlan(conditions(shallow = 22.0), goal = CatchGoal.NUMBERS).selection!!
+        val trophy = carpPlan(conditions(shallow = 22.0), goal = CatchGoal.TROPHY).selection!!
+
+        assertTrue("под стаю — мелкая: ${numbers.value}", numbers.value.contains("14"))
+        assertTrue("под трофея — сушёная: ${trophy.value}", trophy.value.contains("сушить"))
+        assertTrue(
+            "должно быть сказано, кого она отсекает: ${trophy.reason}",
+            trophy.reason.contains("раки")
+        )
+    }
+
+    @Test
+    fun `без прикормки схемы нет, а размер насадки остаётся`() {
+        // Насадку рыболов везёт в любом случае: её размер решает, кто
+        // окажется на крючке, даже когда стол не накрывают.
+        val plan = carpPlan(conditions(shallow = 22.0), hasGroundbait = false)
+
+        assertNull(plan.baiting)
+        assertNotNull(plan.selection)
+    }
+
+    @Test
+    fun `монтаж приходит от способа, а не от рыбы`() {
+        val donka = carpPlan(conditions(shallow = 22.0), methodId = "carp_bottom").rig!!
+
+        assertTrue("вес грузила назван: ${donka.value}", donka.value.contains("100"))
+        assertTrue("сказано про волос: ${donka.reason}", donka.reason.contains("олос"))
+        assertNull("у спиннинга монтажа в словаре нет", carpPlan(
+            conditions(shallow = 22.0),
+            methodId = "spinning"
+        ).rig)
+    }
+
+    @Test
+    fun `план показывает, чего место потребует от снасти`() {
+        val plan = carpPlan(conditions(shallow = 22.0))
+
+        assertTrue(
+            "коряжник и ил должны предупредить о снасти",
+            plan.lookFor.any { it.gearNote.isNotBlank() }
+        )
     }
 
     @Test

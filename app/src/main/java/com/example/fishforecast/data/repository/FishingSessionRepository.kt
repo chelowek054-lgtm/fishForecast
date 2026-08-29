@@ -66,6 +66,7 @@ class FishingSessionRepository @Inject constructor(
                 methodId = input.methodId,
                 layer = layer.name,
                 hasGroundbait = input.hasGroundbait,
+                goal = input.goal.name,
                 waterTempC = when (layer) {
                     WaterLayerChoice.SHALLOW -> conditions.waterShallowC
                     WaterLayerChoice.DEEP -> conditions.waterDeepC
@@ -188,6 +189,7 @@ class FishingSessionRepository @Inject constructor(
                     sunTimes.firstOrNull { day -> day.date == moment.toLocalDate().toString() }
                 )
             },
+            waterBodyId = map?.waterBodyType,
             forecast = bite,
             hours = hours,
             rainLastDayMm = rain
@@ -201,6 +203,9 @@ class FishingSessionRepository @Inject constructor(
         bait?.let { add("${it.title}: ${it.value} — ${it.reason}") }
         backupBait?.let { add("${it.title}: ${it.value}") }
         groundbait?.let { add("${it.title}: ${it.value} — ${it.reason}") }
+        baiting?.let { add("${it.title}: ${it.value} — ${it.reason}") }
+        selection?.let { add("${it.title}: ${it.value} — ${it.reason}") }
+        rig?.let { add("${it.title}: ${it.value} — ${it.reason}") }
         window?.let { add("${it.title}: ${it.value} — ${it.reason}") }
         warnings.forEach { add("Важно: $it") }
     }.joinToString("\n")

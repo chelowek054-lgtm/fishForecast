@@ -36,7 +36,7 @@ import com.example.fishforecast.data.local.entities.WeatherEntity
         SectorEntity::class,
         FishingSessionEntity::class
     ],
-    version = 19,
+    version = 20,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -631,6 +631,26 @@ abstract class AppDatabase : RoomDatabase() {
                     """.trimIndent()
                 )
                 db.execSQL("ALTER TABLE `catches` ADD COLUMN `sessionId` INTEGER")
+            }
+        }
+
+        /**
+         * Цель выезда: за количеством или за трофеем.
+         *
+         * От неё зависит и схема закорма, и размер насадки — стая молодняка
+         * и одиночная крупная рыба зовутся разным столом. Ответ пишется в
+         * архив вместе с планом: иначе через год не понять, почему в тот
+         * выезд советовали сушёный бойл в 30 мм.
+         *
+         * Старым выездам достаётся «за количеством» — так приложение
+         * советовало до сих пор.
+         */
+        val MIGRATION_19_20 = object : Migration(19, 20) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "ALTER TABLE `fishing_sessions` ADD COLUMN `goal` TEXT NOT NULL " +
+                        "DEFAULT 'NUMBERS'"
+                )
             }
         }
     }

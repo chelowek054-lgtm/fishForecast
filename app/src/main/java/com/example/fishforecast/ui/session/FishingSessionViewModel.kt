@@ -11,6 +11,7 @@ import com.example.fishforecast.data.repository.FishingContextRepository
 import com.example.fishforecast.data.repository.FishingSessionRepository
 import com.example.fishforecast.data.repository.KnowledgeRepository
 import com.example.fishforecast.domain.knowledge.FishingMethod
+import com.example.fishforecast.domain.session.CatchGoal
 import com.example.fishforecast.domain.session.FishingStrategy
 import com.example.fishforecast.domain.session.SessionPlanInput
 import com.example.fishforecast.domain.water.DEFAULT_DEEP
@@ -46,7 +47,9 @@ data class RegionInfo(
 data class SessionForm(
     val fish: FishEntity? = null,
     val methodId: String? = null,
-    val hasGroundbait: Boolean = true
+    val hasGroundbait: Boolean = true,
+    /** За кем едем: от этого зависит и стол, и размер насадки. */
+    val goal: CatchGoal = CatchGoal.NUMBERS
 )
 
 @HiltViewModel
@@ -152,6 +155,7 @@ class FishingSessionViewModel @Inject constructor(
     private fun SessionForm.toInput(fish: FishEntity) = SessionPlanInput(
         fish = fish,
         methodId = methodId,
-        hasGroundbait = hasGroundbait
+        hasGroundbait = hasGroundbait,
+        goal = goal
     )
 }

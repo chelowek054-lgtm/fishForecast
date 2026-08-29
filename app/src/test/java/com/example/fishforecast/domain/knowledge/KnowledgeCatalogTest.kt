@@ -64,11 +64,55 @@ class KnowledgeCatalogTest {
     }
 
     @Test
+    fun `схема закорма под трофея отличается от схемы под количество`() {
+        val carpet = catalog.baitingPlan("carpet")!!
+        val program = catalog.baitingPlan("program")!!
+
+        assertEquals("numbers", carpet.goal)
+        assertEquals("trophy", program.goal)
+        assertTrue("трофейную насадку сушат", program.hardened)
+        assertFalse("под стаю сушить нечего", carpet.hardened)
+        assertTrue("программу начинают заранее", program.primeDays > 0)
+        assertTrue("у каждой схемы задан размер насадки", catalog.baitingPlans.all {
+            it.baitSizeMm.isNotBlank()
+        })
+    }
+
+    @Test
+    fun `в холодной воде есть схема на обе цели`() {
+        // Когда рыба ест мало, спорить о цели бессмысленно: работает точка.
+        val cold = catalog.baitingPlans.filter { it.water == "cold" }
+
+        assertTrue("холодная вода описана", cold.isNotEmpty())
+        assertTrue("схема не привязана к цели", cold.any { it.goal == "any" })
+    }
+
+    @Test
+    fun `коряжник и ил говорят, чего требуют от снасти`() {
+        // Место опасно не для рыбы, а для монтажа, и узнать об этом надо
+        // дома, а не на берегу.
+        assertTrue(catalog.structure("snags")!!.gearNote.isNotBlank())
+        assertTrue(catalog.structure("gravel_silt_edge")!!.gearNote.isNotBlank())
+        assertTrue("обычной воде требовать нечего", catalog.structure("water")!!.gearNote.isBlank())
+    }
+
+    @Test
+    fun `карповая донка засекает рыбу сама, поплавок — нет`() {
+        val carp = catalog.method("carp_bottom")!!
+        val float = catalog.method("float")!!
+
+        assertTrue("грузило должно быть тяжёлым", carp.minLeadG >= 100)
+        assertTrue("монтаж описан", carp.rig.isNotBlank())
+        assertEquals("поплавок засекает рукой", 0, float.minLeadG)
+    }
+
+    @Test
     fun `неизвестный идентификатор не роняет разбор`() {
         // Чужой справочник вправе знать структуры, которых эта сборка не
         // понимает: она просто их не найдёт.
         assertNull(catalog.structure("secret_hole"))
         assertNull(catalog.waterBody(null))
+        assertNull(catalog.baitingPlan("secret_recipe"))
     }
 
     @Test

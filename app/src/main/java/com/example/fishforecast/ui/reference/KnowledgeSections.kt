@@ -19,6 +19,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.example.fishforecast.domain.knowledge.BaitingPlan
 import com.example.fishforecast.domain.knowledge.KnowledgeCatalog
 import com.example.fishforecast.domain.knowledge.ObservationType
 import com.example.fishforecast.domain.knowledge.StructureType
@@ -153,6 +154,81 @@ private fun StructureCard(structure: StructureType) {
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(text = structure.notes, style = MaterialTheme.typography.bodyMedium)
             }
+
+            if (structure.gearNote.isNotBlank()) {
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = "Снасть: ${structure.gearNote}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+    }
+}
+
+/**
+ * Раздел «Закорм»: как корм ложится на дно.
+ *
+ * Состав стола задаёт справочник вида — он зависит от температуры воды.
+ * Схема отвечает на другой вопрос: тот же корм ковром и точкой зовёт разную
+ * рыбу, и вместе со схемой меняется размер насадки.
+ */
+@Composable
+fun BaitingSection(catalog: KnowledgeCatalog, modifier: Modifier = Modifier) {
+    KnowledgeList(
+        items = catalog.baitingPlans,
+        empty = "Словарь схем закорма пуст",
+        modifier = modifier,
+        header = {
+            Text(
+                text = "Мелкая и средняя рыба ходит стаей и кормится наперегонки, крупная " +
+                    "держится одиночкой и осматривает точку. Схема выбирается под ту, за " +
+                    "которой едут, и под воду — в холодной работает только точка.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    ) { plan ->
+        BaitingPlanCard(plan)
+    }
+}
+
+@Composable
+private fun BaitingPlanCard(plan: BaitingPlan) {
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Text(
+                text = plan.name,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                AssistChip(onClick = {}, label = { Text(goalText(plan.goal)) })
+                plan.water?.let { water ->
+                    AssistChip(onClick = {}, label = { Text(waterText(water)) })
+                }
+                plan.waterSize?.let { size ->
+                    AssistChip(onClick = {}, label = { Text(waterSizeText(size)) })
+                }
+            }
+            if (plan.baitSizeMm.isNotBlank()) {
+                Text(
+                    text = "Насадка: ${plan.baitSizeMm}" +
+                        if (plan.hardened) ", сушить до каменной твёрдости" else "",
+                    style = MaterialTheme.typography.bodySmall
+                )
+            }
+            if (plan.primeDays > 0) {
+                Text(
+                    text = "Кормить ${plan.primeDays} дней до ловли, не ловя",
+                    style = MaterialTheme.typography.bodySmall
+                )
+            }
+            if (plan.notes.isNotBlank()) {
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(text = plan.notes, style = MaterialTheme.typography.bodyMedium)
+            }
         }
     }
 }
@@ -235,6 +311,24 @@ private fun givesText(value: String): String = when (value) {
     "calm" -> "тихая вода"
     "thermal_refuge" -> "убежище от жары"
     "oxygen_deficit" -> "нехватка кислорода"
+    else -> value
+}
+
+private fun goalText(value: String): String = when (value) {
+    "trophy" -> "за трофеем"
+    "numbers" -> "за количеством"
+    else -> "любая цель"
+}
+
+private fun waterText(value: String): String = when (value) {
+    "cold" -> "холодная вода"
+    "warm" -> "тёплая вода"
+    else -> value
+}
+
+private fun waterSizeText(value: String): String = when (value) {
+    "large" -> "большая вода"
+    "small" -> "пруд, малое озеро"
     else -> value
 }
 

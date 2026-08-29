@@ -7,6 +7,7 @@ import com.example.fishforecast.domain.bite.WaterLayerChoice
 import com.example.fishforecast.domain.fish.Guild
 import com.example.fishforecast.domain.fish.decodeBaits
 import com.example.fishforecast.domain.fish.decodeGroundbait
+import com.example.fishforecast.domain.knowledge.BaitingPlan
 import com.example.fishforecast.domain.knowledge.FishingMethod
 import com.example.fishforecast.domain.knowledge.KnowledgeCatalog
 import com.example.fishforecast.domain.knowledge.LureGuide
@@ -42,6 +43,12 @@ data class FishingStrategy(
     val backupBait: StrategyAdvice?,
     /** Прикормка; у хищника её нет. */
     val groundbait: StrategyAdvice?,
+    /** Как рассыпать корм: ковром, точкой, дорожкой или программой. */
+    val baiting: StrategyAdvice?,
+    /** Размер и твёрдость насадки: ими отсекают мелочь. */
+    val selection: StrategyAdvice?,
+    /** Монтаж под выбранный способ. */
+    val rig: StrategyAdvice?,
     /** Лучшее окно на ближайшие часы. */
     val window: StrategyAdvice?,
     /** Что проверить на месте: структуры, за которые цепляется этот вид. */
@@ -98,8 +105,30 @@ data class SessionPlanInput(
     val fish: FishEntity,
     val methodId: String?,
     /** Есть ли с собой прикормка: без неё советы про закорм бессмысленны. */
-    val hasGroundbait: Boolean = true
+    val hasGroundbait: Boolean = true,
+    /** За кем едут: от этого зависит и стол, и размер насадки. */
+    val goal: CatchGoal = CatchGoal.NUMBERS
 )
+
+/**
+ * За кем едут.
+ *
+ * Вопрос не про амбиции, а про снасть. Мелкая и средняя рыба ходит стаей и
+ * кормится наперегонки: её зовут ковром мелкой фракции и берут на мелкую
+ * насадку. Крупная держится одиночкой, идёт своим маршрутом и осматривает
+ * точку прежде, чем сесть за неё: ей нужен корм, к которому она привыкла, и
+ * насадка, которую молодняк не утащит.
+ *
+ * Одной снастью два ответа сразу не получить — поэтому вопрос задаётся, а
+ * не угадывается.
+ */
+enum class CatchGoal(val title: String) {
+    NUMBERS("За количеством"),
+    TROPHY("За трофеем");
+
+    /** Слово словаря: справочник ходит между устройствами, перевод — дело экрана. */
+    val key: String get() = if (this == TROPHY) "trophy" else "numbers"
+}
 
 /** Условия, посчитанные приложением на ближайший час. */
 data class SessionConditions(
@@ -109,6 +138,8 @@ data class SessionConditions(
     val oxygenMgL: Double?,
     val lightPhase: LightPhase?,
     val forecast: List<BiteForecast> = emptyList(),
+    /** Тип водоёма района: на большой воде и на пруду кормят по-разному. */
+    val waterBodyId: String? = null,
     /** Ближайшие сутки по часам: из них строится раскладка. */
     val hours: List<HourContext> = emptyList(),
     /** Осадки за прошедшие сутки, мм: по ним судим о мутности. */
@@ -141,6 +172,16 @@ fun buildStrategy(
     val horizon = horizonAdvice(fish, guild, conditions, method)
     val warnings = warnings(fish, guild, conditions, method, horizon)
 
+    // Схема закорма и размер насадки — один выбор: корм и насадка должны
+    // звать одну и ту же рыбу, иначе стол собирает молодняк, а крючок ждёт
+    // трофея.
+    val largeWater = knowledge.waterBody(conditions.waterBodyId)?.large ?: false
+    val baitingPlan = if (guild == Guild.PREDATOR) {
+        null
+    } else {
+        baitingPlanFor(input.goal, cold, largeWater, knowledge)
+    }
+
     return FishingStrategy(
         fish = fish,
         guild = guild,
@@ -150,6 +191,9 @@ fun buildStrategy(
         bait = baitAdvice(fish, guild, cold, conditions, knowledge, backup = false),
         backupBait = baitAdvice(fish, guild, cold, conditions, knowledge, backup = true),
         groundbait = groundbaitAdvice(fish, guild, cold, conditions, input, method),
+        baiting = baitingAdvice(baitingPlan, input, cold, method),
+        selection = selectionAdvice(baitingPlan),
+        rig = rigAdvice(method),
         window = windowAdvice(conditions),
         lookFor = fish.preferredStructures.decodeBaits().mapNotNull { knowledge.structure(it) },
         warnings = warnings
@@ -457,6 +501,110 @@ private fun groundbaitAdvice(
             .filter { it.isNotBlank() }
             .joinToString(", "),
         reason = reason
+    )
+}
+
+/**
+ * Схема закорма под цель, воду и размер водоёма.
+ *
+ * Правило о холодной воде старше спора о цели: когда рыба ест мало, любой
+ * стол, кроме точечного, работает против рыболова — потому схема на
+ * холодную воду одна на обе цели.
+ */
+private fun baitingPlanFor(
+    goal: CatchGoal,
+    cold: Boolean,
+    largeWater: Boolean,
+    knowledge: KnowledgeCatalog
+): BaitingPlan? {
+    val water = if (cold) "cold" else "warm"
+    val size = if (largeWater) "large" else "small"
+
+    return knowledge.baitingPlans.firstOrNull {
+        it.water == water && it.goal == goal.key && it.waterSize == size
+    }
+        ?: knowledge.baitingPlans.firstOrNull {
+            it.water == water && it.goal == goal.key && it.waterSize == null
+        }
+        ?: knowledge.baitingPlans.firstOrNull { it.water == water && it.goal == "any" }
+        ?: knowledge.baitingPlans.firstOrNull { it.goal == goal.key }
+}
+
+/**
+ * Как рассыпать корм.
+ *
+ * Справочник вида отвечает, из чего делать стол; схема — как он ляжет на
+ * дно. Один и тот же корм ковром и точкой зовёт разную рыбу.
+ */
+private fun baitingAdvice(
+    plan: BaitingPlan?,
+    input: SessionPlanInput,
+    cold: Boolean,
+    method: FishingMethod?
+): StrategyAdvice? {
+    if (plan == null) return null
+    if (!input.hasGroundbait || method?.groundbait == false) return null
+
+    val reason = buildList {
+        add(plan.notes)
+        if (plan.primeDays > 0) {
+            add(
+                "Точка готовится ${plan.primeDays} дней до выезда: за один вечер такой " +
+                    "программы не сделать"
+            )
+        }
+        if (input.goal == CatchGoal.TROPHY && plan.goal != CatchGoal.TROPHY.key && cold) {
+            add("Трофейные схемы оставьте на тёплую воду: сейчас решает не объём стола, а точность")
+        }
+    }.filter { it.isNotBlank() }.joinToString(". ")
+
+    return StrategyAdvice(
+        title = "Схема закорма",
+        value = listOf(plan.name, volumeWord(plan.volume))
+            .filter { it.isNotBlank() }
+            .joinToString(", "),
+        reason = reason
+    )
+}
+
+/**
+ * Размер и твёрдость насадки.
+ *
+ * Единственный отбор, который работает до поклёвки: мелочь, лещ и раки
+ * просто не справляются с крупной сушёной насадкой, а рыба с развитыми
+ * глоточными зубами справляется.
+ */
+private fun selectionAdvice(plan: BaitingPlan?): StrategyAdvice? {
+    val size = plan?.baitSizeMm?.takeIf { it.isNotBlank() } ?: return null
+
+    return StrategyAdvice(
+        title = "Размер насадки",
+        value = if (plan.hardened) "$size, сушить до каменной твёрдости" else size,
+        reason = if (plan.hardened) {
+            "Такую насадку мелкий карп, лещ и раки не осилят — останется только крупная рыба"
+        } else {
+            "Мелкая насадка даёт быстрые поклёвки активного молодняка: рыбы больше, размер меньше"
+        }
+    )
+}
+
+/**
+ * Монтаж под способ.
+ *
+ * Сложный монтаж не ловит больше — он просто чаще подводит. Здесь принцип
+ * и вес грузила, с которого способ начинает засекать рыбу сам.
+ */
+private fun rigAdvice(method: FishingMethod?): StrategyAdvice? {
+    val rig = method?.rig?.takeIf { it.isNotBlank() } ?: return null
+
+    return StrategyAdvice(
+        title = "Монтаж",
+        value = if (method.minLeadG > 0) {
+            "${method.name}, грузило от ${method.minLeadG} г"
+        } else {
+            method.name
+        },
+        reason = rig
     )
 }
 

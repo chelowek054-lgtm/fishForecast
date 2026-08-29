@@ -26,6 +26,9 @@ data class KnowledgeCatalog(
     val observations: List<ObservationType> = emptyList(),
     /** Способы ловли: чем именно рыболов собирается ловить. */
     val methods: List<FishingMethod> = emptyList(),
+    /** Схемы закорма: как корм ложится на дно и кого этим зовут. */
+    @SerialName("baiting_plans")
+    val baitingPlans: List<BaitingPlan> = emptyList(),
     @SerialName("lure_types")
     val lureTypes: List<LureType> = emptyList(),
     @SerialName("lure_guides")
@@ -43,6 +46,8 @@ data class KnowledgeCatalog(
     fun methodsFor(guildName: String): List<FishingMethod> = methods.filter { it.guild == guildName }
 
     fun lureType(id: String): LureType? = lureTypes.firstOrNull { it.id == id }
+
+    fun baitingPlan(id: String): BaitingPlan? = baitingPlans.firstOrNull { it.id == id }
 
     companion object {
         const val SCHEMA = "fishforecast.knowledge/1"
@@ -114,7 +119,16 @@ data class StructureType(
     /** Поправка к температуре воды, °C: донный ключ холодит место. */
     @SerialName("water_offset_c")
     val waterOffsetC: Double = 0.0,
-    val notes: String = ""
+    val notes: String = "",
+    /**
+     * Чего структура требует от снасти.
+     *
+     * Отдельно от `notes` намеренно: там сказано, чем место хорошо для
+     * рыбы, а здесь — чем оно опасно для монтажа. В коряжнике решает не
+     * прикормка, а фрикцион и диаметр лески; в иле — длина поводка.
+     */
+    @SerialName("gear_note")
+    val gearNote: String = ""
 )
 
 /**
@@ -191,6 +205,51 @@ data class FishingMethod(
     val horizon: String = "bottom",
     /** Применяется ли с прикормкой. */
     val groundbait: Boolean = false,
+    /**
+     * Монтаж: то, что рыболов вяжет дома и забывает на воде.
+     *
+     * Здесь принцип, а не список деталей: чем монтаж проще, тем меньше в
+     * нём того, что развяжется или перетрётся.
+     */
+    val rig: String = "",
+    /** Грузило, с которого способ начинает засекать рыбу сам, г. */
+    @SerialName("min_lead_g")
+    val minLeadG: Int = 0,
+    val notes: String = ""
+)
+
+/**
+ * Схема закорма: как корм ложится на дно.
+ *
+ * Справочник вида говорит, из чего делать стол, — состав от температуры
+ * воды. Но тот же корм, рассыпанный по-разному, зовёт разную рыбу: ковёр
+ * мелкой фракции разжигает конкуренцию в стае молодняка, десяток бойлов у
+ * насадки собирает осторожную одиночку. Поэтому схема живёт отдельно от
+ * состава и выбирается по цели выезда, а не по градусам.
+ */
+@Serializable
+data class BaitingPlan(
+    val id: String,
+    val name: String,
+    /** Как ложится корм: `spot`, `carpet`, `line`, `program`. */
+    val spread: String = "spot",
+    /** За кем едут: `numbers`, `trophy` или `any`. */
+    val goal: String = "any",
+    /** `cold`, `warm`; пусто — схема не про температуру. */
+    val water: String? = null,
+    /** `small` или `large`; пусто — размер водоёма не важен. */
+    @SerialName("water_size")
+    val waterSize: String? = null,
+    /** Объём корма теми же словами, что и в справочнике вида. */
+    val volume: String = "medium",
+    /** Диаметр насадки: он же отсекает мелочь. */
+    @SerialName("bait_size_mm")
+    val baitSizeMm: String = "",
+    /** Сушить ли насадку до каменной твёрдости. */
+    val hardened: Boolean = false,
+    /** Сколько дней кормят до ловли; 0 — кормят и ловят разом. */
+    @SerialName("prime_days")
+    val primeDays: Int = 0,
     val notes: String = ""
 )
 
