@@ -9,7 +9,6 @@ import com.example.fishforecast.data.local.dao.FishDao
 import com.example.fishforecast.data.local.dao.FishingSessionDao
 import com.example.fishforecast.data.local.dao.FishingSpotDao
 import com.example.fishforecast.data.local.dao.PressureLogDao
-import com.example.fishforecast.data.local.dao.ZoneDao
 import com.example.fishforecast.data.local.dao.SavedMapDao
 import com.example.fishforecast.data.local.dao.WeatherDao
 import com.example.fishforecast.data.local.entities.CatchEntity
@@ -18,8 +17,6 @@ import com.example.fishforecast.data.local.entities.FishEntity
 import com.example.fishforecast.data.local.entities.FishingSessionEntity
 import com.example.fishforecast.data.local.entities.FishingSpotEntity
 import com.example.fishforecast.data.local.entities.PressureLogEntity
-import com.example.fishforecast.data.local.entities.SectorEntity
-import com.example.fishforecast.data.local.entities.ZoneEntity
 import com.example.fishforecast.data.local.entities.SavedMapEntity
 import com.example.fishforecast.data.local.entities.WeatherEntity
 
@@ -32,11 +29,9 @@ import com.example.fishforecast.data.local.entities.WeatherEntity
         CatchEntity::class,
         DailySunEntity::class,
         PressureLogEntity::class,
-        ZoneEntity::class,
-        SectorEntity::class,
         FishingSessionEntity::class
     ],
-    version = 20,
+    version = 21,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -46,7 +41,6 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun fishingSpotDao(): FishingSpotDao
     abstract fun catchDao(): CatchDao
     abstract fun pressureLogDao(): PressureLogDao
-    abstract fun zoneDao(): ZoneDao
     abstract fun fishingSessionDao(): FishingSessionDao
 
     companion object {
@@ -651,6 +645,58 @@ abstract class AppDatabase : RoomDatabase() {
                     "ALTER TABLE `fishing_sessions` ADD COLUMN `goal` TEXT NOT NULL " +
                         "DEFAULT 'NUMBERS'"
                 )
+            }
+        }
+
+        /**
+         * Зоны и секторы уходят: на воде остаются точки.
+         *
+         * Обводка контуров обещала больше, чем давала. Нарисованная граница
+         * никуда не входила: расчёт клёва считает место по структурам точки,
+         * а не по площади пятна, и зона оставалась картинкой, которую надо
+         * рисовать пальцем, беречь при обмене и объяснять на сервере. Всё,
+         * ради чего её заводили, точка говорит короче: где встать, куда
+         * бросать и что там за место.
+         *
+         * Точки переезжают целиком, теряя только привязку к зоне и сектору.
+         * Сами таблицы удаляются: держать их пустыми — обещать возвращение.
+         */
+        val MIGRATION_20_21 = object : Migration(20, 21) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `fishing_spots_new` (
+                        `id` INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+                        `uid` TEXT NOT NULL,
+                        `name` TEXT NOT NULL,
+                        `latitude` REAL NOT NULL,
+                        `longitude` REAL NOT NULL,
+                        `fishId` INTEGER,
+                        `note` TEXT NOT NULL,
+                        `placement` TEXT NOT NULL,
+                        `structures` TEXT NOT NULL,
+                        `createdAt` INTEGER NOT NULL,
+                        FOREIGN KEY(`fishId`) REFERENCES `fish`(`id`) ON UPDATE NO ACTION ON DELETE SET NULL
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL(
+                    """
+                    INSERT INTO `fishing_spots_new`
+                    SELECT `id`, `uid`, `name`, `latitude`, `longitude`, `fishId`, `note`,
+                           `placement`, `structures`, `createdAt`
+                    FROM `fishing_spots`
+                    """.trimIndent()
+                )
+                db.execSQL("DROP TABLE `fishing_spots`")
+                db.execSQL("ALTER TABLE `fishing_spots_new` RENAME TO `fishing_spots`")
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_fishing_spots_fishId` " +
+                        "ON `fishing_spots` (`fishId`)"
+                )
+
+                db.execSQL("DROP TABLE IF EXISTS `zone_sectors`")
+                db.execSQL("DROP TABLE IF EXISTS `zones`")
             }
         }
     }

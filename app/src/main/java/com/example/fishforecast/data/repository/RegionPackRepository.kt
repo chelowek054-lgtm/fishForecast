@@ -6,7 +6,6 @@ import com.example.fishforecast.data.local.ActiveMapStore
 import com.example.fishforecast.data.local.dao.FishDao
 import com.example.fishforecast.data.local.dao.FishingSpotDao
 import com.example.fishforecast.data.local.dao.SavedMapDao
-import com.example.fishforecast.data.local.dao.ZoneDao
 import com.example.fishforecast.data.local.entities.FishEntity
 import com.example.fishforecast.data.local.entities.FishingSpotEntity
 import com.example.fishforecast.domain.share.PackAuthor
@@ -25,10 +24,10 @@ import javax.inject.Singleton
 /**
  * Обмен районами.
  *
- * Пакет — это знание о месте: границы, норма давления, глубины, обведённые
- * зоны с секторами, точки и виды рыб, которые здесь берут. Тайлы в него не
- * входят: получатель докачает их сам по границам района, файл остаётся в
- * килобайтах, и чужие тайлы никуда не раздаются.
+ * Пакет — это знание о месте: границы, норма давления, глубины, точки и
+ * виды рыб, которые здесь берут. Тайлы в него не входят: получатель
+ * докачает их сам по границам района, файл остаётся в килобайтах, и чужие
+ * тайлы никуда не раздаются.
  *
  * Всё связано глобальными идентификаторами, поэтому один и тот же район,
  * пришедший дважды или от разных людей, остаётся одним районом. Это же
@@ -40,7 +39,6 @@ class RegionPackRepository @Inject constructor(
     private val savedMapDao: SavedMapDao,
     private val spotDao: FishingSpotDao,
     private val fishDao: FishDao,
-    private val zoneDao: ZoneDao,
     private val store: ActiveMapStore
 ) {
 
@@ -48,8 +46,6 @@ class RegionPackRepository @Inject constructor(
     data class ImportSummary(
         val regionName: String,
         val regionAdded: Boolean,
-        val zonesAdded: Int,
-        val sectorsAdded: Int,
         val spotsAdded: Int,
         val fishAdded: Int,
         val needsTiles: Boolean
@@ -63,8 +59,6 @@ class RegionPackRepository @Inject constructor(
      */
     suspend fun exportRegion(mapId: Int): Result<File> = runCatching {
         val map = savedMapDao.getRegionById(mapId) ?: error("Район не найден")
-        val zones = zoneDao.zonesOf(map.uid)
-        val sectors = zoneDao.sectorsOf(zones.map { it.uid })
         val spots = spotDao.allSpots().filter { map.contains(it.latitude, it.longitude) }
         val allFish = fishDao.allFish()
         // Справочник уезжает не целиком: только те виды, которые привязаны к
@@ -73,8 +67,6 @@ class RegionPackRepository @Inject constructor(
 
         val pack = RegionPackCodec.build(
             map = map,
-            zones = zones,
-            sectors = sectors,
             spots = spots,
             fish = fish,
             packId = UUID.randomUUID().toString(),
@@ -143,17 +135,6 @@ class RegionPackRepository @Inject constructor(
             }
         }
 
-        var zonesAdded = 0
-        contents.zones.forEach { zone ->
-            zonesAdded++
-            zoneDao.insertZone(zone)
-        }
-        var sectorsAdded = 0
-        contents.sectors.forEach { sector ->
-            sectorsAdded++
-            zoneDao.insertSector(sector)
-        }
-
         var spotsAdded = 0
         contents.spots.forEach { spot ->
             val known = spotDao.getSpotByUid(spot.uid)
@@ -165,8 +146,6 @@ class RegionPackRepository @Inject constructor(
         ImportSummary(
             regionName = contents.map.name,
             regionAdded = existingMap == null,
-            zonesAdded = zonesAdded,
-            sectorsAdded = sectorsAdded,
             spotsAdded = spotsAdded,
             fishAdded = fishAdded,
             // Тайлов в пакете нет: без сети чужой район открыть не выйдет.

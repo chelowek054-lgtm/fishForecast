@@ -3,8 +3,6 @@ package com.example.fishforecast.domain.share
 import com.example.fishforecast.data.local.entities.FishEntity
 import com.example.fishforecast.data.local.entities.FishingSpotEntity
 import com.example.fishforecast.data.local.entities.SavedMapEntity
-import com.example.fishforecast.data.local.entities.SectorEntity
-import com.example.fishforecast.data.local.entities.ZoneEntity
 import com.example.fishforecast.domain.fish.decodeBaits
 import com.example.fishforecast.domain.fish.encodeBaits
 import com.example.fishforecast.domain.fish.toCatalogFish
@@ -58,69 +56,43 @@ object RegionPackCodec {
     /** Собирает пакет из того, что накопилось у рыболова по этому району. */
     fun build(
         map: SavedMapEntity,
-        zones: List<ZoneEntity>,
-        sectors: List<SectorEntity>,
         spots: List<FishingSpotEntity>,
         fish: List<FishEntity>,
         packId: String,
         createdAt: String,
         author: PackAuthor?
-    ): RegionPack {
-        val sectorsByZone = sectors.groupBy { it.zoneUid }
-
-        return RegionPack(
-            id = packId,
-            createdAt = createdAt,
-            author = author,
-            region = PackRegion(
-                id = map.uid,
-                name = map.name,
-                bounds = PackBounds(map.north, map.south, map.east, map.west),
-                minZoom = map.minZoom,
-                maxZoom = map.maxZoom,
-                normalPressureMmHg = map.baselinePressureMmHg,
-                elevationM = map.elevationM,
-                waterBodyType = map.waterBodyType,
-                shallowDepthM = map.shallowDepthM,
-                deepDepthM = map.deepDepthM
-            ),
-            zones = zones.map { zone ->
-                PackZone(
-                    id = zone.uid,
-                    name = zone.name,
-                    kind = zone.kind,
-                    outline = zone.outline.decodeOutline().map { PackPoint(it.latitude, it.longitude) },
-                    note = zone.note,
-                    sectors = sectorsByZone[zone.uid].orEmpty().map { sector ->
-                        PackSector(
-                            id = sector.uid,
-                            name = sector.name,
-                            outline = sector.outline.decodeOutline()
-                                .map { PackPoint(it.latitude, it.longitude) },
-                            note = sector.note
-                        )
-                    }
-                )
-            },
-            spots = spots.map { spot ->
-                PackSpot(
-                    id = spot.uid,
-                    name = spot.name,
-                    lat = spot.latitude,
-                    lon = spot.longitude,
-                    placement = spot.placement,
-                    note = spot.note,
-                    structures = spot.structures.decodeBaits(),
-                    // Ссылка на вид — глобальная: числовой ключ справочника
-                    // у получателя свой.
-                    fishId = fish.firstOrNull { it.id == spot.fishId }?.uid,
-                    zoneId = spot.zoneUid,
-                    sectorId = spot.sectorUid
-                )
-            },
-            fish = fish.map { it.toCatalogFish() }
-        )
-    }
+    ): RegionPack = RegionPack(
+        id = packId,
+        createdAt = createdAt,
+        author = author,
+        region = PackRegion(
+            id = map.uid,
+            name = map.name,
+            bounds = PackBounds(map.north, map.south, map.east, map.west),
+            minZoom = map.minZoom,
+            maxZoom = map.maxZoom,
+            normalPressureMmHg = map.baselinePressureMmHg,
+            elevationM = map.elevationM,
+            waterBodyType = map.waterBodyType,
+            shallowDepthM = map.shallowDepthM,
+            deepDepthM = map.deepDepthM
+        ),
+        spots = spots.map { spot ->
+            PackSpot(
+                id = spot.uid,
+                name = spot.name,
+                lat = spot.latitude,
+                lon = spot.longitude,
+                placement = spot.placement,
+                note = spot.note,
+                structures = spot.structures.decodeBaits(),
+                // Ссылка на вид — глобальная: числовой ключ справочника
+                // у получателя свой.
+                fishId = fish.firstOrNull { it.id == spot.fishId }?.uid
+            )
+        },
+        fish = fish.map { it.toCatalogFish() }
+    )
 
     /**
      * Разбирает пакет в сущности.
@@ -148,27 +120,6 @@ object RegionPackCodec {
             shallowDepthM = pack.region.shallowDepthM,
             deepDepthM = pack.region.deepDepthM
         ),
-        zones = pack.zones.map { zone ->
-            ZoneEntity(
-                uid = zone.id,
-                mapUid = pack.region.id,
-                name = zone.name,
-                kind = zone.kind,
-                outline = zone.outline.map { GeoPoint(it.lat, it.lon) }.encodeOutline(),
-                note = zone.note
-            )
-        },
-        sectors = pack.zones.flatMap { zone ->
-            zone.sectors.map { sector ->
-                SectorEntity(
-                    uid = sector.id,
-                    zoneUid = zone.id,
-                    name = sector.name,
-                    outline = sector.outline.map { GeoPoint(it.lat, it.lon) }.encodeOutline(),
-                    note = sector.note
-                )
-            }
-        },
         spots = pack.spots.map { spot ->
             FishingSpotEntity(
                 uid = spot.id,
@@ -177,9 +128,7 @@ object RegionPackCodec {
                 longitude = spot.lon,
                 note = spot.note,
                 placement = spot.placement,
-                structures = spot.structures.encodeBaits(),
-                zoneUid = spot.zoneId,
-                sectorUid = spot.sectorId
+                structures = spot.structures.encodeBaits()
             )
         },
         // Привязка точки к виду хранится отдельно: числовой ключ рыбы
@@ -193,8 +142,6 @@ object RegionPackCodec {
 /** Содержимое пакета, разобранное в сущности приложения. */
 data class RegionPackContents(
     val map: SavedMapEntity,
-    val zones: List<ZoneEntity>,
-    val sectors: List<SectorEntity>,
     val spots: List<FishingSpotEntity>,
     /** Точка (uid) → вид рыбы (uid). */
     val spotFish: Map<String, String>,

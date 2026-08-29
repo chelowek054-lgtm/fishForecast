@@ -55,8 +55,5 @@ data class FishingSpotEntity(
      * коряжник, бровка, приток. Ими место и отличается от соседнего.
      */
     val structures: String = "[]",
-    /** В какой зоне и секторе стоит точка; null — привязки нет. */
-    val zoneUid: String? = null,
-    val sectorUid: String? = null,
     val createdAt: Long = System.currentTimeMillis()
 )

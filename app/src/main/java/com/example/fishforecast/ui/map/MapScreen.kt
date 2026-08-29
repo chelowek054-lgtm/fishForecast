@@ -14,9 +14,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Draw
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Layers
@@ -28,7 +25,6 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
@@ -63,14 +59,10 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.example.fishforecast.data.local.entities.FishEntity
 import com.example.fishforecast.data.local.entities.FishingSpotEntity
 import com.example.fishforecast.data.local.entities.SpotPlacement
-import com.example.fishforecast.data.local.entities.SectorEntity
-import com.example.fishforecast.data.local.entities.ZoneEntity
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
-import com.example.fishforecast.data.local.entities.ZoneKind
+import com.example.fishforecast.domain.fish.decodeBaits
 import com.example.fishforecast.domain.knowledge.StructureType
-import com.example.fishforecast.domain.share.GeoPoint
-import com.example.fishforecast.domain.share.decodeOutline
 import com.example.fishforecast.data.local.entities.SavedMapEntity
 import com.example.fishforecast.data.repository.RegionDownloadState
 import com.example.fishforecast.domain.share.GpxWriter
@@ -84,10 +76,6 @@ import org.maplibre.android.maps.Style
 import org.maplibre.android.plugins.annotation.Circle
 import org.maplibre.android.plugins.annotation.CircleManager
 import org.maplibre.android.plugins.annotation.CircleOptions
-import org.maplibre.android.plugins.annotation.FillManager
-import org.maplibre.android.plugins.annotation.FillOptions
-import org.maplibre.android.plugins.annotation.LineManager
-import org.maplibre.android.plugins.annotation.LineOptions
 import org.maplibre.android.plugins.annotation.OnCircleClickListener
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -100,12 +88,7 @@ fun MapScreen(
     val focusRequests by viewModel.focusRequests
     val locationError by viewModel.locationError
     val activeMap by viewModel.activeMap.collectAsState()
-    val zones by viewModel.zones.collectAsState()
-    val sectors by viewModel.sectors.collectAsState()
-    val outline by viewModel.outline
     val structureTypes by viewModel.structureTypes.collectAsState()
-    val drawing by viewModel.drawing
-    var showZoneDialog by remember { mutableStateOf(false) }
     val baseLayer by viewModel.baseLayer.collectAsState()
     val downloadState by viewModel.downloadState
 
@@ -178,19 +161,6 @@ fun MapScreen(
         },
         floatingActionButton = {
             Column(horizontalAlignment = Alignment.End) {
-                if (activeMap != null) {
-                    SmallFloatingActionButton(
-                        onClick = {
-                            if (drawing) viewModel.cancelDrawing() else viewModel.startDrawing()
-                        }
-                    ) {
-                        Icon(
-                            imageVector = if (drawing) Icons.Default.Close else Icons.Default.Draw,
-                            contentDescription = if (drawing) "Отменить обводку" else "Обвести зону"
-                        )
-                    }
-                    Spacer(modifier = Modifier.height(12.dp))
-                }
                 SmallFloatingActionButton(onClick = { viewModel.locateUser() }) {
                     Icon(Icons.Default.MyLocation, contentDescription = "Моё местоположение")
                 }
@@ -226,12 +196,6 @@ fun MapScreen(
                         readyMap.addOnMapLongClickListener { point ->
                             newSpotPoint = point
                             true
-                        }
-                        // Обводка ставит вершины обычным нажатием: длинное
-                        // уже занято точкой ловли, и держать палец на каждой
-                        // вершине контура было бы мучением.
-                        readyMap.addOnMapClickListener { point ->
-                            viewModel.addOutlinePoint(point.latitude, point.longitude)
                         }
                         map = readyMap
                     }
@@ -278,15 +242,6 @@ fun MapScreen(
                 location = userLocation
             )
 
-            ZonesLayer(
-                mapView = mapView,
-                map = map,
-                style = mapStyle,
-                zones = zones,
-                sectors = sectors,
-                outline = outline
-            )
-
             SpotsLayer(
                 mapView = mapView,
                 map = map,
@@ -299,17 +254,6 @@ fun MapScreen(
                 LocationErrorBanner(
                     message = message,
                     onDismiss = { viewModel.dismissLocationError() },
-                    modifier = Modifier
-                        .align(Alignment.TopCenter)
-                        .padding(16.dp)
-                )
-            }
-
-            if (drawing) {
-                DrawingPanel(
-                    pointCount = outline.size,
-                    onUndo = { viewModel.undoOutlinePoint() },
-                    onFinish = { showZoneDialog = true },
                     modifier = Modifier
                         .align(Alignment.TopCenter)
                         .padding(16.dp)
@@ -385,32 +329,21 @@ fun MapScreen(
         )
     }
 
-    if (showZoneDialog) {
-        SaveZoneDialog(
-            pointCount = outline.size,
-            parentZone = viewModel.enclosingZone(),
-            structureTypes = structureTypes,
-            onDismiss = { showZoneDialog = false },
-            onConfirm = { name, structureId, asSector ->
-                showZoneDialog = false
-                viewModel.saveOutline(name, structureId, asSector)
-            }
-        )
-    }
-
     newSpotPoint?.let { point ->
         AddSpotDialog(
             point = point,
             fishList = fishList,
+            structureTypes = structureTypes,
             onDismiss = { newSpotPoint = null },
-            onConfirm = { name, fishId, note, placement ->
+            onConfirm = { name, fishId, note, placement, structures ->
                 viewModel.addSpot(
                     name = name,
                     latitude = point.latitude,
                     longitude = point.longitude,
                     fishId = fishId,
                     note = note,
-                    placement = placement
+                    placement = placement,
+                    structures = structures
                 )
                 newSpotPoint = null
             }
@@ -422,6 +355,7 @@ fun MapScreen(
         SpotDetailsDialog(
             spot = spot,
             fishName = fishName,
+            structureTypes = structureTypes,
             onDismiss = { selectedSpot = null },
             onShare = { shareSpotLocation(context, spot, fishName) },
             onDelete = {
@@ -432,17 +366,29 @@ fun MapScreen(
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun AddSpotDialog(
     point: LatLng,
     fishList: List<FishEntity>,
+    structureTypes: List<StructureType>,
     onDismiss: () -> Unit,
-    onConfirm: (name: String, fishId: Int?, note: String, placement: SpotPlacement) -> Unit
+    onConfirm: (
+        name: String,
+        fishId: Int?,
+        note: String,
+        placement: SpotPlacement,
+        structures: List<String>
+    ) -> Unit
 ) {
     var name by remember { mutableStateOf("") }
     var note by remember { mutableStateOf("") }
     var fishId by remember { mutableStateOf<Int?>(null) }
     var placement by remember { mutableStateOf(SpotPlacement.WATER) }
+    // Чем это место отличается от соседнего — единственное, ради чего его и
+    // сохраняют. Структур бывает несколько разом: коряга на бровке остаётся
+    // и корягой, и бровкой.
+    var structures by remember { mutableStateOf(emptySet<String>()) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -479,6 +425,26 @@ private fun AddSpotDialog(
                     }
                 }
 
+                if (structureTypes.isNotEmpty()) {
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Text("Что это за место", style = MaterialTheme.typography.labelMedium)
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        structureTypes.forEach { option ->
+                            FilterChip(
+                                selected = option.id in structures,
+                                onClick = {
+                                    structures = if (option.id in structures) {
+                                        structures - option.id
+                                    } else {
+                                        structures + option.id
+                                    }
+                                },
+                                label = { Text(option.name) }
+                            )
+                        }
+                    }
+                }
+
                 if (fishList.isNotEmpty()) {
                     Spacer(modifier = Modifier.height(12.dp))
                     Text("Кто здесь берёт:", style = MaterialTheme.typography.labelMedium)
@@ -498,7 +464,13 @@ private fun AddSpotDialog(
         confirmButton = {
             TextButton(
                 onClick = {
-                    onConfirm(name.ifBlank { "Точка" }, fishId, note, placement)
+                    onConfirm(
+                        name.ifBlank { "Точка" },
+                        fishId,
+                        note,
+                        placement,
+                        structures.toList()
+                    )
                 }
             ) {
                 Text("Сохранить")
@@ -514,6 +486,7 @@ private fun AddSpotDialog(
 private fun SpotDetailsDialog(
     spot: FishingSpotEntity,
     fishName: String?,
+    structureTypes: List<StructureType>,
     onDismiss: () -> Unit,
     onShare: () -> Unit,
     onDelete: () -> Unit
@@ -527,9 +500,23 @@ private fun SpotDetailsDialog(
                     text = "%.5f, %.5f".format(spot.latitude, spot.longitude),
                     style = MaterialTheme.typography.bodySmall
                 )
+                Text(
+                    text = if (spot.placement == SpotPlacement.SHORE.name) {
+                        "Берег: отсюда ловят"
+                    } else {
+                        "Вода: сюда бросают"
+                    },
+                    style = MaterialTheme.typography.bodySmall
+                )
                 if (fishName != null) {
                     Spacer(modifier = Modifier.height(8.dp))
                     Text("Здесь берёт: $fishName")
+                }
+                val places = spot.structures.decodeBaits()
+                    .mapNotNull { id -> structureTypes.firstOrNull { it.id == id }?.name }
+                if (places.isNotEmpty()) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text("Место: ${places.joinToString(", ") { it.lowercase() }}")
                 }
                 if (spot.note.isNotBlank()) {
                     Spacer(modifier = Modifier.height(8.dp))
@@ -547,204 +534,6 @@ private fun SpotDetailsDialog(
                 }
                 TextButton(onClick = onDismiss) { Text("Закрыть") }
             }
-        }
-    )
-}
-
-/**
- * Зоны и секторы поверх карты.
- *
- * Заливка полупрозрачная: под ней должно быть видно берег и рельеф, ради
- * которых контур и рисовался. Секторы обводятся линией — их читают как
- * разметку внутри зоны, а не как отдельные пятна.
- */
-@Composable
-private fun ZonesLayer(
-    mapView: MapView,
-    map: MapLibreMap?,
-    style: Style?,
-    zones: List<ZoneEntity>,
-    sectors: List<SectorEntity>,
-    outline: List<GeoPoint>
-) {
-    val readyMap = map ?: return
-    val readyStyle = style ?: return
-
-    val fillManager = remember(readyMap, readyStyle) {
-        FillManager(mapView, readyMap, readyStyle)
-    }
-    val lineManager = remember(readyMap, readyStyle) {
-        LineManager(mapView, readyMap, readyStyle)
-    }
-
-    // Аннотации живут в нативном слое и переживают свой Style, если их не
-    // снять руками, — тогда рендер-тред обращается к освобождённой памяти.
-    DisposableEffect(fillManager, lineManager) {
-        onDispose {
-            fillManager.onDestroy()
-            lineManager.onDestroy()
-        }
-    }
-
-    DisposableEffect(fillManager, lineManager, zones, sectors, outline) {
-        fillManager.deleteAll()
-        lineManager.deleteAll()
-
-        zones.forEach { zone ->
-            val points = zone.outline.decodeOutline().map { LatLng(it.latitude, it.longitude) }
-            if (points.size < 3) return@forEach
-            val water = zone.kind.equals(ZoneKind.WATER.name, ignoreCase = true)
-            val color = if (water) "#1E88E5" else "#8D6E63"
-            fillManager.create(
-                FillOptions()
-                    .withLatLngs(listOf(points))
-                    .withFillColor(color)
-                    .withFillOpacity(0.18f)
-            )
-            lineManager.create(
-                LineOptions()
-                    .withLatLngs(points + points.first())
-                    .withLineColor(color)
-                    .withLineWidth(2f)
-            )
-        }
-
-        sectors.forEach { sector ->
-            val points = sector.outline.decodeOutline().map { LatLng(it.latitude, it.longitude) }
-            if (points.size < 3) return@forEach
-            lineManager.create(
-                LineOptions()
-                    .withLatLngs(points + points.first())
-                    .withLineColor("#FBC02D")
-                    .withLineWidth(1.5f)
-            )
-        }
-
-        // Контур в работе показывается ломаной: пока он не замкнут, это ещё
-        // не зона, и заливать его нечестно.
-        if (outline.size >= 2) {
-            lineManager.create(
-                LineOptions()
-                    .withLatLngs(outline.map { LatLng(it.latitude, it.longitude) })
-                    .withLineColor("#D32F2F")
-                    .withLineWidth(2.5f)
-            )
-        }
-
-        onDispose { }
-    }
-}
-
-/** Панель обводки: сколько вершин поставлено и что с ними можно сделать. */
-@Composable
-private fun DrawingPanel(
-    pointCount: Int,
-    onUndo: () -> Unit,
-    onFinish: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    Card(modifier = modifier) {
-        Column(modifier = Modifier.padding(12.dp)) {
-            Text(
-                text = "Нажимайте по карте, обводя границу",
-                style = MaterialTheme.typography.bodyMedium
-            )
-            Text(
-                text = "Вершин: $pointCount" + if (pointCount < 3) " — нужно хотя бы три" else "",
-                style = MaterialTheme.typography.bodySmall
-            )
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                TextButton(onClick = onUndo, enabled = pointCount > 0) { Text("Убрать последнюю") }
-                TextButton(onClick = onFinish, enabled = pointCount >= 3) { Text("Замкнуть") }
-            }
-        }
-    }
-}
-
-@OptIn(ExperimentalLayoutApi::class)
-@Composable
-private fun SaveZoneDialog(
-    pointCount: Int,
-    parentZone: ZoneEntity?,
-    structureTypes: List<StructureType>,
-    onDismiss: () -> Unit,
-    onConfirm: (name: String, structureId: String, asSector: Boolean) -> Unit
-) {
-    var name by remember { mutableStateOf("") }
-    // Тип зоны — структура из словаря знаний: не просто «вода», а заводь,
-    // коряжник или выход ключа. Ради этого зоны и рисуются.
-    var structureId by remember { mutableStateOf(ZoneKind.WATER.name.lowercase()) }
-    // Контур внутри чужой зоны почти всегда сектор: на водоёмах места
-    // нумеруют внутри участков, а не поверх них.
-    var asSector by remember { mutableStateOf(parentZone != null) }
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(if (asSector) "Новый сектор" else "Новая зона") },
-        text = {
-            Column {
-                Text(
-                    text = "Обведено вершин: $pointCount",
-                    style = MaterialTheme.typography.bodySmall
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-                OutlinedTextField(
-                    value = name,
-                    onValueChange = { name = it },
-                    label = { Text(if (asSector) "Номер или имя сектора" else "Название зоны") },
-                    singleLine = true
-                )
-
-                parentZone?.let { zone ->
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        FilterChip(
-                            selected = asSector,
-                            onClick = { asSector = true },
-                            label = { Text("Сектор «${zone.name}»") }
-                        )
-                        FilterChip(
-                            selected = !asSector,
-                            onClick = { asSector = false },
-                            label = { Text("Отдельная зона") }
-                        )
-                    }
-                }
-
-                if (!asSector) {
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(text = "Что это за место", style = MaterialTheme.typography.labelLarge)
-                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        structureTypes.forEach { option ->
-                            FilterChip(
-                                selected = structureId == option.id,
-                                onClick = { structureId = option.id },
-                                label = { Text(option.name) }
-                            )
-                        }
-                    }
-                    Text(
-                        text = structureTypes.firstOrNull { it.id == structureId }?.notes.orEmpty(),
-                        style = MaterialTheme.typography.bodySmall
-                    )
-                }
-            }
-        },
-        confirmButton = {
-            TextButton(
-                onClick = {
-                    onConfirm(
-                        name.ifBlank { if (asSector) "Сектор" else "Зона" },
-                        structureId,
-                        asSector
-                    )
-                }
-            ) {
-                Text("Сохранить")
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Отмена") }
         }
     )
 }

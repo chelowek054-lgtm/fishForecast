@@ -34,7 +34,14 @@ data class RegionPack(
     val createdAt: String,
     val author: PackAuthor? = null,
     val region: PackRegion,
-    val zones: List<PackZone> = emptyList(),
+    /**
+     * Точки — всё, что рыболов знает о местах внутри района.
+     *
+     * Обведённые зоны и секторы отсюда ушли: контур ни во что не входил, а
+     * формат за него платил. Пакеты, собранные до этого, читаются по-прежнему
+     * — незнакомый раздел просто игнорируется, и поколение схемы менять
+     * незачем.
+     */
     val spots: List<PackSpot> = emptyList(),
     /**
      * Виды рыб этой местности — в том же формате, в каком справочник
@@ -97,32 +104,6 @@ data class PackBounds(
     val west: Double
 )
 
-/** Обведённая рыболовом граница вместе со своими секторами. */
-@Serializable
-data class PackZone(
-    val id: String,
-    val name: String,
-    /** `WATER` или `SHORE`. */
-    val kind: String,
-    val outline: List<PackPoint>,
-    val note: String = "",
-    val sectors: List<PackSector> = emptyList()
-)
-
-@Serializable
-data class PackSector(
-    val id: String,
-    val name: String,
-    val outline: List<PackPoint>,
-    val note: String = ""
-)
-
-@Serializable
-data class PackPoint(
-    val lat: Double,
-    val lon: Double
-)
-
 @Serializable
 data class PackSpot(
     val id: String,
@@ -135,8 +116,6 @@ data class PackSpot(
     /** Структуры места из словаря знаний. */
     val structures: List<String> = emptyList(),
     /** Вид рыбы по его глобальному идентификатору; null — не привязана. */
-    val fishId: String? = null,
-    val zoneId: String? = null,
-    val sectorId: String? = null
+    val fishId: String? = null
 )
 

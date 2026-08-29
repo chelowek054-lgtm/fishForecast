@@ -3,10 +3,7 @@ package com.example.fishforecast.domain.share
 import com.example.fishforecast.data.local.entities.FishEntity
 import com.example.fishforecast.data.local.entities.FishingSpotEntity
 import com.example.fishforecast.data.local.entities.SavedMapEntity
-import com.example.fishforecast.data.local.entities.SectorEntity
 import com.example.fishforecast.data.local.entities.SpotPlacement
-import com.example.fishforecast.data.local.entities.ZoneEntity
-import com.example.fishforecast.data.local.entities.ZoneKind
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -45,29 +42,6 @@ class RegionPackCodecTest {
         maxPressure = 760f
     )
 
-    private val zone = ZoneEntity(
-        uid = "zone-1",
-        mapUid = "region-1",
-        name = "Северный залив",
-        kind = ZoneKind.WATER.name,
-        outline = listOf(
-            GeoPoint(55.79, 37.61),
-            GeoPoint(55.79, 37.63),
-            GeoPoint(55.77, 37.62)
-        ).encodeOutline()
-    )
-
-    private val sector = SectorEntity(
-        uid = "sector-1",
-        zoneUid = "zone-1",
-        name = "3",
-        outline = listOf(
-            GeoPoint(55.785, 37.615),
-            GeoPoint(55.785, 37.62),
-            GeoPoint(55.78, 37.617)
-        ).encodeOutline()
-    )
-
     private val spot = FishingSpotEntity(
         id = 11,
         uid = "spot-1",
@@ -77,14 +51,11 @@ class RegionPackCodecTest {
         fishId = 3,
         note = "Бровка вдоль камыша",
         placement = SpotPlacement.SHORE.name,
-        zoneUid = "zone-1",
-        sectorUid = "sector-1"
+        structures = "[\"drop_off\",\"reeds\"]"
     )
 
     private fun pack() = RegionPackCodec.build(
         map = map,
-        zones = listOf(zone),
-        sectors = listOf(sector),
         spots = listOf(spot),
         fish = listOf(carp),
         packId = "pack-1",
@@ -100,10 +71,8 @@ class RegionPackCodecTest {
         assertEquals(745.8, restored.region.normalPressureMmHg!!, 0.001)
         assertEquals(1.5, restored.region.shallowDepthM!!, 0.001)
         assertEquals("flowing_large", restored.region.waterBodyType)
-        assertEquals(1, restored.zones.size)
-        assertEquals(1, restored.zones.first().sectors.size)
-        assertEquals(3, restored.zones.first().outline.size)
         assertEquals("SHORE", restored.spots.first().placement)
+        assertEquals(listOf("drop_off", "reeds"), restored.spots.first().structures)
     }
 
     @Test
@@ -123,17 +92,6 @@ class RegionPackCodecTest {
         // Своя область MapLibre у получателя появится при скачивании тайлов.
         assertEquals(0L, contents.map.offlineRegionId)
         assertEquals("fish-carp", contents.spotFish["spot-1"])
-    }
-
-    @Test
-    fun `контур зоны не теряет вершины при обмене`() {
-        val contents = RegionPackCodec.toEntities(pack())
-        val outline = contents.zones.first().outline.decodeOutline()
-
-        assertEquals(3, outline.size)
-        assertEquals(55.79, outline.first().latitude, 0.000001)
-        assertEquals(37.61, outline.first().longitude, 0.000001)
-        assertTrue(outline.isPolygon())
     }
 
     @Test
@@ -157,8 +115,25 @@ class RegionPackCodecTest {
         // Пакет, собранный приложением с новыми возможностями, должен
         // читаться, пока схема того же поколения.
         val extended = RegionPackCodec.encode(pack())
-            .replaceFirst("\"zones\"", "\"catches\": [], \"zones\"")
+            .replaceFirst("\"spots\"", "\"catches\": [], \"spots\"")
 
         assertTrue(RegionPackCodec.decode(extended).isSuccess)
+    }
+
+    @Test
+    fun `пакет со старыми зонами читается без них`() {
+        // Зоны из формата ушли, но у рыболовов на руках остались старые
+        // пакеты: незнакомый раздел игнорируется, а точки приезжают как
+        // приезжали.
+        val withZones = RegionPackCodec.encode(pack()).replaceFirst(
+            "\"spots\"",
+            "\"zones\": [ { \"id\": \"zone-1\", \"name\": \"Залив\", \"kind\": \"WATER\", " +
+                "\"outline\": [ { \"lat\": 55.79, \"lon\": 37.61 } ] } ], \"spots\""
+        )
+
+        val restored = RegionPackCodec.decode(withZones).getOrThrow()
+
+        assertEquals(1, restored.spots.size)
+        assertEquals("Мысок", restored.spots.first().name)
     }
 }

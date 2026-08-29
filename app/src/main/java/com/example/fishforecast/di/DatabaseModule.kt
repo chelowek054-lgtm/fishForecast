@@ -8,7 +8,6 @@ import com.example.fishforecast.data.local.dao.FishDao
 import com.example.fishforecast.data.local.dao.FishingSpotDao
 import com.example.fishforecast.data.local.dao.FishingSessionDao
 import com.example.fishforecast.data.local.dao.PressureLogDao
-import com.example.fishforecast.data.local.dao.ZoneDao
 import com.example.fishforecast.data.local.dao.SavedMapDao
 import com.example.fishforecast.data.local.dao.WeatherDao
 import dagger.Module
@@ -48,7 +47,8 @@ object DatabaseModule {
             AppDatabase.MIGRATION_16_17,
             AppDatabase.MIGRATION_17_18,
             AppDatabase.MIGRATION_18_19,
-            AppDatabase.MIGRATION_19_20
+            AppDatabase.MIGRATION_19_20,
+            AppDatabase.MIGRATION_20_21
         ).build()
     }
 
@@ -65,11 +65,6 @@ object DatabaseModule {
     @Provides
     fun provideFishingSessionDao(database: AppDatabase): FishingSessionDao {
         return database.fishingSessionDao()
-    }
-
-    @Provides
-    fun provideZoneDao(database: AppDatabase): ZoneDao {
-        return database.zoneDao()
     }
 
     @Provides

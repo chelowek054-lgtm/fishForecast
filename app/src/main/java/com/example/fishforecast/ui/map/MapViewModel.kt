@@ -13,17 +13,9 @@ import com.example.fishforecast.data.repository.FishRepository
 import com.example.fishforecast.data.repository.FishingContextRepository
 import com.example.fishforecast.data.repository.RegionPackRepository
 import com.example.fishforecast.data.repository.KnowledgeRepository
-import com.example.fishforecast.data.repository.ZoneRepository
 import com.example.fishforecast.domain.fish.encodeBaits
 import com.example.fishforecast.domain.knowledge.StructureType
 import kotlinx.coroutines.flow.map
-import com.example.fishforecast.data.repository.enclosing
-import com.example.fishforecast.data.local.entities.SectorEntity
-import com.example.fishforecast.data.local.entities.ZoneEntity
-import com.example.fishforecast.data.local.entities.ZoneKind
-import com.example.fishforecast.domain.share.GeoPoint
-import com.example.fishforecast.domain.share.encodeOutline
-import com.example.fishforecast.domain.share.isPolygon
 import com.example.fishforecast.data.repository.FishingSpotRepository
 import com.example.fishforecast.data.repository.OfflineMapRepository
 import com.example.fishforecast.data.repository.RegionDownloadState
@@ -43,7 +35,6 @@ class MapViewModel @Inject constructor(
     private val fishingSpotRepository: FishingSpotRepository,
     private val fishingContext: FishingContextRepository,
     private val regionPackRepository: RegionPackRepository,
-    private val zoneRepository: ZoneRepository,
     private val knowledgeRepository: KnowledgeRepository,
     fishRepository: FishRepository
 ) : ViewModel() {
@@ -108,96 +99,10 @@ class MapViewModel @Inject constructor(
         _packToShare.value = null
     }
 
-    /** Словарь структур: им размечаются и зоны, и точки. */
+    /** Словарь структур: ими рыболов размечает свои точки. */
     val structureTypes: StateFlow<List<StructureType>> = knowledgeRepository.catalog
         .map { it.structures }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
-
-    val zones: StateFlow<List<ZoneEntity>> = zoneRepository.activeZones
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
-
-    val sectors: StateFlow<List<SectorEntity>> = zoneRepository.activeSectors
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
-
-    /**
-     * Вершины контура, который рыболов обводит прямо сейчас. Пустой список
-     * значит, что режим обводки выключен и нажатия по карте работают как
-     * обычно.
-     */
-    private val _outline = mutableStateOf<List<GeoPoint>>(emptyList())
-    val outline: State<List<GeoPoint>> = _outline
-
-    private val _drawing = mutableStateOf(false)
-    val drawing: State<Boolean> = _drawing
-
-    fun startDrawing() {
-        _drawing.value = true
-        _outline.value = emptyList()
-    }
-
-    /**
-     * @return взято ли нажатие в обводку. Вне режима нажатие не наше: карту
-     * надо оставить в покое, иначе перестанут работать точки и жесты.
-     */
-    fun addOutlinePoint(latitude: Double, longitude: Double): Boolean {
-        if (!_drawing.value) return false
-        _outline.value = _outline.value + GeoPoint(latitude, longitude)
-        return true
-    }
-
-    /** Последняя вершина — чаще всего промах, и отменять нужно именно её. */
-    fun undoOutlinePoint() {
-        _outline.value = _outline.value.dropLast(1)
-    }
-
-    fun cancelDrawing() {
-        _drawing.value = false
-        _outline.value = emptyList()
-    }
-
-    /**
-     * Сохраняет обведённое. Контур целиком внутри существующей зоны — это
-     * её сектор: на водоёмах места нумеруют внутри участков, а не поверх
-     * них.
-     */
-    fun saveOutline(name: String, structureId: String, asSector: Boolean) {
-        val points = _outline.value
-        if (!points.isPolygon()) return
-
-        viewModelScope.launch {
-            val parent = zones.value.enclosing(points)
-            if (asSector && parent != null) {
-                zoneRepository.addSector(
-                    SectorEntity(
-                        zoneUid = parent.uid,
-                        name = name,
-                        outline = points.encodeOutline()
-                    )
-                )
-            } else {
-                val mapUid = activeMap.value?.uid ?: return@launch
-                zoneRepository.addZone(
-                    ZoneEntity(
-                        mapUid = mapUid,
-                        name = name,
-                        // Тип зоны — идентификатор структуры из словаря:
-                        // «вода» и «берег» остались там же, рядом с
-                        // коряжником и притоком.
-                        kind = structureId,
-                        outline = points.encodeOutline()
-                    )
-                )
-            }
-            cancelDrawing()
-        }
-    }
-
-    /** В какую зону попадёт обводимый контур; null — в свободное место. */
-    fun enclosingZone(): ZoneEntity? = zones.value.enclosing(_outline.value)
-
-    fun deleteZone(zone: ZoneEntity) {
-        viewModelScope.launch { zoneRepository.deleteZone(zone) }
-    }
 
     private val _downloadState = mutableStateOf<RegionDownloadState?>(null)
     val downloadState: State<RegionDownloadState?> = _downloadState

@@ -183,8 +183,6 @@ class SavedMapsViewModel @Inject constructor(
 private fun RegionPackRepository.ImportSummary.describe(): String = buildString {
     append(if (regionAdded) "Район «$regionName» добавлен" else "Район «$regionName» обновлён")
     val parts = listOfNotNull(
-        zonesAdded.takeIf { it > 0 }?.let { "зон: $it" },
-        sectorsAdded.takeIf { it > 0 }?.let { "секторов: $it" },
         spotsAdded.takeIf { it > 0 }?.let { "точек: $it" },
         fishAdded.takeIf { it > 0 }?.let { "видов рыб: $it" }
     )
