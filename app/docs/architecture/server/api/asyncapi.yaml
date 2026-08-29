@@ -1,0 +1,182 @@
+asyncapi: 3.0.0
+
+# Контракт реального времени: чаты, присутствие и уведомления о новом.
+# Отправка сообщений остаётся обычным REST-запросом (openapi.yaml) — так она
+# переживает обрыв соединения и попадает в общую очередь исходящего.
+
+info:
+  title: FishForecast Realtime
+  version: 1.0.0-draft
+  description: |
+    Одно WebSocket-соединение на приложение. Клиент подписывается на комнаты и
+    на свои уведомления; сервер шлёт события. Соединение необязательно: без него
+    работает всё, кроме живой доставки, а история догоняется через REST.
+
+servers:
+  production:
+    host: api.fishforecast.app
+    pathname: /v1/ws
+    protocol: wss
+    security:
+      - $ref: "#/components/securitySchemes/bearerAuth"
+
+channels:
+  chatRoom:
+    address: chat/{roomId}
+    title: Комната чата
+    parameters:
+      roomId:
+        description: Идентификатор комнаты
+    messages:
+      messagePosted:
+        $ref: "#/components/messages/ChatMessagePosted"
+      typing:
+        $ref: "#/components/messages/Typing"
+      presence:
+        $ref: "#/components/messages/Presence"
+
+  userInbox:
+    address: user/{userId}/inbox
+    title: Личные уведомления
+    parameters:
+      userId:
+        description: Идентификатор пользователя
+    messages:
+      wallUpdated:
+        $ref: "#/components/messages/WallUpdated"
+      syncInvalidate:
+        $ref: "#/components/messages/SyncInvalidate"
+      bathymetryReady:
+        $ref: "#/components/messages/BathymetryReady"
+      knowledgePublished:
+        $ref: "#/components/messages/KnowledgePublished"
+
+operations:
+  receiveChatMessage:
+    action: receive
+    channel:
+      $ref: "#/channels/chatRoom"
+    summary: Клиент получает сообщения комнаты
+  sendTyping:
+    action: send
+    channel:
+      $ref: "#/channels/chatRoom"
+    summary: Клиент сообщает, что печатает
+  receiveInbox:
+    action: receive
+    channel:
+      $ref: "#/channels/userInbox"
+    summary: Клиент получает личные уведомления
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: httpApiKey
+      name: Authorization
+      in: header
+
+  messages:
+    ChatMessagePosted:
+      name: chat.message.posted
+      payload:
+        type: object
+        required: [id, room_id, author_id, body, sent_at]
+        properties:
+          id:
+            type: string
+            format: uuid
+          room_id:
+            type: string
+            format: uuid
+          author_id:
+            type: string
+            format: uuid
+          body:
+            type: string
+          sent_at:
+            type: string
+            format: date-time
+          correlation_id:
+            type: string
+
+    Typing:
+      name: chat.typing
+      payload:
+        type: object
+        properties:
+          room_id:
+            type: string
+            format: uuid
+          user_id:
+            type: string
+            format: uuid
+
+    Presence:
+      name: chat.presence
+      payload:
+        type: object
+        properties:
+          room_id:
+            type: string
+            format: uuid
+          online:
+            type: array
+            items:
+              type: string
+              format: uuid
+
+    WallUpdated:
+      name: wall.updated
+      summary: В ленте появилось новое
+      payload:
+        type: object
+        properties:
+          post_id:
+            type: string
+            format: uuid
+          author_id:
+            type: string
+            format: uuid
+
+    SyncInvalidate:
+      name: sync.invalidate
+      summary: Что-то изменилось на сервере, стоит подтянуть изменения
+      description: |
+        Сообщение не несёт данных: клиент сам решает, когда сходить за
+        изменениями. Пропущенное уведомление ничего не ломает — очередная
+        синхронизация всё равно спросит «что нового с такого-то времени».
+      payload:
+        type: object
+        properties:
+          entity_type:
+            type: string
+            enum: [region, spot, catch, chat_message, bathymetry]
+          entity_uid:
+            type: string
+
+    BathymetryReady:
+      name: bathymetry.ready
+      summary: Промер обработан, сетка глубин готова
+      payload:
+        type: object
+        properties:
+          dataset_id:
+            type: string
+            format: uuid
+          region_id:
+            type: string
+            format: uuid
+          status:
+            type: string
+            enum: [ready, failed]
+
+    KnowledgePublished:
+      name: knowledge.published
+      summary: Вышла новая версия документа знаний
+      payload:
+        type: object
+        properties:
+          slug:
+            type: string
+          version:
+            type: integer

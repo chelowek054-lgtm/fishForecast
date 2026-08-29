@@ -1,0 +1,1135 @@
+openapi: 3.1.0
+
+# Контракт REST платформы FishForecast.
+# Правила версионирования, заголовков и ошибок — в contracts.md.
+# Черновик: пишется до кода, код обязан ему соответствовать.
+
+info:
+  title: FishForecast Platform API
+  version: 1.0.0-draft
+  description: |
+    Платформа хранит и раздаёт знание: общее (словари, виды, модель клёва),
+    о месте (районы, точки, глубины) и личное (уловы, лента, чаты).
+
+    Клиент офлайн-первый: любой из этих вызовов может не состояться, и
+    приложение обязано работать дальше. Поэтому всё, что меняет данные,
+    идемпотентно, а всё, что читает, поддерживает ETag.
+
+servers:
+  - url: https://api.fishforecast.app
+    description: Промышленное окружение
+  - url: https://stage.api.fishforecast.app
+    description: Предпромышленное окружение
+
+tags:
+  - name: auth
+    description: Личность рыболова
+  - name: knowledge
+    description: "Общее знание: словари, виды, модель клёва"
+  - name: regions
+    description: "Знание места: районы, точки, глубины"
+  - name: catches
+    description: Уловы и датасет
+  - name: social
+    description: Лента и чаты
+  - name: sync
+    description: Обмен очередью изменений
+  - name: media
+    description: Файлы
+
+security:
+  - bearerAuth: []
+
+paths:
+  /v1/auth/device:
+    post:
+      tags: [auth]
+      summary: Получить токен для анонимного устройства
+      description: |
+        Обменивает идентификатор автора, который уже живёт на устройстве
+        (`ActiveMapStore.ensureAuthorId`), на токен. Учётной записи для чтения
+        знаний и публикации районов не требуется — она нужна только для ленты
+        и чатов.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [device_author_id]
+              properties:
+                device_author_id:
+                  type: string
+                  format: uuid
+                display_name:
+                  type: string
+      responses:
+        "200":
+          description: Токены выданы
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TokenPair"
+        "429":
+          $ref: "#/components/responses/Problem"
+
+  /v1/auth/upgrade:
+    post:
+      tags: [auth]
+      summary: Превратить анонимное устройство в учётную запись
+      description: |
+        Анонимные данные не теряются: район и уловы уже подписаны тем же
+        идентификатором автора, поэтому апгрейд только добавляет способ входа.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [provider, credential]
+              properties:
+                provider:
+                  type: string
+                  enum: [email, google, apple]
+                credential:
+                  type: string
+      responses:
+        "200":
+          description: Учётная запись связана
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "409":
+          $ref: "#/components/responses/Problem"
+
+  /v1/knowledge/documents:
+    get:
+      tags: [knowledge]
+      summary: Какие документы знаний существуют и какие у них версии
+      security: []
+      responses:
+        "200":
+          description: Список документов
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/KnowledgeDocument"
+
+  /v1/knowledge/{slug}/latest:
+    get:
+      tags: [knowledge]
+      summary: Последняя опубликованная версия документа
+      description: |
+        Возвращает сам документ. Поддерживает `If-None-Match`: если версия у
+        клиента совпадает, приходит `304` и трафика нет. Клиент проверяет схему
+        до применения и при негодном документе остаётся на встроенном.
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/KnowledgeSlug"
+      responses:
+        "200":
+          description: Документ
+          headers:
+            ETag:
+              schema:
+                type: string
+            X-Knowledge-Version:
+              schema:
+                type: integer
+          content:
+            application/json:
+              schema:
+                type: object
+                description: Документ в своей схеме (fishforecast.knowledge/1 и т. п.)
+        "304":
+          description: Не изменился
+        "404":
+          $ref: "#/components/responses/Problem"
+
+  /v1/knowledge/{slug}/versions:
+    get:
+      tags: [knowledge]
+      summary: История версий документа
+      parameters:
+        - $ref: "#/components/parameters/KnowledgeSlug"
+      responses:
+        "200":
+          description: Версии от новых к старым
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/KnowledgeVersion"
+    post:
+      tags: [knowledge]
+      summary: Сохранить черновик новой версии
+      description: Доступно роли эксперта. Черновик клиентам не виден.
+      parameters:
+        - $ref: "#/components/parameters/KnowledgeSlug"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [document]
+              properties:
+                document:
+                  type: object
+                comment:
+                  type: string
+      responses:
+        "201":
+          description: Черновик сохранён
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/KnowledgeVersion"
+        "422":
+          $ref: "#/components/responses/Problem"
+
+  /v1/knowledge/{slug}/versions/{version}/publish:
+    post:
+      tags: [knowledge]
+      summary: Опубликовать версию
+      description: |
+        После публикации документ становится виден клиентам. Откат делается
+        публикацией предыдущей версии заново — история не переписывается.
+      parameters:
+        - $ref: "#/components/parameters/KnowledgeSlug"
+        - name: version
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Опубликовано
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/KnowledgeVersion"
+        "409":
+          $ref: "#/components/responses/Problem"
+
+  /v1/knowledge/{slug}/preview:
+    post:
+      tags: [knowledge]
+      summary: "Песочница: пересчитать клёв на исторических уловах"
+      description: |
+        Главный инструмент эксперта. Берёт черновик модели клёва и прогоняет по
+        сохранённым уловам со снимками условий, показывая, стало ли предсказание
+        ближе к факту. Ничего не публикует.
+      parameters:
+        - $ref: "#/components/parameters/KnowledgeSlug"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [document]
+              properties:
+                document:
+                  type: object
+                sample:
+                  type: string
+                  enum: [all, region, author]
+                region_id:
+                  type: string
+                  format: uuid
+      responses:
+        "200":
+          description: Отчёт о качестве
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BacktestReport"
+
+  /v1/regions:
+    get:
+      tags: [regions]
+      summary: Искать районы
+      security: []
+      parameters:
+        - name: bbox
+          in: query
+          description: Охват «запад,юг,восток,север»
+          schema:
+            type: string
+        - name: q
+          in: query
+          schema:
+            type: string
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: Найденные районы без содержимого
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RegionPage"
+    post:
+      tags: [regions]
+      summary: Опубликовать район
+      description: |
+        Тело — тот же пакет, что уходит файлом. Тайлов в нём нет; получатель
+        докачает их сам по границам.
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegionPack"
+      responses:
+        "201":
+          description: Район опубликован
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RegionSummary"
+        "422":
+          $ref: "#/components/responses/Problem"
+
+  /v1/regions/{uid}:
+    get:
+      tags: [regions]
+      summary: Забрать район целиком
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/RegionUid"
+      responses:
+        "200":
+          description: Пакет района
+          headers:
+            ETag:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RegionPack"
+        "404":
+          $ref: "#/components/responses/Problem"
+    put:
+      tags: [regions]
+      summary: Новая версия своего района
+      description: |
+        Требует `If-Match` с известной клиенту версией. Побеждает не последний
+        записавший, а тот, кто писал поверх актуальной версии.
+      parameters:
+        - $ref: "#/components/parameters/RegionUid"
+        - name: If-Match
+          in: header
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegionPack"
+      responses:
+        "200":
+          description: Обновлено
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RegionSummary"
+        "409":
+          $ref: "#/components/responses/Problem"
+
+  /v1/regions/{uid}/bathymetry:
+    get:
+      tags: [regions]
+      summary: Промеры глубин района
+      parameters:
+        - $ref: "#/components/parameters/RegionUid"
+      responses:
+        "200":
+          description: Наборы глубин
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/BathymetryDataset"
+    post:
+      tags: [regions]
+      summary: Отдать промер эхолота на обработку
+      description: |
+        Файл заранее положен в объектное хранилище по подписанной ссылке; сюда
+        приезжает только ключ. Интерполяция идёт в воркере, состояние набора
+        меняется с `queued` на `ready`.
+      parameters:
+        - $ref: "#/components/parameters/RegionUid"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [source, raw_key]
+              properties:
+                source:
+                  type: string
+                  enum: [deeper, lowrance, garmin, gpx, csv, manual]
+                raw_key:
+                  type: string
+                measured_at:
+                  type: string
+                  format: date-time
+      responses:
+        "202":
+          description: Принято в обработку
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BathymetryDataset"
+
+  /v1/catches:
+    post:
+      tags: [catches]
+      summary: Опубликовать улов
+      description: |
+        Отдельное осознанное действие. Уровень видимости выбирает автор; в ленте
+        место округляется до района.
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CatchRecord"
+      responses:
+        "201":
+          description: Улов сохранён
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CatchRecord"
+
+  /v1/regions/{uid}/catches:
+    get:
+      tags: [catches]
+      summary: Уловы района
+      parameters:
+        - $ref: "#/components/parameters/RegionUid"
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: Лента уловов района
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/CatchRecord"
+                  next_cursor:
+                    type: string
+
+  /v1/sync/batch:
+    post:
+      tags: [sync]
+      summary: Отправить накопленную очередь изменений
+      description: |
+        Пачка операций из очереди исходящего клиента. Каждая несёт свой ключ
+        идемпотентности: связь на воде рвётся посреди отправки, и повтор не
+        должен создавать вторых записей.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [operations]
+              properties:
+                operations:
+                  type: array
+                  maxItems: 200
+                  items:
+                    $ref: "#/components/schemas/SyncOperation"
+      responses:
+        "207":
+          description: Результат по каждой операции
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  results:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/SyncResult"
+
+  /v1/sync/changes:
+    get:
+      tags: [sync]
+      summary: Что изменилось с прошлой синхронизации
+      parameters:
+        - name: since
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date-time
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200":
+          description: Изменения по сущностям
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/ChangeRecord"
+                  next_cursor:
+                    type: string
+
+  /v1/wall:
+    get:
+      tags: [social]
+      summary: Лента уловов
+      parameters:
+        - name: scope
+          in: query
+          schema:
+            type: string
+            enum: [following, region, all]
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: Записи ленты
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/WallPost"
+                  next_cursor:
+                    type: string
+    post:
+      tags: [social]
+      summary: Написать в ленту
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                catch_id:
+                  type: string
+                  format: uuid
+                text:
+                  type: string
+                  maxLength: 4000
+      responses:
+        "201":
+          description: Запись создана
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WallPost"
+
+  /v1/chats:
+    get:
+      tags: [social]
+      summary: Мои чаты
+      responses:
+        "200":
+          description: Список комнат
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ChatRoom"
+
+  /v1/chats/{room_id}/messages:
+    get:
+      tags: [social]
+      summary: История сообщений
+      parameters:
+        - name: room_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: Сообщения от новых к старым
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/ChatMessage"
+                  next_cursor:
+                    type: string
+    post:
+      tags: [social]
+      summary: Отправить сообщение
+      description: |
+        Живая доставка идёт по WebSocket (asyncapi.yaml), но отправка остаётся
+        обычным запросом: так сообщение переживает обрыв соединения и попадает
+        в очередь исходящего наравне с остальным.
+      parameters:
+        - name: room_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [body]
+              properties:
+                body:
+                  type: string
+                  maxLength: 4000
+      responses:
+        "201":
+          description: Отправлено
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ChatMessage"
+
+  /v1/media/upload-url:
+    post:
+      tags: [media]
+      summary: Подписанная ссылка для загрузки файла
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [kind, content_type, size_bytes]
+              properties:
+                kind:
+                  type: string
+                  enum: [catch_photo, sonar_raw]
+                content_type:
+                  type: string
+                size_bytes:
+                  type: integer
+      responses:
+        "200":
+          description: Куда класть файл
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  url:
+                    type: string
+                  key:
+                    type: string
+                  expires_at:
+                    type: string
+                    format: date-time
+        "413":
+          $ref: "#/components/responses/Problem"
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  parameters:
+    KnowledgeSlug:
+      name: slug
+      in: path
+      required: true
+      description: "Идентификатор документа: fish-catalog, knowledge, bite-model"
+      schema:
+        type: string
+        enum: [fish-catalog, knowledge, bite-model]
+    RegionUid:
+      name: uid
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      description: Ключ повтора; результат хранится сутки
+      schema:
+        type: string
+    Cursor:
+      name: cursor
+      in: query
+      schema:
+        type: string
+    Limit:
+      name: limit
+      in: query
+      schema:
+        type: integer
+        default: 20
+        maximum: 100
+
+  responses:
+    Problem:
+      description: Ошибка в формате RFC 7807
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+
+  schemas:
+    Problem:
+      type: object
+      required: [type, title, status]
+      properties:
+        type:
+          type: string
+        title:
+          type: string
+        status:
+          type: integer
+        detail:
+          type: string
+        instance:
+          type: string
+        correlation_id:
+          type: string
+
+    TokenPair:
+      type: object
+      required: [access_token, refresh_token, expires_in]
+      properties:
+        access_token:
+          type: string
+        refresh_token:
+          type: string
+        expires_in:
+          type: integer
+
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        display_name:
+          type: string
+        trust_score:
+          type: integer
+
+    KnowledgeDocument:
+      type: object
+      properties:
+        slug:
+          type: string
+        schema:
+          type: string
+          description: "Например fishforecast.knowledge/1"
+        title:
+          type: string
+        latest_version:
+          type: integer
+        published_at:
+          type: string
+          format: date-time
+
+    KnowledgeVersion:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        document_slug:
+          type: string
+        version:
+          type: integer
+        state:
+          type: string
+          enum: [draft, published, rolled_back]
+        checksum:
+          type: string
+        published_by:
+          type: string
+          format: uuid
+        published_at:
+          type: string
+          format: date-time
+        comment:
+          type: string
+
+    BacktestReport:
+      type: object
+      description: Насколько предсказание сошлось с фактом на исторических уловах
+      properties:
+        sample_size:
+          type: integer
+        baseline:
+          $ref: "#/components/schemas/BacktestMetrics"
+        candidate:
+          $ref: "#/components/schemas/BacktestMetrics"
+        by_species:
+          type: array
+          items:
+            type: object
+            properties:
+              fish_uid:
+                type: string
+              delta_auc:
+                type: number
+
+    BacktestMetrics:
+      type: object
+      properties:
+        auc:
+          type: number
+        brier:
+          type: number
+        mean_score_on_catch:
+          type: number
+        mean_score_on_blank:
+          type: number
+
+    RegionSummary:
+      type: object
+      properties:
+        uid:
+          type: string
+          format: uuid
+        name:
+          type: string
+        version:
+          type: integer
+        author:
+          $ref: "#/components/schemas/User"
+        bounds:
+          $ref: "#/components/schemas/Bounds"
+        spot_count:
+          type: integer
+        updated_at:
+          type: string
+          format: date-time
+
+    RegionPage:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/RegionSummary"
+        next_cursor:
+          type: string
+
+    Bounds:
+      type: object
+      required: [north, south, east, west]
+      properties:
+        north:
+          type: number
+        south:
+          type: number
+        east:
+          type: number
+        west:
+          type: number
+
+    RegionPack:
+      type: object
+      description: |
+        Тот же документ, что уходит файлом `.ffpack`. Схема и правила слияния —
+        в RegionPack.md; здесь он переносится, а не переопределяется.
+      required: [schema, id, created_at, region]
+      properties:
+        schema:
+          type: string
+          example: fishforecast.region-pack/3
+        id:
+          type: string
+        created_at:
+          type: string
+        author:
+          type: object
+          properties:
+            id:
+              type: string
+            name:
+              type: string
+        region:
+          type: object
+        spots:
+          type: array
+          items:
+            $ref: "#/components/schemas/PackSpot"
+        fish:
+          type: array
+          items:
+            type: object
+
+    PackSpot:
+      type: object
+      required: [id, name, lat, lon, placement]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        lat:
+          type: number
+        lon:
+          type: number
+        placement:
+          type: string
+          enum: [SHORE, WATER]
+        note:
+          type: string
+        structures:
+          type: array
+          items:
+            type: string
+        fish_id:
+          type: string
+
+    CatchRecord:
+      type: object
+      required: [uid, caught_at]
+      properties:
+        uid:
+          type: string
+          format: uuid
+        region_id:
+          type: string
+          format: uuid
+        spot_id:
+          type: string
+          format: uuid
+        fish_uid:
+          type: string
+        weight_grams:
+          type: integer
+        length_cm:
+          type: integer
+        caught_at:
+          type: string
+          format: date-time
+        photo_key:
+          type: string
+        visibility:
+          type: string
+          enum: [private, region, public]
+          default: private
+        conditions:
+          $ref: "#/components/schemas/ConditionsSnapshot"
+
+    ConditionsSnapshot:
+      type: object
+      description: |
+        Снимок часа, в который взяли рыбу. Это и есть строка обучающей выборки:
+        без него улов остаётся историей, а не данными.
+      properties:
+        water_temp_c:
+          type: number
+        water_temp_delta_24h_c:
+          type: number
+        oxygen_mg_l:
+          type: number
+        pressure_mmhg:
+          type: number
+        pressure_delta_3h_mmhg:
+          type: number
+        baseline_pressure_mmhg:
+          type: number
+        wind_ms:
+          type: number
+        wind_direction_deg:
+          type: number
+        onshore_wind:
+          type: boolean
+        cloud_cover:
+          type: number
+        light_phase:
+          type: string
+          enum: [night, dawn, morning, day, evening, dusk]
+        layer:
+          type: string
+          enum: [SHALLOW, DEEP]
+        structures:
+          type: array
+          items:
+            type: string
+        bite_score:
+          type: integer
+        knowledge_version:
+          type: integer
+        bite_model_version:
+          type: integer
+
+    BathymetryDataset:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        region_id:
+          type: string
+          format: uuid
+        source:
+          type: string
+        status:
+          type: string
+          enum: [queued, processing, ready, failed]
+        cell_size_m:
+          type: number
+        grid_key:
+          type: string
+        point_count:
+          type: integer
+        depth_min_m:
+          type: number
+        depth_max_m:
+          type: number
+
+    SyncOperation:
+      type: object
+      required: [idempotency_key, entity_type, entity_uid, operation]
+      properties:
+        idempotency_key:
+          type: string
+        entity_type:
+          type: string
+          enum: [region, spot, catch, session, chat_message, bathymetry]
+        entity_uid:
+          type: string
+        operation:
+          type: string
+          enum: [upsert, delete]
+        base_version:
+          type: integer
+        payload:
+          type: object
+
+    SyncResult:
+      type: object
+      properties:
+        idempotency_key:
+          type: string
+        status:
+          type: integer
+        entity_uid:
+          type: string
+        version:
+          type: integer
+        problem:
+          $ref: "#/components/schemas/Problem"
+
+    ChangeRecord:
+      type: object
+      properties:
+        entity_type:
+          type: string
+        entity_uid:
+          type: string
+        operation:
+          type: string
+          enum: [upsert, delete]
+        version:
+          type: integer
+        changed_at:
+          type: string
+          format: date-time
+        payload:
+          type: object
+
+    WallPost:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        author:
+          $ref: "#/components/schemas/User"
+        text:
+          type: string
+        catch:
+          $ref: "#/components/schemas/CatchRecord"
+        place_hint:
+          type: string
+          description: Место с точностью до района, не до точки
+        created_at:
+          type: string
+          format: date-time
+
+    ChatRoom:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        kind:
+          type: string
+          enum: [region, direct, group]
+        title:
+          type: string
+        region_id:
+          type: string
+          format: uuid
+        unread:
+          type: integer
+
+    ChatMessage:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        room_id:
+          type: string
+          format: uuid
+        author:
+          $ref: "#/components/schemas/User"
+        body:
+          type: string
+        sent_at:
+          type: string
+          format: date-time

@@ -121,6 +121,11 @@
 Формат уже готов к тому, чтобы стать телом запроса. Ничего из этого пока не
 реализовано — раздел существует, чтобы не проектировать формат дважды.
 
+> Полный контракт платформы, включая эти эндпойнты, ведётся отдельно:
+> [architecture/server/api/openapi.yaml](architecture/server/api/openapi.yaml),
+> правила версионирования и ошибок —
+> [architecture/server/api/contracts.md](architecture/server/api/contracts.md).
+
 | Метод | Что делает | Тело |
 |---|---|---|
 | `POST /v1/regions` | Опубликовать район | `RegionPack` |
