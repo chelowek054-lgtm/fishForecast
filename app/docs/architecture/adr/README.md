@@ -19,6 +19,7 @@
 | [0007](0007-bathymetry-sources.md) | Батиметрия от пользователя, в общем формате точек | Принят |
 | [0008](0008-gradle-modularization.md) | Разделение на Gradle-модули | Принят |
 | [0009](0009-realtime-transport.md) | WebSocket на приём, REST на отправку | Принят |
+| [0010](0010-documentation-driven-development.md) | Documentation Driven Development: документ ведёт код | Принят |
 
 ## Шаблон
 
