@@ -15,3 +15,5 @@
 local.properties
 .idea
 
+# Кэш приложения контроля процесса (docs/development/_contract/app-contract.md)
+.docdd/

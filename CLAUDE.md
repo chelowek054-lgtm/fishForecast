@@ -49,6 +49,8 @@
 | История фаз 1–5 | `app/docs/Roadmap.md` |
 | Чек-лист факторов клёва | `app/docs/BiteFactors.md` |
 | Формат обмена районами | `app/docs/RegionPack.md` |
+| Требования, задачи, проверки процесса | `docs/development/` |
+| Контракт файлов процесса | `docs/development/_contract/SPEC.md` |
 
 Знание о рыбе и водоёмах — не код: оно живёт в `app/src/main/assets/`
 (`initial_fish.json`, `knowledge.json`) и правится как документ.

@@ -1,0 +1,38 @@
+# Манифест проекта для приложения контроля процесса.
+# Схема: _contract/schemas/project.schema.json
+
+contract: docdd.workspace/1
+
+project:
+  id: fishforecast
+  name: FishForecast
+  description: >-
+    Офлайн-первый помощник рыболова: погода, модель воды, знания о видах и
+    местах. Работа ведётся по правилу «документ ведёт код».
+
+paths:
+  requirements: requirements
+  design: design
+  decisions: decisions
+  contracts: contracts
+  tasks: tasks
+  phases: phases
+  tests: tests
+  diagrams: diagrams
+
+sources:
+  code:
+    - app/src
+  docs:
+    - app/docs
+
+roles:
+  - id: architect
+    name: Архитектор
+  - id: dev
+    name: Разработчик
+
+policy:
+  require_approved_docs_before_dev: true
+  require_verification_before_done: true
+  stale_in_progress_days: 14
