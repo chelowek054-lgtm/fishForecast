@@ -1,11 +1,11 @@
 ---
 id: V-0001
 type: verification
-title: Подмена документа модели меняет расчёт, встроенный даёт прежние числа
+title: Подмена документа модели меняет расчёт
 status: approved
 owner: dev
 created: 2026-08-30
-updated: 2026-08-30
+updated: 2026-09-01
 kind: unit
 runner: gradle
 command: ":app:testDebugUnitTest --tests *BiteModelTest*"
@@ -24,3 +24,7 @@ links:
 
 Первое ловит регрессию при переносе, второе доказывает, что документ вообще
 читается.
+
+## Журнал
+
+- 2026-09-01 · починено title_mismatch, verification_never_run · architect
