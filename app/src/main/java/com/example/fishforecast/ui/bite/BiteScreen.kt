@@ -41,6 +41,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.size
@@ -263,7 +264,12 @@ enum class FishingSection(val title: String) {
 private fun CurrentBiteCard(forecast: BiteForecast, fishName: String) {
     Card(
         modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = forecast.level.container())
+        colors = CardDefaults.cardColors(
+            containerColor = forecast.level.container(),
+            // Цвет текста идёт вместе с заливкой: тема о ней не знает и
+            // подставила бы свой onSurface — светлый поверх светлого.
+            contentColor = forecast.level.onContainer()
+        )
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Text(
@@ -551,11 +557,42 @@ private fun BiteLevel.title(): String = when (this) {
     BiteLevel.POOR -> "Клёва почти нет"
 }
 
-private fun BiteLevel.container(): Color = when (this) {
-    BiteLevel.GOOD -> Color(0xFFB8E4C2)
-    BiteLevel.MODERATE -> Color(0xFFF5E6B2)
-    BiteLevel.POOR -> Color(0xFFF0C9C9)
+/**
+ * Заливка карточки под уровень клёва.
+ *
+ * Своя, а не из темы: три уровня должны читаться одинаково на любой схеме
+ * цветов, в том числе на динамической. Но раз заливка своя, то и текст на ней
+ * задаётся здесь же — [onContainer]. Иначе выходит то, что и вышло: в тёмной
+ * теме светлый текст ложился на светло-зелёную пастель и пропадал.
+ */
+@Composable
+private fun BiteLevel.container(): Color = if (darkSurface()) {
+    when (this) {
+        BiteLevel.GOOD -> Color(0xFF1E3B26)
+        BiteLevel.MODERATE -> Color(0xFF3B361B)
+        BiteLevel.POOR -> Color(0xFF3B2020)
+    }
+} else {
+    when (this) {
+        BiteLevel.GOOD -> Color(0xFFB8E4C2)
+        BiteLevel.MODERATE -> Color(0xFFF5E6B2)
+        BiteLevel.POOR -> Color(0xFFF0C9C9)
+    }
 }
+
+/** Текст и подписи поверх [container]. */
+@Composable
+private fun BiteLevel.onContainer(): Color =
+    if (darkSurface()) Color(0xFFE3E7E3) else Color(0xFF141714)
+
+/**
+ * Тёмная ли схема сейчас.
+ *
+ * Считается по яркости поверхности, а не по системной настройке: тему можно
+ * задать принудительно, а на Android 12+ цвета вовсе приезжают из обоев.
+ */
+@Composable
+private fun darkSurface(): Boolean = MaterialTheme.colorScheme.surface.luminance() < 0.5f
 
 private fun BiteLevel.bar(): Color = when (this) {
     BiteLevel.GOOD -> Color(0xFF2E7D32)
