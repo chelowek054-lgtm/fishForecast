@@ -19,8 +19,8 @@ class FishCatalogTest {
 
         assertTrue("видов должно быть больше одного", catalog.fish.size > 1)
         val carp = catalog.fish.first { it.id == "carp" }
-        assertEquals(18.0, carp.temp.optMin, 0.001)
-        assertEquals(30.0, carp.temp.absMax, 0.001)
+        assertEquals(20.0, carp.temp.optMin, 0.001)
+        assertEquals(32.0, carp.temp.absMax, 0.001)
         assertEquals(5.0, carp.oxygen.comfortMgL, 0.001)
         assertTrue(carp.baits.warm.isNotEmpty())
         assertTrue(carp.groundbaitRules.warm.notes.isNotBlank())
@@ -72,9 +72,9 @@ class FishCatalogTest {
         val entity = carp.toEntity()
 
         assertEquals("carp", entity.uid)
-        assertEquals(18f, entity.optMinTemp)
-        assertEquals(30f, entity.absMaxTemp)
-        assertEquals(3f, entity.oxygenCriticalMgL)
+        assertEquals(20f, entity.optMinTemp)
+        assertEquals(32f, entity.absMaxTemp)
+        assertEquals(2.5f, entity.oxygenCriticalMgL)
         assertEquals(carp.baits.cold, entity.baitsCold.decodeBaits())
         assertEquals(carp.groundbaitRules.warm.notes, entity.groundbaitWarm.decodeGroundbait().notes)
     }

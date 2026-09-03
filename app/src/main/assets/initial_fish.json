@@ -4,10 +4,10 @@
     "name": "Карп / Сазан",
     "description": "Две разные рыбы под одним именем. Мелкий и средний карп ходит плотной стаей, кормится наперегонки и хватает первым; крупный держится одиночкой или малой группой, ходит своим суточным маршрутом и осматривает точку прежде, чем сесть за неё. От того, за кем едешь, зависит и размер насадки, и схема закорма. Чудо-аромата у карпа нет: запах — только метка. Если за ней не стоит пищевая ценность, рыба быстро связывает этот запах с опасностью и обходит его.",
     "temp": {
-      "opt_min": 18.0,
-      "opt_max": 26.0,
-      "abs_min": 8.0,
-      "abs_max": 30.0
+      "opt_min": 20.0,
+      "opt_max": 27.0,
+      "abs_min": 5.0,
+      "abs_max": 32.0
     },
     "pressure": {
       "min_mmHg": 740,
@@ -15,7 +15,7 @@
     },
     "oxygen": {
       "comfort_mg_l": 5.0,
-      "critical_mg_l": 3.0
+      "critical_mg_l": 2.5
     },
     "default_horizon": "bottom",
     "cold_temp_threshold": 14.0,
@@ -57,9 +57,9 @@
     "name": "Карась",
     "temp": {
       "opt_min": 16.0,
-      "opt_max": 24.0,
-      "abs_min": 4.0,
-      "abs_max": 28.0
+      "opt_max": 26.0,
+      "abs_min": 1.0,
+      "abs_max": 30.0
     },
     "pressure": {
       "min_mmHg": 742,
@@ -67,7 +67,7 @@
     },
     "oxygen": {
       "comfort_mg_l": 3.0,
-      "critical_mg_l": 1.5
+      "critical_mg_l": 0.5
     },
     "default_horizon": "bottom",
     "cold_temp_threshold": 13.0,
@@ -99,10 +99,10 @@
     "id": "bream",
     "name": "Лещ",
     "temp": {
-      "opt_min": 15.0,
-      "opt_max": 22.0,
-      "abs_min": 5.0,
-      "abs_max": 25.0
+      "opt_min": 16.0,
+      "opt_max": 26.0,
+      "abs_min": 4.0,
+      "abs_max": 30.0
     },
     "pressure": {
       "min_mmHg": 745,
@@ -110,7 +110,7 @@
     },
     "oxygen": {
       "comfort_mg_l": 5.0,
-      "critical_mg_l": 3.5
+      "critical_mg_l": 3.0
     },
     "default_horizon": "bottom",
     "cold_temp_threshold": 12.0,
@@ -143,9 +143,9 @@
     "name": "Плотва",
     "temp": {
       "opt_min": 12.0,
-      "opt_max": 20.0,
-      "abs_min": 2.0,
-      "abs_max": 24.0
+      "opt_max": 24.0,
+      "abs_min": 1.0,
+      "abs_max": 28.0
     },
     "pressure": {
       "min_mmHg": 745,
@@ -185,10 +185,10 @@
     "id": "perch",
     "name": "Окунь",
     "temp": {
-      "opt_min": 12.0,
-      "opt_max": 20.0,
-      "abs_min": 2.0,
-      "abs_max": 24.0
+      "opt_min": 16.0,
+      "opt_max": 24.0,
+      "abs_min": 1.0,
+      "abs_max": 28.0
     },
     "pressure": {
       "min_mmHg": 748,
@@ -228,10 +228,10 @@
     "id": "pike",
     "name": "Щука",
     "temp": {
-      "opt_min": 10.0,
-      "opt_max": 18.0,
-      "abs_min": 1.0,
-      "abs_max": 22.0
+      "opt_min": 14.0,
+      "opt_max": 21.0,
+      "abs_min": 0.0,
+      "abs_max": 26.0
     },
     "pressure": {
       "min_mmHg": 738,
@@ -271,10 +271,10 @@
     "id": "zander",
     "name": "Судак",
     "temp": {
-      "opt_min": 14.0,
-      "opt_max": 22.0,
-      "abs_min": 4.0,
-      "abs_max": 26.0
+      "opt_min": 18.0,
+      "opt_max": 26.0,
+      "abs_min": 2.0,
+      "abs_max": 30.0
     },
     "pressure": {
       "min_mmHg": 745,
@@ -282,7 +282,7 @@
     },
     "oxygen": {
       "comfort_mg_l": 7.0,
-      "critical_mg_l": 5.0
+      "critical_mg_l": 4.0
     },
     "default_horizon": "bottom",
     "cold_temp_threshold": 12.0,
@@ -314,18 +314,18 @@
     "id": "grass_carp",
     "name": "Белый амур",
     "temp": {
-      "opt_min": 25.0,
-      "opt_max": 30.0,
-      "abs_min": 15.0,
-      "abs_max": 33.0
+      "opt_min": 22.0,
+      "opt_max": 28.0,
+      "abs_min": 8.0,
+      "abs_max": 34.0
     },
     "pressure": {
       "min_mmHg": 745,
       "max_mmHg": 758
     },
     "oxygen": {
-      "comfort_mg_l": 6.0,
-      "critical_mg_l": 4.0
+      "comfort_mg_l": 5.0,
+      "critical_mg_l": 3.0
     },
     "default_horizon": "surface",
     "cold_temp_threshold": 18.0,
@@ -357,10 +357,10 @@
     "id": "catfish",
     "name": "Сом европейский",
     "temp": {
-      "opt_min": 18.0,
-      "opt_max": 26.0,
-      "abs_min": 10.0,
-      "abs_max": 28.0
+      "opt_min": 23.0,
+      "opt_max": 28.0,
+      "abs_min": 8.0,
+      "abs_max": 32.0
     },
     "pressure": {
       "min_mmHg": 740,
@@ -368,7 +368,7 @@
     },
     "oxygen": {
       "comfort_mg_l": 5.5,
-      "critical_mg_l": 3.5
+      "critical_mg_l": 3.0
     },
     "default_horizon": "bottom",
     "cold_temp_threshold": 14.0,
@@ -401,9 +401,9 @@
     "name": "Налим",
     "temp": {
       "opt_min": 2.0,
-      "opt_max": 12.0,
+      "opt_max": 14.0,
       "abs_min": 0.0,
-      "abs_max": 15.0
+      "abs_max": 22.0
     },
     "pressure": {
       "min_mmHg": 740,

@@ -275,7 +275,7 @@ class FishingStrategyTest {
 
     @Test
     fun `вода теплее предела вида — честно советует ехать за другим`() {
-        val plan = carpPlan(conditions(shallow = 32.0, oxygen = 4.0))
+        val plan = carpPlan(conditions(shallow = 34.0, oxygen = 4.0))
 
         assertTrue(
             "нужно сказать прямо: ${plan.warnings}",
