@@ -5,7 +5,8 @@ title: Вынести веса модели клёва в документ зн�
 status: ready
 owner: dev
 created: 2026-08-30
-updated: 2026-08-30
+updated: 2026-09-03
+change: feature
 tags: [client, bite-model]
 links:
   implements: [R-0001]
@@ -42,3 +43,4 @@ links:
 ## Журнал
 
 - 2026-08-30 · заведена · architect
+- 2026-09-03 · починено change_missing · architect
