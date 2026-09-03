@@ -71,6 +71,37 @@ class BiteChartAxisTest {
     }
 
     @Test
+    fun `широкая подпись гасит соседние часы`() {
+        // «Сейчас» шире своей ячейки и налезало на соседний час: на оси
+        // читалось «сейчас8» вместо двух подписей.
+        val ticks = chartTicks(hours(count = 8, from = 9), nowIndex = 4)
+
+        assertEquals("сейчас", ticks[4].label)
+        assertEquals("", ticks[3].label)
+        assertEquals("", ticks[5].label)
+        // Дальше расстояние уже хватает — подпись возвращается.
+        assertEquals("15", ticks[6].label)
+    }
+
+    @Test
+    fun `дата гасит соседний час, но не наоборот`() {
+        val times = hours(count = 8, from = 22, day = 29)
+        val ticks = chartTicks(times, nowIndex = -1)
+
+        // Полночь — начало суток, подписана датой; соседний час уступает.
+        assertEquals("30.08", ticks[2].label)
+        assertEquals("", ticks[1].label)
+        assertEquals(1, ticks.count { it.label == "30.08" })
+    }
+
+    @Test
+    fun `ширина подписи считается в ячейках вокруг своей`() {
+        assertEquals(4..4, occupiedCells(4, "12", cellChars = 3))
+        assertEquals(3..5, occupiedCells(4, "сейчас", cellChars = 3))
+        assertEquals(3..5, occupiedCells(4, "04.09", cellChars = 3))
+    }
+
+    @Test
     fun `шаг подписей задаётся снаружи`() {
         val ticks = chartTicks(hours(count = 7, from = 0), nowIndex = -1, stepHours = 6)
 
