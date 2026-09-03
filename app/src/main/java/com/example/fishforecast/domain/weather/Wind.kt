@@ -27,6 +27,29 @@ fun windDirectionLabel(degrees: Double): String {
  */
 fun windArrowRotation(degrees: Double): Float = ((degrees + 180) % 360).toFloat()
 
+/**
+ * Насколько развернулся ветер, в градусах: от 0 до 180.
+ *
+ * Смена направления важнее самой скорости: она означает, что через водоём
+ * прошёл фронт, а рыба на такое отзывается паузой — ей нужно заново найти,
+ * где теперь стоит корм.
+ */
+fun windTurn(fromDegrees: Double, toDegrees: Double): Double {
+    val delta = ((toDegrees - fromDegrees) % 360 + 360) % 360
+    return if (delta > 180) 360 - delta else delta
+}
+
+/**
+ * Северный ли ветер: сектор от северо-запада до северо-востока.
+ *
+ * Он приносит холодный воздух, студит верхний слой и в холодной воде
+ * работает против рыболова, а в перегретой — на него.
+ */
+fun isNortherlyWind(degrees: Double): Boolean {
+    val normalized = ((degrees % 360) + 360) % 360
+    return normalized >= 315.0 || normalized <= 45.0
+}
+
 fun windDescription(speedKmh: Double): String {
     val ms = speedKmh.kmhToMs()
     return when {

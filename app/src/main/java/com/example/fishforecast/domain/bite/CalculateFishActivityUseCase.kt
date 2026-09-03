@@ -8,7 +8,10 @@ import com.example.fishforecast.domain.fish.decodeLightActivity
 import com.example.fishforecast.domain.light.lightActivity
 import com.example.fishforecast.domain.light.lightPhaseAt
 import com.example.fishforecast.domain.sensor.hPaToMmHg
+import com.example.fishforecast.domain.weather.isNortherlyWind
 import com.example.fishforecast.domain.weather.kmhToMs
+import com.example.fishforecast.domain.weather.windDirectionLabel
+import com.example.fishforecast.domain.weather.windTurn
 import java.time.LocalDateTime
 import com.example.fishforecast.domain.water.WaterState
 import com.example.fishforecast.domain.water.oxygenLevel
@@ -61,6 +64,12 @@ class CalculateFishActivityUseCase @Inject constructor() {
                     ?.let { state.layerAt(it.time, place.layer) }
                     ?.plus(place.waterOffsetC)
             }
+            // Своё окно: вода инертна, и за три часа её ход почти не читается.
+            val waterTrendBefore = water?.let { state ->
+                sorted.getOrNull(index - WATER_TREND_HOURS)
+                    ?.let { state.layerAt(it.time, place.layer) }
+                    ?.plus(place.waterOffsetC)
+            }
 
             val temperature = temperatureFactor(waterNow ?: hour.temperature, fish, waterNow != null)
             val pressure = pressureFactor(hour.pressure.hPaToMmHg(), normal)
@@ -79,10 +88,19 @@ class CalculateFishActivityUseCase @Inject constructor() {
                 oxygenFactor(sorted, index, hour, fish)
             }
             val guild = Guild.of(fish.guild)
-            val wind = windFactor(hour.windSpeed, guild)
+            val wind = windFactor(sorted, index, guild, waterNow, fish)
             val light = lightFactor(hour.time, sunTimes, fish, guild)
+            // Ход суток и ход воды отвечают на вопрос «откуда пришли»:
+            // одна и та же погода читается по-разному в зависимости от того,
+            // росло давление вторые сутки или падало перед фронтом.
+            val dayTrend = pressureDayFactor(sorted, index, normal)
+            val waterTrend = waterTrendFactor(waterNow, waterTrendBefore, fish, WATER_TREND_HOURS)
+            val stratification = stratificationFactor(sorted, index, place, waterNow, fish)
 
-            val factors = listOfNotNull(temperature, oxygen, pressure, trend, wind, light)
+            val factors = listOfNotNull(
+                temperature, oxygen, pressure, trend, dayTrend,
+                waterTrend, wind, light, stratification
+            )
 
             // Ограничители перемножаются: непригодную для рыбы воду не
             // компенсирует ни давление, ни ветер. Условия клёва складываются
@@ -264,8 +282,11 @@ class CalculateFishActivityUseCase @Inject constructor() {
             0.0
         }
 
-        // Остывание добавляет кислорода, дальнейший прогрев — отнимает.
+        // Остывание добавляет кислорода, дальнейший прогрев — отнимает. Но
+        // только в тепле: в холодной воде кислорода и так вдоволь.
+        val oxygenAtStake = hour.temperature > warmWaterStarts - HEAT_MARGIN_C
         val coolingBonus = when {
+            !oxygenAtStake -> 0.0
             cooling <= -NOTICEABLE_COOLING -> COOLING_BONUS
             cooling >= NOTICEABLE_COOLING -> -COOLING_BONUS
             else -> 0.0
@@ -325,8 +346,14 @@ class CalculateFishActivityUseCase @Inject constructor() {
             tolerance = HEAT_TOLERANCE
         )
 
+        // Ход воды правит кислород только в тепле. В пятиградусной воде его
+        // почти тринадцать миллиграммов на литр — прогрев на полградуса там
+        // ничего не отнимает, и штрафовать за него значит выдавать весну за
+        // ухудшение. За сам ход отвечает отдельный фактор.
+        val oxygenAtStake = waterNow > warmWaterStarts - HEAT_MARGIN_C
         val cooling = waterBefore?.let { it - waterNow } ?: 0.0
         val coolingBonus = when {
+            !oxygenAtStake -> 0.0
             cooling >= WATER_COOLING_STEP -> COOLING_BONUS
             cooling <= -WATER_COOLING_STEP -> -COOLING_BONUS
             else -> 0.0
@@ -402,34 +429,213 @@ class CalculateFishActivityUseCase @Inject constructor() {
     }
 
     /**
-     * Ветер.
+     * Ход давления за сутки.
      *
-     * Зеркальная гладь — не идеал, а проблема: рябь ломает освещённость и
-     * прячет рыболова, а заодно гонит корм к подветренному берегу. Поэтому у
-     * ветра оптимум, а не монотонный штраф. Хищнику рябь важнее: он охотится
-     * глазами и в прозрачной тихой воде сам виден издалека.
+     * Трёхчасовое окно ловит момент, но не рассказывает, откуда пришли.
+     * Между тем рыба отзывается именно на затяжное движение: сутки падения
+     * перед фронтом — это жор, сутки роста после фронта — вялый клёв, даже
+     * когда в последние три часа всё замерло.
+     *
+     * Оговорка, которую стоит помнить: прямой связи давления с кормлением
+     * наука не показала, потому что отделить его от прочей погоды в поле не
+     * удаётся. Здесь это эвристика, проверенная практикой, — и потому она
+     * весит меньше, чем отклонение от нормы места.
      */
-    private fun windFactor(windSpeedKmh: Double, guild: Guild): BiteFactor {
-        val ms = windSpeedKmh.kmhToMs()
-        val rippleBonus = if (guild == Guild.PREDATOR) PREDATOR_RIPPLE else PEACEFUL_RIPPLE
+    private fun pressureDayFactor(
+        forecast: List<WeatherEntity>,
+        index: Int,
+        normal: Double?
+    ): BiteFactor {
+        val previousIndex = (index - DAY_WINDOW_HOURS).coerceAtLeast(0)
+        val hoursBack = index - previousIndex
+        if (hoursBack < MIN_DAY_WINDOW_HOURS) {
+            return BiteFactor(
+                name = "Ход за сутки",
+                value = 1.0,
+                weight = WEIGHT_PRESSURE_DAY,
+                comment = "Истории меньше $MIN_DAY_WINDOW_HOURS часов — сутки не прочитать"
+            )
+        }
+
+        val current = forecast[index].pressure.hPaToMmHg()
+        val previous = forecast[previousIndex].pressure.hPaToMmHg()
+        val change = current - previous
+        val atNormal = normal != null && abs(current - normal) <= AT_NORMAL_MMHG
 
         val value = when {
+            change <= -DAY_FALL_MMHG -> 1.0
+            change <= -STABLE_PRESSURE_MMHG -> 0.9
+            change < STABLE_PRESSURE_MMHG -> if (atNormal) 0.9 else 0.8
+            change >= DAY_RISE_MMHG -> 0.35
+            // Рост у самой нормы места рыба переносит легче: фон привычный,
+            // меняется только его сторона.
+            atNormal -> 0.65
+            else -> 0.5
+        }
+
+        return BiteFactor(
+            name = "Ход за сутки",
+            value = value,
+            weight = WEIGHT_PRESSURE_DAY,
+            comment = "%+.0f мм за %d ч".format(change, hoursBack) + when {
+                change <= -DAY_FALL_MMHG -> " — падает перед фронтом, рыба кормится впрок"
+                change <= -STABLE_PRESSURE_MMHG -> " — понемногу падает, это в плюс"
+                change < STABLE_PRESSURE_MMHG -> " — сутки ровные"
+                change >= DAY_RISE_MMHG -> " — резкий рост после фронта, рыба прижата"
+                atNormal -> " — растёт, но уже у нормы места"
+                else -> " — растёт после фронта, клёв вялый"
+            }
+        )
+    }
+
+    /**
+     * Куда идёт вода относительно оптимума вида.
+     *
+     * Раньше прогрев всегда шёл в минус — через кислород. Для перегретой воды
+     * это верно, а для холодной прямо наоборот: несколько тёплых дней весной
+     * поднимают воду на пару градусов, и рыба выходит кормиться. Знак у хода
+     * воды зависит не от направления, а от того, с какой стороны от оптимума
+     * она сейчас стоит.
+     */
+    private fun waterTrendFactor(
+        waterNow: Double?,
+        waterBefore: Double?,
+        fish: FishEntity,
+        hours: Int
+    ): BiteFactor? {
+        if (waterNow == null || waterBefore == null) return null
+
+        val delta = waterNow - waterBefore
+        val warming = delta >= WATER_TREND_STEP
+        val cooling = delta <= -WATER_TREND_STEP
+        val belowOptimum = waterNow < fish.optMinTemp
+        val aboveOptimum = waterNow > fish.optMaxTemp
+
+        val value = when {
+            belowOptimum && warming -> 1.0
+            belowOptimum && cooling -> 0.55
+            belowOptimum -> 0.8
+            aboveOptimum && cooling -> 1.0
+            aboveOptimum && warming -> 0.5
+            aboveOptimum -> 0.75
+            warming || cooling -> 0.9
+            else -> 1.0
+        }
+
+        return BiteFactor(
+            name = "Ход воды",
+            value = value,
+            weight = WEIGHT_WATER_TREND,
+            comment = "%+.1f° за %d ч".format(delta, hours) + when {
+                belowOptimum && warming -> " — холодная вода греется, рыба выходит кормиться"
+                belowOptimum && cooling -> " — холодает, рыба замирает"
+                belowOptimum -> " — холодная вода стоит на месте"
+                aboveOptimum && cooling -> " — жара отпускает, рыба оживает"
+                aboveOptimum && warming -> " — перегретая вода греется дальше"
+                aboveOptimum -> " — жарко и без перемен"
+                else -> " — вода в оптимуме вида"
+            }
+        )
+    }
+
+    /**
+     * Ветер: сила, постоянство и сторона.
+     *
+     * Зеркальная гладь — не идеал, а проблема: рябь ломает освещённость и
+     * прячет рыболова. Но одной скорости мало. Ветер, который сутки дует в
+     * один берег, сгоняет туда планктон, за ним малька, за мальком хищника —
+     * это и есть наветренный берег, ради которого встают против ветра.
+     * Развернувшийся ветер означает обратное: прошёл фронт, корм понесло в
+     * другую сторону, и рыбе надо заново искать стол.
+     *
+     * Северный ветер приносит холодный воздух. В холодной воде это против
+     * рыболова, в перегретой — за него: верхний слой остывает и берёт
+     * кислород.
+     */
+    private fun windFactor(
+        forecast: List<WeatherEntity>,
+        index: Int,
+        guild: Guild,
+        waterNow: Double?,
+        fish: FishEntity
+    ): BiteFactor {
+        val hour = forecast[index]
+        val ms = hour.windSpeed.kmhToMs()
+        val rippleBonus = if (guild == Guild.PREDATOR) PREDATOR_RIPPLE else PEACEFUL_RIPPLE
+
+        val base = when {
             ms < CALM_MS -> 1.0 - rippleBonus
             ms <= RIPPLE_MAX_MS -> 1.0
             ms <= STRONG_WIND_MS -> 0.7
             else -> 0.3
         }
 
+        val before = forecast.getOrNull(index - WIND_SHIFT_HOURS)
+        val turn = before?.let { windTurn(it.windDirection, hour.windDirection) }
+        // Штиль не «разворачивается»: направление у слабого ветра случайно.
+        val turned = turn != null && turn >= WIND_TURN_DEG && ms >= CALM_MS
+        val steady = turn != null && turn <= WIND_STEADY_DEG &&
+            ms >= CALM_MS && ms <= STRONG_WIND_MS
+        val northerly = ms >= CALM_MS && isNortherlyWind(hour.windDirection)
+        val hotWater = waterNow != null && waterNow > fish.optMaxTemp
+        val coldWater = waterNow != null && waterNow < fish.optMinTemp
+
+        var value = base
+        if (turned) value *= WIND_TURN_PENALTY
+        if (steady) value *= WIND_STEADY_BONUS
+        if (northerly && coldWater) value *= NORTH_COLD_PENALTY
+        if (northerly && hotWater) value *= NORTH_HEAT_BONUS
+
         return BiteFactor(
             name = "Ветер",
-            value = value,
+            value = value.coerceIn(0.0, 1.0),
             weight = WEIGHT_WIND,
-            comment = "%.1f м/с".format(ms) + when {
+            comment = "%s %.1f м/с".format(windDirectionLabel(hour.windDirection), ms) + when {
+                turned -> " — развернулся за $WIND_SHIFT_HOURS ч, рыба перестраивается"
+                northerly && coldWater -> " — северный, студит и без того холодную воду"
+                northerly && hotWater -> " — северный, сбивает жару, кислорода прибавится"
+                steady && ms > CALM_MS -> " — держит сторону, корм идёт к наветренному берегу"
                 ms < CALM_MS -> " — штиль, вода как зеркало"
                 ms <= RIPPLE_MAX_MS -> " — рябь на воде, это в плюс"
                 ms <= STRONG_WIND_MS -> " — заметный ветер, вода перемешивается"
                 else -> " — сильный ветер, рыбалка трудная"
             }
+        )
+    }
+
+    /**
+     * Расслоение воды в штиль.
+     *
+     * Перемешивает водоём ветер. Когда его нет несколько часов подряд, а
+     * вода перегрета, столб распадается на слои: тёплый верх, холодный низ и
+     * термоклин между ними. Рыба уходит из верхнего слоя, но и в яму не
+     * идёт — там нечем дышать, — а стоит в термоклине и кормится вяло.
+     *
+     * Фактор появляется только тогда, когда всё это сошлось: без штиля или
+     * без жары его в списке нет, и лишней строки на экране не возникает.
+     */
+    private fun stratificationFactor(
+        forecast: List<WeatherEntity>,
+        index: Int,
+        place: PlaceContext,
+        waterNow: Double?,
+        fish: FishEntity
+    ): BiteFactor? {
+        if (waterNow == null || waterNow <= fish.optMaxTemp) return null
+
+        val from = index - CALM_SPELL_HOURS + 1
+        if (from < 0) return null
+        val calm = (from..index).all { forecast[it].windSpeed.kmhToMs() < CALM_MS }
+        if (!calm) return null
+
+        val deep = place.layer == WaterLayerChoice.DEEP
+        return BiteFactor(
+            name = "Расслоение",
+            value = if (deep) STRATIFIED_DEEP else STRATIFIED_SHALLOW,
+            weight = 0.0,
+            limiting = true,
+            comment = "Штиль $CALM_SPELL_HOURS ч на перегретой воде: она расслоилась, " +
+                if (deep) "рыба держится термоклина над ямой" else "рыба ушла с мели вниз"
         )
     }
 
@@ -450,6 +656,14 @@ class CalculateFishActivityUseCase @Inject constructor() {
         const val WEIGHT_LIGHT = 0.30
         const val WEIGHT_WIND = 0.15
 
+        // Веса динамики. Сумма всех весов больше единицы — так и задумано:
+        // расчёт нормирует их по тем факторам, которые удалось посчитать, и
+        // на устройстве без истории оценка не проседает просто от нехватки
+        // данных. Действующие доли: давление 0.29, тенденция 0.17, ход за
+        // сутки 0.13, свет 0.25, ветер 0.12, ход воды 0.04.
+        const val WEIGHT_PRESSURE_DAY = 0.15
+        const val WEIGHT_WATER_TREND = 0.05
+
         /** Ширина перехода не бывает нулевой: иначе деление на ноль. */
         const val MIN_TOLERANCE = 1.0
 
@@ -463,7 +677,47 @@ class CalculateFishActivityUseCase @Inject constructor() {
         const val STABLE_PRESSURE_MMHG = 1.0
         const val NOTICEABLE_PRESSURE_MMHG = 3.0
 
+        /** Окно суточного хода и минимум истории, при котором его читают. */
+        const val DAY_WINDOW_HOURS = 24
+        const val MIN_DAY_WINDOW_HOURS = 6
+
+        /** Падение за сутки, которое рыба встречает жором. */
+        const val DAY_FALL_MMHG = 2.5
+
+        /** Рост за сутки, после которого клёв замирает. */
+        const val DAY_RISE_MMHG = 4.0
+
+        /** Окно хода воды: за три часа её движение почти не читается. */
+        const val WATER_TREND_HOURS = 6
+
+        /** Насколько должна сдвинуться вода за окно, чтобы это был ход. */
+        const val WATER_TREND_STEP = 0.3
+
+        /** За сколько часов сравнивается направление ветра. */
+        const val WIND_SHIFT_HOURS = 6
+
+        /** Поворот, после которого ветер считается сменившимся. */
+        const val WIND_TURN_DEG = 90.0
+
+        /** Разброс, в пределах которого ветер считается устойчивым. */
+        const val WIND_STEADY_DEG = 45.0
+
+        const val WIND_TURN_PENALTY = 0.8
+        const val WIND_STEADY_BONUS = 1.1
+        const val NORTH_COLD_PENALTY = 0.85
+        const val NORTH_HEAT_BONUS = 1.1
+
+        /** Сколько часов штиля расслаивают перегретую воду. */
+        const val CALM_SPELL_HOURS = 6
+
+        /** Что остаётся от шанса на мели и в яме, когда вода расслоилась. */
+        const val STRATIFIED_SHALLOW = 0.8
+        const val STRATIFIED_DEEP = 0.95
+
         const val HEAT_TOLERANCE = 12.0
+
+        /** За сколько градусов до верха оптимума кислород становится узким местом. */
+        const val HEAT_MARGIN_C = 2.0
         const val NOTICEABLE_COOLING = 2.0
 
         /** Насколько должна сдвинуться вода за окно, чтобы это было ходом. */

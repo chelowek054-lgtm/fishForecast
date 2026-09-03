@@ -1,6 +1,8 @@
 package com.example.fishforecast.domain.weather
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class WindTest {
@@ -30,5 +32,25 @@ class WindTest {
     @Test
     fun `скорость переводится в метры в секунду`() {
         assertEquals(10.0, 36.0.kmhToMs(), 0.001)
+    }
+
+    @Test
+    fun `поворот ветра считается по короткой дуге`() {
+        // Через север ветер поворачивает на двадцать градусов, а не на триста сорок.
+        assertEquals(20.0, windTurn(350.0, 10.0), 0.001)
+        assertEquals(20.0, windTurn(10.0, 350.0), 0.001)
+        assertEquals(0.0, windTurn(180.0, 180.0), 0.001)
+        assertEquals(180.0, windTurn(45.0, 225.0), 0.001)
+        assertEquals(90.0, windTurn(0.0, 270.0), 0.001)
+    }
+
+    @Test
+    fun `северным считается сектор от северо-запада до северо-востока`() {
+        assertTrue(isNortherlyWind(0.0))
+        assertTrue(isNortherlyWind(350.0))
+        assertTrue(isNortherlyWind(40.0))
+        assertFalse(isNortherlyWind(90.0))
+        assertFalse(isNortherlyWind(180.0))
+        assertFalse(isNortherlyWind(300.0))
     }
 }

@@ -414,4 +414,166 @@ class CalculateFishActivityUseCaseTest {
         assertEquals(listOf("2026-08-26T00:00", "2026-08-26T01:00", "2026-08-26T02:00", "2026-08-26T03:00"),
             result.map { it.time })
     }
+
+    // --- Динамика погоды: откуда пришли, а не только что сейчас ---
+
+    /** Сутки часов с заданным ходом давления, чтобы окно в 24 часа заполнилось. */
+    private fun day(
+        pressureFrom: Double,
+        pressureTo: Double,
+        hours: Int = 25,
+        windSpeed: Double = 12.0,
+        windDirection: Double = 180.0
+    ): List<WeatherEntity> = (0 until hours).map { index ->
+        val part = index.toDouble() / (hours - 1)
+        hour(
+            index = index % 24,
+            pressureHpa = (pressureFrom + (pressureTo - pressureFrom) * part) * 1.333224,
+            windSpeed = windSpeed
+        ).copy(
+            time = "2026-08-%02dT%02d:00".format(26 + index / 24, index % 24),
+            windDirection = windDirection
+        )
+    }
+
+    @Test
+    fun `сутки падения давления лучше суток роста`() {
+        // Перед фронтом рыба кормится впрок, после него — прижата ко дну.
+        // В последний час давление одинаковое: разницу даёт только история.
+        val falling = useCase(pike, day(pressureFrom = 754.0, pressureTo = 750.0), 750.0)
+        val rising = useCase(pike, day(pressureFrom = 745.0, pressureTo = 750.0), 750.0)
+
+        assertTrue(
+            "падение должно быть выше роста: ${falling.last().score} против ${rising.last().score}",
+            falling.last().score > rising.last().score
+        )
+    }
+
+    @Test
+    fun `суточный ход назван причиной, а не спрятан в балле`() {
+        val plan = useCase(pike, day(pressureFrom = 756.0, pressureTo = 750.0), 750.0).last()
+
+        val factor = plan.factors.first { it.name == "Ход за сутки" }
+        assertTrue("должно быть сказано про фронт: ${factor.comment}", factor.comment.contains("фронт"))
+    }
+
+    @Test
+    fun `без истории суточный ход не штрафует`() {
+        // Первые часы прогноза не должны выглядеть хуже только потому,
+        // что смотреть назад ещё некуда.
+        val short = useCase(pike, (0..2).map { hour(it) }, 750.0).last()
+
+        val factor = short.factors.first { it.name == "Ход за сутки" }
+        assertEquals(1.0, factor.value, 0.001)
+        assertTrue(factor.comment.contains("Истории меньше"))
+    }
+
+    @Test
+    fun `холодная вода, которая греется, лучше стынущей`() {
+        // Было холодно, стало теплее — рыба выходит кормиться. Прежняя
+        // модель штрафовала любой прогрев, потому что считала его только
+        // через кислород.
+        val forecast = (0..8).map { hour(it) }
+        val warming = useCase(pike, forecast, 750.0, water(3.0, 3.2, 3.4, 3.6, 3.9, 4.2, 4.6, 5.0, 5.4))
+        val cooling = useCase(pike, forecast, 750.0, water(7.0, 6.6, 6.2, 5.9, 5.7, 5.6, 5.5, 5.4, 5.4))
+
+        assertTrue(
+            "прогрев холодной воды должен быть выше: ${warming.last().score} против ${cooling.last().score}",
+            warming.last().score > cooling.last().score
+        )
+    }
+
+    @Test
+    fun `в перегретой воде знак хода меняется на обратный`() {
+        val forecast = (0..8).map { hour(it) }
+        val cooling = useCase(pike, forecast, 750.0, water(24.0, 23.6, 23.2, 22.9, 22.6, 22.3, 22.0, 21.7, 21.4))
+        val warming = useCase(pike, forecast, 750.0, water(19.0, 19.4, 19.8, 20.2, 20.6, 21.0, 21.4, 21.8, 22.2))
+
+        assertTrue(
+            "остывание жары должно быть выше прогрева: ${cooling.last().score} против ${warming.last().score}",
+            cooling.last().score > warming.last().score
+        )
+    }
+
+    @Test
+    fun `сменившийся ветер хуже устойчивого`() {
+        // Разворот означает прошедший фронт: корм понесло в другую сторону,
+        // и рыбе надо заново искать стол.
+        val steady = day(750.0, 750.0, windDirection = 180.0)
+        val turned = steady.mapIndexed { index, entity ->
+            if (index >= steady.size - 3) entity.copy(windDirection = 20.0) else entity
+        }
+
+        val steadyScore = useCase(pike, steady, 750.0).last()
+        val turnedScore = useCase(pike, turned, 750.0).last()
+
+        assertTrue(
+            "разворот должен стоить баллов: ${turnedScore.score} против ${steadyScore.score}",
+            turnedScore.score < steadyScore.score
+        )
+        assertTrue(
+            turnedScore.factors.first { it.name == "Ветер" }.comment.contains("развернулся")
+        )
+    }
+
+    /** Ровная вода на те же часы, что и сутки прогноза. */
+    private fun waterFor(forecast: List<WeatherEntity>, temperature: Double): WaterState {
+        val hours = forecast.map { WaterHour(time = it.time, temperature = temperature) }
+        return WaterState(
+            shallow = hours,
+            deep = hours,
+            shallowDepthM = 1.5,
+            deepDepthM = 4.0,
+            depthsAssumed = false,
+            anchored = false
+        )
+    }
+
+    @Test
+    fun `северный ветер в холодной воде хуже южного`() {
+        val northForecast = day(750.0, 750.0, windDirection = 0.0)
+        val southForecast = day(750.0, 750.0, windDirection = 180.0)
+        val cold = waterFor(northForecast, 5.0)
+        val north = useCase(pike, northForecast, 750.0, cold).last()
+        val south = useCase(pike, southForecast, 750.0, cold).last()
+
+        assertTrue(
+            "северный должен быть хуже: ${north.score} против ${south.score}",
+            north.score < south.score
+        )
+        assertTrue(north.factors.first { it.name == "Ветер" }.comment.contains("студит"))
+    }
+
+    @Test
+    fun `северный ветер на перегретой воде идёт в плюс`() {
+        val forecast = day(750.0, 750.0, windDirection = 0.0)
+        val north = useCase(pike, forecast, 750.0, waterFor(forecast, 21.0)).last()
+
+        assertTrue(
+            "северный по жаре должен помогать: ${north.factors.first { it.name == "Ветер" }.comment}",
+            north.factors.first { it.name == "Ветер" }.comment.contains("сбивает жару")
+        )
+    }
+
+    @Test
+    fun `штиль на перегретой воде расслаивает её, и мель проигрывает яме`() {
+        val calm = day(750.0, 750.0, windSpeed = 2.0)
+        val hot = waterFor(calm, 21.0)
+
+        val shallow = useCase(pike, calm, 750.0, hot, place = PlaceContext(WaterLayerChoice.SHALLOW)).last()
+        val deep = useCase(pike, calm, 750.0, hot, place = PlaceContext(WaterLayerChoice.DEEP)).last()
+
+        val factor = shallow.factors.first { it.name == "Расслоение" }
+        assertTrue("должно быть сказано про термоклин: ${factor.comment}", factor.comment.contains("расслоилась"))
+        assertTrue("в яме должно быть не хуже: ${deep.score} против ${shallow.score}", deep.score >= shallow.score)
+    }
+
+    @Test
+    fun `при ветре расслоения нет`() {
+        // Ветер перемешивает столб: слоёв не образуется, и штрафа быть не должно.
+        val forecast = day(750.0, 750.0, windSpeed = 18.0)
+        val windy = useCase(pike, forecast, 750.0, waterFor(forecast, 21.0)).last()
+
+        assertTrue(windy.factors.none { it.name == "Расслоение" })
+    }
 }
