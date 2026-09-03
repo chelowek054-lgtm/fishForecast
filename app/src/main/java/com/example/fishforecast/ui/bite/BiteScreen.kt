@@ -41,6 +41,17 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.wrapContentWidth
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -285,82 +296,252 @@ private fun CurrentBiteCard(forecast: BiteForecast, fishName: String) {
 }
 
 /**
- * Столбики активности по часам. Рисуются вручную: библиотека графиков ради
- * одной диаграммы утянула бы в офлайн-приложение лишний вес.
+ * Столбики активности по часам.
+ *
+ * Рисуется вручную: библиотека графиков ради одной диаграммы утянула бы в
+ * офлайн-приложение лишний вес. Тридцать шесть часов в ширину телефона не
+ * помещаются, поэтому столбик имеет постоянную ширину, а график
+ * прокручивается — растянутый на экран график не показывает ни одного часа.
+ *
+ * Шкала стоит слева и не уезжает при прокрутке: уехавшая шкала бесполезна,
+ * значение не с чем сопоставить.
  */
 @Composable
 private fun BiteChart(forecast: List<BiteForecast>, nowIndex: Int) {
     if (forecast.isEmpty()) return
 
-    val barColors = forecast.map { it.level.bar() }
+    val ticks = remember(forecast, nowIndex) {
+        chartTicks(forecast.map { it.time }, nowIndex)
+    }
+    val scroll = rememberScrollState()
+    val density = LocalDensity.current
+
+    // Открываем график на «сейчас»: решение принимают по ближайшим часам, а не
+    // по позавчерашним. Пара часов позади остаётся в виду ради контекста.
+    LaunchedEffect(nowIndex, forecast.size) {
+        if (nowIndex > PAST_IN_VIEW) {
+            val offset = with(density) { (CELL_WIDTH * (nowIndex - PAST_IN_VIEW)).roundToPx() }
+            scroll.scrollTo(offset)
+        }
+    }
+
+    val gridColor = MaterialTheme.colorScheme.outlineVariant
+    val dayColor = MaterialTheme.colorScheme.outline
     val nowColor = MaterialTheme.colorScheme.onSurface
 
     Column {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(160.dp),
-            verticalAlignment = Alignment.Bottom,
-            horizontalArrangement = Arrangement.spacedBy(4.dp)
-        ) {
-            forecast.forEachIndexed { index, hour ->
-                val past = nowIndex >= 0 && index < nowIndex
+        Row(modifier = Modifier.fillMaxWidth()) {
+            ScoreAxis()
 
-                Box(
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .height(CHART_HEIGHT)
+            ) {
+                GridLines(gridColor, Modifier.matchParentSize())
+
+                Row(
                     modifier = Modifier
-                        .weight(1f)
-                        .fillMaxSize()
-                        // Прошедшее бледнее: оно объясняет, откуда пришли,
-                        // но решение принимают по тому, что впереди.
-                        .alpha(if (past) PAST_ALPHA else 1f),
-                    contentAlignment = Alignment.BottomCenter
+                        .horizontalScroll(scroll)
+                        .fillMaxHeight(),
+                    verticalAlignment = Alignment.Bottom
                 ) {
-                    Canvas(modifier = Modifier.fillMaxSize()) {
-                        val barHeight = size.height * (hour.score / 100f)
-                        drawRect(
-                            color = barColors[index],
-                            topLeft = androidx.compose.ui.geometry.Offset(0f, size.height - barHeight),
-                            size = androidx.compose.ui.geometry.Size(size.width, barHeight)
+                    forecast.forEachIndexed { index, hour ->
+                        HourBar(
+                            hour = hour,
+                            tick = ticks[index],
+                            past = nowIndex >= 0 && index < nowIndex,
+                            dayColor = dayColor,
+                            nowColor = nowColor
                         )
-                        // Разделитель «сейчас»: без него столбики прошлого и
-                        // будущего сливаются в один ряд.
-                        if (index == nowIndex) {
-                            drawLine(
-                                color = nowColor,
-                                start = androidx.compose.ui.geometry.Offset(0f, 0f),
-                                end = androidx.compose.ui.geometry.Offset(0f, size.height),
-                                strokeWidth = 3f
-                            )
-                        }
                     }
                 }
             }
         }
 
-        Spacer(modifier = Modifier.height(4.dp))
-
-        // Подпись у каждого столбика не влезает: ячейка уже, чем «06:00».
-        // Поэтому ось делится на группы по шесть часов, и подпись занимает
-        // всю ширину своей группы.
-        Row(modifier = Modifier.fillMaxWidth()) {
-            forecast.chunked(LABEL_STEP).forEach { chunk ->
-                Text(
-                    text = chunk.first().time.takeLast(5),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.weight(chunk.size.toFloat()),
-                    maxLines = 1
-                )
+        // Ось времени живёт тем же состоянием прокрутки, что и столбики, —
+        // иначе подписи разъезжаются с тем, что подписывают.
+        Row {
+            Spacer(modifier = Modifier.width(AXIS_WIDTH))
+            Row(modifier = Modifier.horizontalScroll(scroll)) {
+                ticks.forEach { tick -> HourLabel(tick) }
             }
         }
 
-        forecast.getOrNull(nowIndex)?.let { hour ->
+        Spacer(modifier = Modifier.height(8.dp))
+        ChartLegend()
+    }
+}
+
+/** Шкала оценки. Стоит вне прокрутки, потому и остаётся на виду. */
+@Composable
+private fun ScoreAxis() {
+    Column(
+        modifier = Modifier
+            .width(AXIS_WIDTH)
+            .height(CHART_HEIGHT)
+            .padding(end = 4.dp),
+        horizontalAlignment = Alignment.End,
+        verticalArrangement = Arrangement.SpaceBetween
+    ) {
+        listOf("100", "50", "0").forEach { mark ->
             Text(
-                text = "• сейчас ${hour.time.takeLast(5)}",
+                text = mark,
                 style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1
             )
         }
+    }
+}
+
+/**
+ * Линии уровня: сплошные на делениях шкалы, пунктирные на границах цвета.
+ *
+ * Пунктир объясняет, почему столбик зелёный: он перешагнул семьдесят. Без этих
+ * линий цвет выглядит произволом.
+ */
+@Composable
+private fun GridLines(color: Color, modifier: Modifier = Modifier) {
+    val goodColor = BiteLevel.GOOD.bar()
+    val moderateColor = BiteLevel.MODERATE.bar()
+
+    Canvas(modifier = modifier) {
+        listOf(0f, 0.5f, 1f).forEach { part ->
+            val y = size.height * part
+            drawLine(
+                color = color,
+                start = Offset(0f, y),
+                end = Offset(size.width, y),
+                strokeWidth = 1f
+            )
+        }
+
+        val dash = PathEffect.dashPathEffect(floatArrayOf(8f, 8f))
+        listOf(GOOD_SCORE to goodColor, MODERATE_SCORE to moderateColor).forEach { pair ->
+            val y = size.height * (1f - pair.first / 100f)
+            drawLine(
+                color = pair.second.copy(alpha = 0.45f),
+                start = Offset(0f, y),
+                end = Offset(size.width, y),
+                strokeWidth = 2f,
+                pathEffect = dash
+            )
+        }
+    }
+}
+
+/** Один час: столбик, разделитель суток слева и отметка «сейчас». */
+@Composable
+private fun HourBar(
+    hour: BiteForecast,
+    tick: HourTick,
+    past: Boolean,
+    dayColor: Color,
+    nowColor: Color
+) {
+    val barColor = hour.level.bar()
+
+    Box(
+        modifier = Modifier
+            .width(CELL_WIDTH)
+            .fillMaxHeight()
+            // Прошедшее бледнее: оно объясняет, откуда пришли, но решение
+            // принимают по тому, что впереди.
+            .alpha(if (past) PAST_ALPHA else 1f)
+    ) {
+        Canvas(modifier = Modifier.fillMaxSize()) {
+            if (tick.dayStart) {
+                drawLine(
+                    color = dayColor,
+                    start = Offset(0f, 0f),
+                    end = Offset(0f, size.height),
+                    strokeWidth = 2f
+                )
+            }
+
+            val padding = BAR_PADDING.toPx()
+            val barHeight = size.height * (hour.score / 100f)
+            drawRoundRect(
+                color = barColor,
+                topLeft = Offset(padding, size.height - barHeight),
+                size = Size(size.width - padding * 2, barHeight),
+                cornerRadius = CornerRadius(4f, 4f)
+            )
+
+            if (tick.now) {
+                drawLine(
+                    color = nowColor,
+                    start = Offset(0f, 0f),
+                    end = Offset(0f, size.height),
+                    strokeWidth = 3f
+                )
+            }
+        }
+    }
+}
+
+/**
+ * Подпись часа под своим столбиком.
+ *
+ * Ячейка уже подписи, поэтому текст меряется без ограничения и выходит за её
+ * края по центру. Соседние часы подписи не получают — накладываться не на что.
+ */
+@Composable
+private fun HourLabel(tick: HourTick) {
+    Box(
+        modifier = Modifier.width(CELL_WIDTH),
+        contentAlignment = Alignment.Center
+    ) {
+        if (tick.label.isNotEmpty()) {
+            Text(
+                text = tick.label,
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = if (tick.now || tick.dayStart) FontWeight.Bold else FontWeight.Normal,
+                color = if (tick.now) {
+                    MaterialTheme.colorScheme.onSurface
+                } else {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                },
+                softWrap = false,
+                modifier = Modifier.wrapContentWidth(unbounded = true)
+            )
+        }
+    }
+}
+
+/** Что означает цвет и почему часть столбиков бледная. */
+@Composable
+private fun ChartLegend() {
+    Column {
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            LegendItem(BiteLevel.GOOD.bar(), "от $GOOD_SCORE")
+            LegendItem(BiteLevel.MODERATE.bar(), "$MODERATE_SCORE–${GOOD_SCORE - 1}")
+            LegendItem(BiteLevel.POOR.bar(), "до $MODERATE_SCORE")
+        }
+        Text(
+            text = "Бледные столбики — прошедшие часы, цифры под ними — час суток",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
+}
+
+@Composable
+private fun LegendItem(color: Color, text: String) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Box(
+            modifier = Modifier
+                .size(10.dp)
+                .clip(RoundedCornerShape(2.dp))
+                .background(color)
+        )
+        Spacer(modifier = Modifier.width(4.dp))
+        Text(
+            text = text,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
     }
 }
 
@@ -389,5 +570,20 @@ internal const val HOURS_FORWARD = 24
 /** Насколько бледнее показываются прошедшие часы. */
 private const val PAST_ALPHA = 0.4f
 
-/** Через сколько часов ставится подпись на оси. */
-private const val LABEL_STEP = 6
+/** Ширина ячейки часа. Постоянная: график прокручивается, а не сжимается. */
+private val CELL_WIDTH = 18.dp
+
+/** Отступ внутри ячейки — из него получается зазор между столбиками. */
+private val BAR_PADDING = 3.dp
+
+/** Ширина колонки со шкалой оценки. */
+private val AXIS_WIDTH = 28.dp
+
+private val CHART_HEIGHT = 160.dp
+
+/** Сколько прошедших часов остаётся в виду, когда график открывается. */
+private const val PAST_IN_VIEW = 2
+
+/** Границы уровней клёва — те же, что в BiteLevel.fromScore. */
+private const val GOOD_SCORE = 70
+private const val MODERATE_SCORE = 40
