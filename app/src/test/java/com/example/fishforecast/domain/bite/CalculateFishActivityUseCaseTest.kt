@@ -728,4 +728,85 @@ class CalculateFishActivityUseCaseTest {
         assertTrue(zero.score in 0..100)
         assertTrue(huge.score in 0..100)
     }
+
+    // --- Акклимация: чем рыба жила неделю ---
+
+    /** Неделя часов с заданной водой и последним часом на [now]. */
+    private fun week(previous: Double, now: Double): Pair<List<WeatherEntity>, WaterState> {
+        val hours = (0 until 180).map { index ->
+            hour(index % 24).copy(time = "2026-08-%02dT%02d:00".format(20 + index / 24, index % 24))
+        }
+        val water = WaterState(
+            shallow = hours.mapIndexed { index, entity ->
+                WaterHour(entity.time, if (index < hours.size - 6) previous else now)
+            },
+            deep = hours.map { WaterHour(it.time, previous) },
+            shallowDepthM = 1.5,
+            deepDepthM = 4.0,
+            depthsAssumed = false,
+            anchored = false
+        )
+        return hours to water
+    }
+
+    @Test
+    fun `рыба, неделю стоявшая в холоде, встречает потепление лучше`() {
+        // Шесть градусов для щуки холодны в любом случае, но привыкшей к
+        // восьми это край её полосы, а пришедшей с восемнадцати — провал.
+        val (fromCold, coldWater) = week(previous = 8.0, now = 6.0)
+        val (fromWarm, warmWater) = week(previous = 18.0, now = 6.0)
+
+        val cold = useCase(pike, fromCold, 750.0, coldWater).last()
+        val warm = useCase(pike, fromWarm, 750.0, warmWater).last()
+
+        assertTrue(
+            "привыкшей к холоду должно быть легче: ${cold.score} против ${warm.score}",
+            cold.score > warm.score
+        )
+        assertTrue(
+            cold.factors.first { it.name == "Температура воды" }.comment.contains("привыкла к холодной")
+        )
+    }
+
+    @Test
+    fun `сдвиг оптимума ограничен парой градусов`() {
+        // Даже месяц ледяной воды не превращает щуку в налима: и четыре
+        // градуса, и один сдвигают полосу одинаково — до упора.
+        val (mild, mildWater) = week(previous = 4.0, now = 5.0)
+        val (icy, icyWater) = week(previous = 1.0, now = 5.0)
+
+        val mildFactor = useCase(pike, mild, 750.0, mildWater)
+            .last().factors.first { it.name == "Температура воды" }
+        val icyFactor = useCase(pike, icy, 750.0, icyWater)
+            .last().factors.first { it.name == "Температура воды" }
+
+        assertEquals("упор одинаков", mildFactor.value, icyFactor.value, 0.001)
+        assertTrue("но вода всё равно холоднее оптимума: ${mildFactor.value}", mildFactor.value < 1.0)
+    }
+
+    @Test
+    fun `предел выносливости не сдвигается вместе с оптимумом`() {
+        // Привычка меняет аппетит, а не физиологию: за пределом активности
+        // нет, сколько бы рыба ни привыкала.
+        val (forecast, water) = week(previous = 24.0, now = 24.0)
+
+        val factor = useCase(pike, forecast, 750.0, water)
+            .last().factors.first { it.name == "Температура воды" }
+
+        assertEquals("предел щуки 22°, за ним активности нет", 0.0, factor.value, 0.001)
+    }
+
+    @Test
+    fun `без недели истории акклимации нет`() {
+        // Первые часы прогноза не должны выглядеть иначе только потому, что
+        // смотреть назад ещё некуда.
+        val short = (0..5).map { hour(it) }
+        val water = water(12.0, 12.0, 12.0, 12.0, 12.0, 12.0)
+
+        val factor = useCase(pike, short, 750.0, water)
+            .last().factors.first { it.name == "Температура воды" }
+
+        assertTrue("подписи о привычке быть не должно: ${factor.comment}",
+            !factor.comment.contains("привыкла"))
+    }
 }

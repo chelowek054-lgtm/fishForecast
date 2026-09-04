@@ -56,6 +56,25 @@ class CalculateFishActivityUseCase @Inject constructor() {
         val sorted = forecast.sortedBy { it.time }
         val normal = normalPressureMmHg
 
+        // Средняя вода за неделю до каждого часа: температура акклимации.
+        // Считается один раз бегущей суммой — иначе на каждый час пришлось бы
+        // заново пробегать сто шестьдесят восемь предыдущих.
+        val layerTemperatures = sorted.map { entry ->
+            water?.layerAt(entry.time, place.layer)?.plus(place.waterOffsetC)
+        }
+        val prefix = DoubleArray(layerTemperatures.size + 1)
+        val counts = IntArray(layerTemperatures.size + 1)
+        layerTemperatures.forEachIndexed { index, value ->
+            prefix[index + 1] = prefix[index] + (value ?: 0.0)
+            counts[index + 1] = counts[index] + if (value == null) 0 else 1
+        }
+        fun acclimationAt(index: Int): Double? {
+            val from = (index - ACCLIMATION_WINDOW_HOURS).coerceAtLeast(0)
+            val hours = counts[index] - counts[from]
+            if (hours < MIN_ACCLIMATION_HOURS) return null
+            return (prefix[index] - prefix[from]) / hours
+        }
+
         return sorted.mapIndexed { index, hour ->
             // Рыба живёт в воде, а не в воздухе. Пока вода не посчитана,
             // остаётся прежнее допущение — но оно именно допущение.
@@ -72,7 +91,12 @@ class CalculateFishActivityUseCase @Inject constructor() {
                     ?.plus(place.waterOffsetC)
             }
 
-            val temperature = temperatureFactor(waterNow ?: hour.temperature, fish, waterNow != null)
+            val temperature = temperatureFactor(
+                temperature = waterNow ?: hour.temperature,
+                fish = fish,
+                fromWater = waterNow != null,
+                acclimation = acclimationAt(index)
+            )
             val pressure = pressureFactor(hour.pressure.hPaToMmHg(), normal, fish)
             val trend = pressureTrendFactor(sorted, index, normal, fish)
             val oxygen = if (waterNow != null) {
@@ -144,9 +168,17 @@ class CalculateFishActivityUseCase @Inject constructor() {
     private fun temperatureFactor(
         temperature: Double,
         fish: FishEntity,
-        fromWater: Boolean
+        fromWater: Boolean,
+        acclimation: Double?
     ): BiteFactor {
-        val optimum = fish.optMinTemp.toDouble()..fish.optMaxTemp.toDouble()
+        // Оптимум из справочника — про вид вообще, а рыба живёт в конкретной
+        // воде. Неделя в восьми градусах перестраивает обмен, и та же
+        // двенадцатиградусная вода для неё тепло, а для пришедшей сверху —
+        // холодный удар. Поэтому полоса комфорта сдвигается к той воде, в
+        // которой рыба стояла, а предел выносливости остаётся на месте: он
+        // про физиологию, а не про привычку.
+        val shift = acclimationShift(fish, acclimation)
+        val optimum = (fish.optMinTemp + shift)..(fish.optMaxTemp + shift)
         val value = when {
             temperature in optimum -> 1.0
             temperature < optimum.start -> {
@@ -160,6 +192,11 @@ class CalculateFishActivityUseCase @Inject constructor() {
         }
 
         val what = if (fromWater) "Вода" else "Воздух"
+        val acclimated = when {
+            shift <= -ACCLIMATION_NOTICEABLE_C -> ", рыба привыкла к холодной воде"
+            shift >= ACCLIMATION_NOTICEABLE_C -> ", рыба привыкла к тёплой воде"
+            else -> ""
+        }
         return BiteFactor(
             name = if (fromWater) "Температура воды" else "Температура",
             value = value,
@@ -171,8 +208,24 @@ class CalculateFishActivityUseCase @Inject constructor() {
                 temperature < optimum.start -> "холодно до оцепенения"
                 value > 0 -> "теплее оптимума"
                 else -> "жарко до оцепенения"
-            }
+            } + acclimated
         )
+    }
+
+    /**
+     * Насколько сдвинуть оптимум под ту воду, в которой рыба стояла неделю.
+     *
+     * Акклимация начинается уже за сутки и в основном укладывается в первую
+     * неделю: рыба, привыкшая к двадцати пяти градусам, ест почти вдвое
+     * интенсивнее привыкшей к пятнадцати. Но перестройка не бесконечна,
+     * поэтому сдвиг ограничен парой градусов, и берётся не весь разрыв, а его
+     * доля — вид остаётся собой.
+     */
+    private fun acclimationShift(fish: FishEntity, acclimation: Double?): Double {
+        if (acclimation == null) return 0.0
+        val center = (fish.optMinTemp + fish.optMaxTemp) / 2.0
+        return ((acclimation - center) * ACCLIMATION_SHARE)
+            .coerceIn(-MAX_ACCLIMATION_SHIFT_C, MAX_ACCLIMATION_SHIFT_C)
     }
 
     /**
@@ -731,6 +784,27 @@ class CalculateFishActivityUseCase @Inject constructor() {
 
         /** Рост за сутки, после которого клёв замирает. */
         const val DAY_RISE_MMHG = 4.0
+
+        /**
+         * Окно акклимации: столько рыба помнит воду, в которой стояла.
+         *
+         * Неделя сходится с трёх сторон: основная часть перестройки обмена
+         * проходит за первые сутки-неделю, инерция воды на яме того же
+         * порядка, и ровно семь суток прошлого приложение уже качает.
+         */
+        const val ACCLIMATION_WINDOW_HOURS = 168
+
+        /** Меньше суток истории — про привычку говорить не о чем. */
+        const val MIN_ACCLIMATION_HOURS = 24
+
+        /** Какую долю разрыва отыгрывает акклимация. */
+        const val ACCLIMATION_SHARE = 0.3
+
+        /** Дальше этого оптимум не уезжает: вид остаётся собой. */
+        const val MAX_ACCLIMATION_SHIFT_C = 2.0
+
+        /** С какого сдвига о привычке стоит писать в пояснении. */
+        const val ACCLIMATION_NOTICEABLE_C = 1.0
 
         /** Окно хода воды: за три часа её движение почти не читается. */
         const val WATER_TREND_HOURS = 6
