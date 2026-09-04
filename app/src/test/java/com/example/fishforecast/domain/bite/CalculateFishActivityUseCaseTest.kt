@@ -3,6 +3,7 @@ package com.example.fishforecast.domain.bite
 import com.example.fishforecast.data.local.entities.DailySunEntity
 import com.example.fishforecast.data.local.entities.FishEntity
 import com.example.fishforecast.data.local.entities.WeatherEntity
+import com.example.fishforecast.domain.knowledge.StructureType
 import com.example.fishforecast.domain.water.WaterHour
 import com.example.fishforecast.domain.water.WaterState
 import org.junit.Assert.assertEquals
@@ -575,5 +576,50 @@ class CalculateFishActivityUseCaseTest {
         val windy = useCase(pike, forecast, 750.0, waterFor(forecast, 21.0)).last()
 
         assertTrue(windy.factors.none { it.name == "Расслоение" })
+    }
+
+    @Test
+    fun `структуры места меняют оценку, а не только подпись`() {
+        // Коряжник для щуки — засада с кормом под боком: он должен поднимать
+        // шанс, а не украшать карточку.
+        val forecast = day(750.0, 750.0)
+        val open = useCase(pike, forecast, 750.0).last()
+        val snags = useCase(
+            pike, forecast, 750.0,
+            place = PlaceContext(
+                layer = WaterLayerChoice.SHALLOW,
+                structures = listOf(
+                    StructureType(id = "snags", name = "Коряжник", predatorBonus = 0.25)
+                )
+            )
+        ).last()
+
+        assertTrue(
+            "коряжник должен поднимать оценку: ${snags.score} против ${open.score}",
+            snags.score > open.score
+        )
+        assertTrue(
+            snags.factors.first { it.name == "Место" }.comment.contains("коряжник")
+        )
+    }
+
+    @Test
+    fun `гиблое место роняет оценку и говорит об этом`() {
+        val forecast = day(750.0, 750.0)
+        val silt = useCase(
+            pike, forecast, 750.0,
+            place = PlaceContext(
+                layer = WaterLayerChoice.SHALLOW,
+                structures = listOf(
+                    StructureType(id = "rotten_silt", name = "Гнилой ил", predatorBonus = -0.3)
+                )
+            )
+        ).last()
+        val open = useCase(pike, forecast, 750.0).last()
+
+        assertTrue("ил должен ронять оценку: ${silt.score} против ${open.score}", silt.score < open.score)
+        assertTrue(
+            silt.factors.first { it.name == "Место" }.comment.contains("против рыбы")
+        )
     }
 }

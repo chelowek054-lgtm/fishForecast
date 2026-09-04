@@ -1,6 +1,9 @@
 package com.example.fishforecast.domain.bite
 
+import com.example.fishforecast.data.local.entities.FishingSpotEntity
 import com.example.fishforecast.domain.fish.Guild
+import com.example.fishforecast.domain.fish.decodeBaits
+import com.example.fishforecast.domain.knowledge.KnowledgeCatalog
 import com.example.fishforecast.domain.knowledge.StructureType
 
 /**
@@ -55,4 +58,29 @@ data class PlaceContext(
 enum class WaterLayerChoice(val title: String) {
     SHALLOW("на мели"),
     DEEP("в яме")
+}
+
+/**
+ * Место по сохранённой точке.
+ *
+ * Структуры лежали у точки с тех пор, как она научилась их хранить, но до
+ * расчёта не доходили: экраны передавали один слой, и хищник считался в
+ * пустой воде — коряжник, бровка и приток на оценку не влияли.
+ *
+ * Незнакомые идентификаторы молча пропускаются: словарь правится отдельно от
+ * точек, и чужая структура не повод остаться без оценки места.
+ */
+fun placeOf(
+    spot: FishingSpotEntity?,
+    layer: WaterLayerChoice,
+    catalog: KnowledgeCatalog
+): PlaceContext {
+    val structures = spot?.structures?.decodeBaits()?.mapNotNull { catalog.structure(it) }.orEmpty()
+    return PlaceContext(
+        layer = layer,
+        structures = structures,
+        // Имя точки важнее слова «мель»: рыболов узнаёт своё место по имени,
+        // а слой он и так выбрал сам.
+        title = spot?.name?.takeIf { it.isNotBlank() } ?: layer.title
+    )
 }

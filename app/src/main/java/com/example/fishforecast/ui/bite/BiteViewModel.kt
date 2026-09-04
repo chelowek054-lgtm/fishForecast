@@ -2,13 +2,19 @@ package com.example.fishforecast.ui.bite
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.fishforecast.data.local.entities.DailySunEntity
 import com.example.fishforecast.data.local.entities.FishEntity
 import com.example.fishforecast.data.local.entities.FishingSpotEntity
 import com.example.fishforecast.data.local.entities.SavedMapEntity
 import com.example.fishforecast.data.repository.FishRepository
 import com.example.fishforecast.data.repository.FishingContextRepository
 import com.example.fishforecast.domain.bite.BiteForecast
+import com.example.fishforecast.data.repository.KnowledgeRepository
 import com.example.fishforecast.domain.bite.CalculateFishActivityUseCase
+import com.example.fishforecast.domain.bite.WaterLayerChoice
+import com.example.fishforecast.domain.bite.placeOf
+import com.example.fishforecast.domain.knowledge.KnowledgeCatalog
+import com.example.fishforecast.domain.water.WaterState
 import com.example.fishforecast.domain.weather.hourWindow
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -35,10 +41,19 @@ data class BiteUiState(
     val weatherMissing: Boolean = false
 )
 
+/** Всё, что описывает район: карта, вода, солнце и словари знаний. */
+private data class BiteContext(
+    val map: SavedMapEntity?,
+    val water: WaterState,
+    val sunTimes: List<DailySunEntity>,
+    val knowledge: KnowledgeCatalog
+)
+
 @HiltViewModel
 class BiteViewModel @Inject constructor(
     private val fishingContext: FishingContextRepository,
     fishRepository: FishRepository,
+    knowledge: KnowledgeRepository,
     calculateFishActivity: CalculateFishActivityUseCase
 ) : ViewModel() {
 
@@ -52,11 +67,12 @@ class BiteViewModel @Inject constructor(
         combine(
             fishingContext.activeMap,
             fishingContext.activeWater,
-            fishingContext.activeSunTimes
-        ) { map, water, sun -> Triple(map, water, sun) },
+            fishingContext.activeSunTimes,
+            knowledge.catalog
+        ) { map, water, sun, catalog -> BiteContext(map, water, sun, catalog) },
         combine(selectedFishId, selectedSpotId) { fishId, spotId -> fishId to spotId }
     ) { fishList, weather, spots, context, (selectedId, spotId) ->
-        val (map, water, sunTimes) = context
+        val (map, water, sunTimes, catalog) = context
         // Пока рыболов не выбрал рыбу, показываем первую из справочника:
         // экран должен отвечать на вопрос «ехать или нет» сразу.
         val selected = fishList.firstOrNull { it.id == selectedId } ?: fishList.firstOrNull()
@@ -66,8 +82,11 @@ class BiteViewModel @Inject constructor(
         // «ехать или нет» не помогают.
         val spot = spots.firstOrNull { it.id == spotId }
         val normalPressure = fishingContext.normalPressureFor(map)
+        // Структуры выбранной точки идут в расчёт: коряжник, бровка и приток
+        // меняют шанс сильнее, чем разница в пару миллиметров давления.
+        val place = placeOf(spot, WaterLayerChoice.SHALLOW, catalog)
         val calculated = selected
-            ?.let { calculateFishActivity(it, weather, normalPressure, water, sunTimes) }
+            ?.let { calculateFishActivity(it, weather, normalPressure, water, sunTimes, place) }
             .orEmpty()
         // Прошедшие часы больше не выбрасываются: клёв читается в ходе, а
         // не в моментальном срезе. Отметку «сейчас» ставит окно.
