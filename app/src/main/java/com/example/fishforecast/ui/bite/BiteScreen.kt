@@ -34,6 +34,7 @@ import com.example.fishforecast.ui.session.FishingSessionViewModel
 import com.example.fishforecast.ui.session.RegionInfo
 import com.example.fishforecast.ui.session.SessionSetup
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -54,6 +55,11 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
+import com.example.fishforecast.data.local.entities.ObservationEntity
+import com.example.fishforecast.domain.knowledge.ObservationType
+import kotlin.math.roundToInt
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -214,6 +220,13 @@ fun BiteScreen(
                 CurrentBiteCard(current, state.selectedFish?.name.orEmpty())
             }
 
+            ObservationsBlock(
+                types = state.observationTypes,
+                noted = state.noted,
+                onNote = viewModel::note,
+                onRemove = viewModel::removeNote
+            )
+
             Text(
                 text = "Активность по часам",
                 style = MaterialTheme.typography.titleMedium,
@@ -230,6 +243,80 @@ fun BiteScreen(
         }
     }
 }
+
+/**
+ * Что видно с берега.
+ *
+ * Прогноз говорит, какой должна быть вода; рыболов видит, какая она есть. Бой
+ * малька, птицы над водой, радужная плёнка — это факт, и он весомее расчёта,
+ * но живёт недолго, поэтому отметка тает сама и её не надо снимать руками.
+ *
+ * Отмеченное показано сверху со сроком: иначе непонятно, почему оценка вдруг
+ * выше прогноза.
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun ObservationsBlock(
+    types: List<ObservationType>,
+    noted: List<ObservationEntity>,
+    onNote: (String) -> Unit,
+    onRemove: (ObservationEntity) -> Unit
+) {
+    if (types.isEmpty()) return
+
+    val now = remember(noted) { System.currentTimeMillis() }
+    val active = remember(noted, types, now) {
+        noted.mapNotNull { entity ->
+            val type = types.firstOrNull { it.id == entity.typeId } ?: return@mapNotNull null
+            val hoursLeft = type.hours - (now - entity.notedAt).toDouble() / MILLIS_PER_HOUR
+            if (hoursLeft <= 0) null else Triple(entity, type, hoursLeft)
+        }
+    }
+
+    Column {
+        Text(
+            text = "Что видно с берега",
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold
+        )
+        Text(
+            text = "Отметьте увиденное — оно весомее прогноза и действует несколько часов",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+
+        if (active.isNotEmpty()) {
+            Spacer(modifier = Modifier.height(8.dp))
+            active.forEach { (entity, type, hoursLeft) ->
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "• ${type.name} — ещё ${hoursLeft.roundToInt().coerceAtLeast(1)} ч",
+                        style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier.weight(1f)
+                    )
+                    TextButton(onClick = { onRemove(entity) }) { Text("Снять") }
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(4.dp))
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            types.forEach { type ->
+                val already = active.any { it.second.id == type.id }
+                FilterChip(
+                    selected = already,
+                    onClick = { if (!already) onNote(type.id) },
+                    label = { Text(type.name) }
+                )
+            }
+        }
+    }
+}
+
+private const val MILLIS_PER_HOUR = 3_600_000.0
 
 /**
  * Для какой воды считается всё на экране.

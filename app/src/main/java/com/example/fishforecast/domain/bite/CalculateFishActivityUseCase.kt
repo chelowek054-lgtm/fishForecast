@@ -50,7 +50,8 @@ class CalculateFishActivityUseCase @Inject constructor() {
         normalPressureMmHg: Double? = null,
         water: WaterState? = null,
         sunTimes: List<DailySunEntity> = emptyList(),
-        place: PlaceContext = PlaceContext()
+        place: PlaceContext = PlaceContext(),
+        observations: List<ActiveObservation> = emptyList()
     ): List<BiteForecast> {
         val sorted = forecast.sortedBy { it.time }
         val normal = normalPressureMmHg
@@ -96,10 +97,13 @@ class CalculateFishActivityUseCase @Inject constructor() {
             val dayTrend = pressureDayFactor(sorted, index, normal)
             val waterTrend = waterTrendFactor(waterNow, waterTrendBefore, fish, WATER_TREND_HOURS)
             val stratification = stratificationFactor(sorted, index, place, waterNow, fish)
+            // Увиденное своими глазами весомее расчёта, но живёт недолго:
+            // поправка тает к концу срока, записанного в словаре.
+            val noticed = observationFactor(observations, guild, hour.time)
 
             val factors = listOfNotNull(
                 temperature, oxygen, pressure, trend, dayTrend,
-                waterTrend, wind, light, stratification
+                waterTrend, wind, light, stratification, noticed
             )
 
             // Ограничители перемножаются: непригодную для рыбы воду не

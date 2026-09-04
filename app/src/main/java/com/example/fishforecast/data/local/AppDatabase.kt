@@ -8,6 +8,7 @@ import com.example.fishforecast.data.local.dao.CatchDao
 import com.example.fishforecast.data.local.dao.FishDao
 import com.example.fishforecast.data.local.dao.FishingSessionDao
 import com.example.fishforecast.data.local.dao.FishingSpotDao
+import com.example.fishforecast.data.local.dao.ObservationDao
 import com.example.fishforecast.data.local.dao.PressureLogDao
 import com.example.fishforecast.data.local.dao.SavedMapDao
 import com.example.fishforecast.data.local.dao.WeatherDao
@@ -16,6 +17,7 @@ import com.example.fishforecast.data.local.entities.DailySunEntity
 import com.example.fishforecast.data.local.entities.FishEntity
 import com.example.fishforecast.data.local.entities.FishingSessionEntity
 import com.example.fishforecast.data.local.entities.FishingSpotEntity
+import com.example.fishforecast.data.local.entities.ObservationEntity
 import com.example.fishforecast.data.local.entities.PressureLogEntity
 import com.example.fishforecast.data.local.entities.SavedMapEntity
 import com.example.fishforecast.data.local.entities.WeatherEntity
@@ -29,9 +31,10 @@ import com.example.fishforecast.data.local.entities.WeatherEntity
         CatchEntity::class,
         DailySunEntity::class,
         PressureLogEntity::class,
-        FishingSessionEntity::class
+        FishingSessionEntity::class,
+        ObservationEntity::class
     ],
-    version = 21,
+    version = 22,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -42,6 +45,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun catchDao(): CatchDao
     abstract fun pressureLogDao(): PressureLogDao
     abstract fun fishingSessionDao(): FishingSessionDao
+    abstract fun observationDao(): ObservationDao
 
     companion object {
         /** Офлайн-области (Фаза 3). Справочник рыб пересоздавать нельзя — он правится вручную. */
@@ -697,6 +701,35 @@ abstract class AppDatabase : RoomDatabase() {
 
                 db.execSQL("DROP TABLE IF EXISTS `zone_sectors`")
                 db.execSQL("DROP TABLE IF EXISTS `zones`")
+            }
+        }
+
+        /**
+         * Наблюдения с берега.
+         *
+         * Словарь знаний давно описывал, что видно на воде и насколько это
+         * весомо, но отметить увиденное было негде: коэффициенты лежали без
+         * применения. Теперь отметка хранится у района вместе со временем, а
+         * срок её жизни по-прежнему берётся из словаря — он может измениться
+         * вместе с ним, и записывать его в базу значило бы копировать знание.
+         */
+        val MIGRATION_21_22 = object : Migration(21, 22) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `observations` (
+                        `id` INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+                        `uid` TEXT NOT NULL,
+                        `mapId` INTEGER NOT NULL,
+                        `typeId` TEXT NOT NULL,
+                        `notedAt` INTEGER NOT NULL
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_observations_mapId` " +
+                        "ON `observations` (`mapId`)"
+                )
             }
         }
     }

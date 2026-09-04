@@ -2,6 +2,7 @@ package com.example.fishforecast.ui.bite
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.launch
 import com.example.fishforecast.data.local.entities.DailySunEntity
 import com.example.fishforecast.data.local.entities.FishEntity
 import com.example.fishforecast.data.local.entities.FishingSpotEntity
@@ -9,7 +10,11 @@ import com.example.fishforecast.data.local.entities.SavedMapEntity
 import com.example.fishforecast.data.repository.FishRepository
 import com.example.fishforecast.data.repository.FishingContextRepository
 import com.example.fishforecast.domain.bite.BiteForecast
+import com.example.fishforecast.data.local.entities.ObservationEntity
 import com.example.fishforecast.data.repository.KnowledgeRepository
+import com.example.fishforecast.data.repository.ObservationRepository
+import com.example.fishforecast.data.repository.withTypes
+import com.example.fishforecast.domain.knowledge.ObservationType
 import com.example.fishforecast.domain.bite.CalculateFishActivityUseCase
 import com.example.fishforecast.domain.bite.WaterLayerChoice
 import com.example.fishforecast.domain.bite.placeOf
@@ -38,7 +43,11 @@ data class BiteUiState(
     /** Где в ряду текущий час: по нему рисуется разделитель «сейчас». */
     val nowIndex: Int = -1,
     /** Прогноза нет — считать нечего, и это не ошибка. */
-    val weatherMissing: Boolean = false
+    val weatherMissing: Boolean = false,
+    /** Что вообще можно отметить: словарь наблюдений. */
+    val observationTypes: List<ObservationType> = emptyList(),
+    /** Что уже отмечено на этом районе. */
+    val noted: List<ObservationEntity> = emptyList()
 )
 
 /** Всё, что описывает район: карта, вода, солнце и словари знаний. */
@@ -54,6 +63,7 @@ class BiteViewModel @Inject constructor(
     private val fishingContext: FishingContextRepository,
     fishRepository: FishRepository,
     knowledge: KnowledgeRepository,
+    private val observations: ObservationRepository,
     calculateFishActivity: CalculateFishActivityUseCase
 ) : ViewModel() {
 
@@ -70,8 +80,12 @@ class BiteViewModel @Inject constructor(
             fishingContext.activeSunTimes,
             knowledge.catalog
         ) { map, water, sun, catalog -> BiteContext(map, water, sun, catalog) },
-        combine(selectedFishId, selectedSpotId) { fishId, spotId -> fishId to spotId }
-    ) { fishList, weather, spots, context, (selectedId, spotId) ->
+        combine(
+            selectedFishId,
+            selectedSpotId,
+            observations.active
+        ) { fishId, spotId, noted -> Triple(fishId, spotId, noted) }
+    ) { fishList, weather, spots, context, (selectedId, spotId, noted) ->
         val (map, water, sunTimes, catalog) = context
         // Пока рыболов не выбрал рыбу, показываем первую из справочника:
         // экран должен отвечать на вопрос «ехать или нет» сразу.
@@ -85,8 +99,14 @@ class BiteViewModel @Inject constructor(
         // Структуры выбранной точки идут в расчёт: коряжник, бровка и приток
         // меняют шанс сильнее, чем разница в пару миллиметров давления.
         val place = placeOf(spot, WaterLayerChoice.SHALLOW, catalog)
+        // Отметки рыболова: факт весомее прогноза, но со своим сроком жизни.
+        val noticed = noted.withTypes(catalog)
         val calculated = selected
-            ?.let { calculateFishActivity(it, weather, normalPressure, water, sunTimes, place) }
+            ?.let {
+                calculateFishActivity(
+                    it, weather, normalPressure, water, sunTimes, place, noticed
+                )
+            }
             .orEmpty()
         // Прошедшие часы больше не выбрасываются: клёв читается в ходе, а
         // не в моментальном срезе. Отметку «сейчас» ставит окно.
@@ -100,7 +120,9 @@ class BiteViewModel @Inject constructor(
             activeMap = map,
             forecast = window.items,
             nowIndex = window.nowIndex,
-            weatherMissing = weather.isEmpty()
+            weatherMissing = weather.isEmpty(),
+            observationTypes = catalog.observations,
+            noted = noted
         )
     }.stateIn(
         scope = viewModelScope,
@@ -114,6 +136,15 @@ class BiteViewModel @Inject constructor(
 
     fun selectSpot(spot: FishingSpotEntity?) {
         selectedSpotId.value = spot?.id
+    }
+
+    /** Отметить увиденное. Срок жизни отметки берётся из словаря знаний. */
+    fun note(typeId: String) {
+        viewModelScope.launch { observations.note(typeId) }
+    }
+
+    fun removeNote(observation: ObservationEntity) {
+        viewModelScope.launch { observations.remove(observation) }
     }
 
     private companion object {
