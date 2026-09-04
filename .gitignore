@@ -17,3 +17,6 @@ local.properties
 
 # Кэш приложения контроля процесса (docs/development/_contract/app-contract.md)
 .docdd/
+
+# Логи компилятора Kotlin: мусор сборки, не история проекта
+.kotlin/
