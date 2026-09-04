@@ -29,8 +29,7 @@
 |---|---|
 | [client/overview.md](client/overview.md) | Модули, слои и правила зависимостей (C4 L3) |
 | [client/offline-sync.md](client/offline-sync.md) | Офлайн-первый контракт: очередь исходящего, uid, версии, конфликты |
-| [client/bite-score.md](client/bite-score.md) | Как считается клёв: формулы, пороги, веса, пример |
-| [client/bite-score-gaps.md](client/bite-score-gaps.md) | Разбор модели: что учтено, чего нет, порядок работ |
+| [client/bite-score.md](client/bite-score.md) | Клёв целиком: формулы, пороги, данные, что учтено и чего нет |
 | [client/knowledge-updates.md](client/knowledge-updates.md) | Как приезжают словари, справочник видов и модель клёва |
 | [client/bathymetry.md](client/bathymetry.md) | Слой глубин: импорт эхолота, хранение, отрисовка, связь с водой |
 
@@ -52,7 +51,6 @@
 
 Соседние документы, которые остаются на своих местах:
 [Roadmap.md](../Roadmap.md) — история фаз 1–5,
-[BiteFactors.md](../BiteFactors.md) — чек-лист факторов клёва,
 [RegionPack.md](../RegionPack.md) — формат обмена районами.
 
 ## Как этим пользоваться

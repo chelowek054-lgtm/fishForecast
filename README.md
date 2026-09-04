@@ -6,8 +6,8 @@ Android-приложение, которое отвечает на один во
 
 Дорожная карта и решения по архитектуре — в [app/docs/Roadmap.md](app/docs/Roadmap.md).
 
-Какие данные нужны, чтобы подсказать место, прикормку и наживку, и что из этого
-уже есть на устройстве — в [app/docs/BiteFactors.md](app/docs/BiteFactors.md).
+Как считается клёв, какие данные для этого нужны и чего модели пока не хватает —
+в [app/docs/architecture/client/bite-score.md](app/docs/architecture/client/bite-score.md).
 
 Как рыболовы обмениваются районами и каким будет общий сервер —
 в [app/docs/RegionPack.md](app/docs/RegionPack.md).
