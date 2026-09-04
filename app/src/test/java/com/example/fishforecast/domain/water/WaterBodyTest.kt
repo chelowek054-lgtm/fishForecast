@@ -111,4 +111,61 @@ class WaterBodyTest {
         val afternoon = state.oxygenAt(hours.first { it.time.endsWith("T15:00") }.time)!!
         assertTrue("под утро кислорода меньше: $night против $afternoon", night < afternoon)
     }
+
+    @Test
+    fun `в расслоившемся пруду яма теряет кислород, а мель нет`() {
+        // Столб разделился: наверху ветер и водоросли, внизу термоклин и
+        // донный расход. Брать для ямы кислород мели значило бы завышать её
+        // шансы ровно там, где рыбе нечем дышать.
+        val warm = 22.0
+        val cold = 12.0
+
+        val mixed = deepOxygenMgL(deepTemperatureC = 20.0, shallowTemperatureC = 21.0, waterBody = pond)
+        val fresh = deepOxygenMgL(cold, warm, pond, stratifiedHours = 0)
+        val stale = deepOxygenMgL(cold, warm, pond, stratifiedHours = 48)
+
+        assertTrue("расслоение должно тратить кислород: $stale против $fresh", stale < fresh)
+        assertEquals("полтора миллиграмма за сутки, двое суток — три", 3.0, fresh - stale, 0.05)
+        assertTrue("перемешанный столб дышит вместе с мелью", mixed > 0.0)
+    }
+
+    @Test
+    fun `на реке расслоения не бывает`() {
+        val fresh = deepOxygenMgL(12.0, 22.0, river, stratifiedHours = 0)
+        val stale = deepOxygenMgL(12.0, 22.0, river, stratifiedHours = 72)
+
+        assertEquals("течение не даёт слоям разойтись", fresh, stale, 0.001)
+    }
+
+    @Test
+    fun `три градуса между слоями — уже термоклин`() {
+        assertTrue(isStratified(shallowTemperatureC = 22.0, deepTemperatureC = 19.0))
+        assertTrue(!isStratified(shallowTemperatureC = 22.0, deepTemperatureC = 20.0))
+    }
+
+    @Test
+    fun `кислород считается для обоих слоёв`() {
+        // Жаркая неделя: мель прогревается, яма отстаёт — слои расходятся.
+        val hours = days(7, meanAir = 27.0)
+        val map = com.example.fishforecast.data.local.entities.SavedMapEntity(
+            name = "Пруд",
+            offlineRegionId = 0,
+            north = 55.8, south = 55.7, east = 37.7, west = 37.6,
+            minZoom = 10.0, maxZoom = 14.0,
+            shallowDepthM = 1.0,
+            deepDepthM = 6.0
+        )
+
+        val state = calculateWaterState(hours, map, pond)
+        val last = state.shallow.last().time
+
+        val shallowOxygen = state.oxygenAt(last)!!
+        val deepOxygen = state.oxygenAt(last, com.example.fishforecast.domain.bite.WaterLayerChoice.DEEP)!!
+
+        assertTrue("у ямы должен быть свой кислород", state.oxygenDeep.isNotEmpty())
+        assertTrue(
+            "в прогретом пруду яме должно быть не легче: $deepOxygen против $shallowOxygen",
+            deepOxygen != shallowOxygen
+        )
+    }
 }

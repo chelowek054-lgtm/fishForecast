@@ -82,7 +82,10 @@ class CalculateFishActivityUseCase @Inject constructor() {
                     fish = fish,
                     // Кислород считает вода: он свойство водоёма, а не рыбы,
                     // и зависит от течения, ветра и того, была ли ночь.
-                    oxygenMgL = ((water?.oxygenAt(hour.time) ?: oxygenSaturationMgL(waterNow)) +
+                    // Кислород берётся у своего слоя: после расслоения в яме
+                    // его меньше, а не столько же.
+                    oxygenMgL = ((water?.oxygenAt(hour.time, place.layer)
+                        ?: oxygenSaturationMgL(waterNow)) +
                         place.oxygenOffsetMgL).coerceAtLeast(0.0)
                 )
             } else {

@@ -28,6 +28,15 @@ data class WaterState(
      * клёва: он свойство воды, а не рыбы, и одинаков для всех видов.
      */
     val oxygen: Map<String, Double> = emptyMap(),
+    /**
+     * Кислород в яме по часам, мг/л.
+     *
+     * Отдельно от мели, потому что после расслоения это разная вода: наверху
+     * ветер и водоросли, внизу термоклин и донный расход. Брать для ямы
+     * кислород мели значило завышать её шансы ровно там, где рыбе нечем
+     * дышать.
+     */
+    val oxygenDeep: Map<String, Double> = emptyMap(),
     /** Тип водоёма, по которому всё это посчитано; null — считали прудом. */
     val waterBody: WaterBodyType? = null
 ) {
@@ -38,7 +47,14 @@ data class WaterState(
 
     fun deepAt(time: String): Double? = deep.firstOrNull { it.time == time }?.temperature
 
+    /** Кислород на мели: столбец, который видно с берега. */
     fun oxygenAt(time: String): Double? = oxygen[time]
+
+    /** Кислород выбранного слоя. */
+    fun oxygenAt(time: String, layer: WaterLayerChoice): Double? = when (layer) {
+        WaterLayerChoice.SHALLOW -> oxygen[time]
+        WaterLayerChoice.DEEP -> oxygenDeep[time] ?: oxygen[time]
+    }
 
     /** Температура выбранного слоя: мель или яма. */
     fun layerAt(time: String, layer: WaterLayerChoice): Double? = when (layer) {
@@ -66,11 +82,12 @@ fun calculateWaterState(
     }
 
     val shallow = simulateWaterTemperature(forecast, shallowLayer, anchor, waterBody)
+    val deepHours = simulateWaterTemperature(forecast, deepLayer, anchor, waterBody)
     val sorted = forecast.sortedBy { it.time }
 
     return WaterState(
         shallow = shallow,
-        deep = simulateWaterTemperature(forecast, deepLayer, anchor, waterBody),
+        deep = deepHours,
         shallowDepthM = shallowLayer.depthM,
         deepDepthM = deepLayer.depthM,
         depthsAssumed = map?.shallowDepthM == null || map.deepDepthM == null,
@@ -84,8 +101,45 @@ fun calculateWaterState(
                 windMs = sorted.getOrNull(index)?.windSpeed?.kmhToMs() ?: 0.0
             )
         },
+        oxygenDeep = deepLayerOxygen(shallow, deepHours, sorted, waterBody),
         waterBody = waterBody
     )
+}
+
+/**
+ * Кислород в яме по часам.
+ *
+ * Расслоение накапливается: чем дольше слои разделены, тем больше яма
+ * потратила и тем меньше в ней осталось. Поэтому считается не мгновенная
+ * разница, а сколько часов подряд она держится.
+ */
+private fun deepLayerOxygen(
+    shallow: List<WaterHour>,
+    deep: List<WaterHour>,
+    sorted: List<WeatherEntity>,
+    waterBody: WaterBodyType?
+): Map<String, Double> {
+    val shallowByTime = shallow.associate { it.time to it.temperature }
+    var stratifiedHours = 0
+
+    return deep.associate { hour ->
+        val above = shallowByTime[hour.time]
+        stratifiedHours = if (above != null && isStratified(above, hour.temperature)) {
+            stratifiedHours + 1
+        } else {
+            0
+        }
+
+        val index = sorted.indexOfFirst { it.time == hour.time }
+        hour.time to deepOxygenMgL(
+            deepTemperatureC = hour.temperature,
+            shallowTemperatureC = above ?: hour.temperature,
+            waterBody = waterBody,
+            stratifiedHours = stratifiedHours,
+            darkHours = sorted.darkHoursBefore(index),
+            windMs = sorted.getOrNull(index)?.windSpeed?.kmhToMs() ?: 0.0
+        )
+    }
 }
 
 /**

@@ -101,3 +101,51 @@ private const val WIND_AERATION_GAIN = 0.15
 
 /** За столько тёмных часов ночной провал набирает полную силу. */
 private const val NIGHT_LENGTH_HOURS = 8.0
+
+/**
+ * Кислород в яме, мг/л.
+ *
+ * Пока столб перемешан, яма дышит вместе с мелью: ветер достаёт до дна, и
+ * разница только в температуре. Но стоит воде разделиться — а это видно по
+ * разнице слоёв, — как термоклин перестаёт пропускать кислород вниз, и яма
+ * начинает его тратить: донные отложения потребляют, а взять неоткуда.
+ *
+ * Отсюда и рыба в термоклине: наверху жарко, внизу нечем дышать, и она
+ * стоит между. Раньше расчёт брал для ямы кислород мели и завышал её шансы
+ * ровно там, где рыбы нет.
+ *
+ * @param stratifiedHours сколько часов подряд слои уже разделены.
+ */
+fun deepOxygenMgL(
+    deepTemperatureC: Double,
+    shallowTemperatureC: Double,
+    waterBody: WaterBodyType? = null,
+    stratifiedHours: Int = 0,
+    darkHours: Int = 0,
+    windMs: Double = 0.0
+): Double {
+    val stratified = isStratified(shallowTemperatureC, deepTemperatureC)
+    if (!stratified) {
+        // Перемешанный столб: та же вода, только холоднее.
+        return availableOxygenMgL(deepTemperatureC, waterBody, darkHours, windMs)
+    }
+
+    // Ветер до ямы не достаёт, дневного кислорода от водорослей там тоже нет:
+    // остаётся насыщение по температуре, поправленное аэрацией водоёма.
+    val base = oxygenSaturationMgL(deepTemperatureC) * (waterBody?.aeration ?: 1.0)
+    val perDay = waterBody?.hypolimnionDropMgLPerDay ?: 0.0
+    val spent = perDay * stratifiedHours / HOURS_IN_DAY
+    return (base - spent).coerceAtLeast(0.0)
+}
+
+/**
+ * Разделился ли столб. Судим по разнице слоёв: три градуса между мелью и
+ * ямой — это уже термоклин, а не разброс измерений.
+ */
+fun isStratified(shallowTemperatureC: Double, deepTemperatureC: Double): Boolean =
+    shallowTemperatureC - deepTemperatureC >= STRATIFICATION_GRADIENT_C
+
+/** Разница слоёв, начиная с которой считаем воду расслоившейся, °C. */
+const val STRATIFICATION_GRADIENT_C = 3.0
+
+private const val HOURS_IN_DAY = 24.0
