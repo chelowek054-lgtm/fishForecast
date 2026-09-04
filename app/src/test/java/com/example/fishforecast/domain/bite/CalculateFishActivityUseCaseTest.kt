@@ -669,4 +669,63 @@ class CalculateFishActivityUseCaseTest {
             silt.factors.first { it.name == "Место" }.comment.contains("против рыбы")
         )
     }
+
+    @Test
+    fun `быстрая рыба забывает перепад, медленная его помнит`() {
+        // Скачок был шесть часов назад. Карп стравил газ за два часа и уже
+        // кормится; судак газообменивает пузырь через кровь и всё ещё стоит.
+        // Скачок с 758 на норму случился шесть часов назад. К последнему часу
+        // давление уже привычное, и разницу даёт только длина памяти вида.
+        val forecast = (0..20).map { index ->
+            hour(index, pressureHpa = (if (index < 15) 758.0 else 750.0) * 1.333224)
+        }
+        val fast = pike.copy(pressureRecoveryHours = 2)
+        val slow = pike.copy(pressureRecoveryHours = 14)
+
+        val fastTrend = useCase(fast, forecast, 750.0).last().factors.first { it.name == "Тенденция" }
+        val slowTrend = useCase(slow, forecast, 750.0).last().factors.first { it.name == "Тенденция" }
+
+        assertEquals("за два часа ничего не менялось", 1.0, fastTrend.value, 0.001)
+        assertTrue(
+            "медленная рыба должна помнить перепад: ${slowTrend.comment}",
+            slowTrend.value < 1.0
+        )
+    }
+
+    @Test
+    fun `окно тенденции названо в пояснении`() {
+        val forecast = (0..20).map { hour(it % 24) }
+        val slow = pike.copy(pressureRecoveryHours = 14)
+
+        val trend = useCase(slow, forecast, 750.0).last().factors.first { it.name == "Тенденция" }
+
+        assertTrue("должно быть сказано окно: ${trend.comment}", trend.comment.contains("14 ч"))
+    }
+
+    @Test
+    fun `у медленной рыбы тенденция весит больше`() {
+        val forecast = (0..20).map { hour(it % 24) }
+        val fast = pike.copy(pressureRecoveryHours = 2)
+        val slow = pike.copy(pressureRecoveryHours = 18)
+
+        val fastWeight = useCase(fast, forecast, 750.0).last()
+            .factors.first { it.name == "Тенденция" }.weight
+        val slowWeight = useCase(slow, forecast, 750.0).last()
+            .factors.first { it.name == "Тенденция" }.weight
+
+        assertTrue("$slowWeight должно быть больше $fastWeight", slowWeight > fastWeight)
+    }
+
+    @Test
+    fun `чужое значение окна не ломает расчёт`() {
+        // Справочник правится руками и приезжает с сервера: ноль часов не
+        // должен обнулять окно, а сотня — уводить расчёт в прошлую неделю.
+        val forecast = (0..20).map { hour(it % 24) }
+
+        val zero = useCase(pike.copy(pressureRecoveryHours = 0), forecast, 750.0).last()
+        val huge = useCase(pike.copy(pressureRecoveryHours = 500), forecast, 750.0).last()
+
+        assertTrue(zero.score in 0..100)
+        assertTrue(huge.score in 0..100)
+    }
 }

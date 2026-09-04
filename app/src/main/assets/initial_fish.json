@@ -13,7 +13,8 @@
       "min_mmHg": 740,
       "max_mmHg": 755,
       "max_drop_mmhg": 12,
-      "max_rise_mmhg": 10
+      "max_rise_mmhg": 10,
+      "pressure_recovery_hours": 2
     },
     "oxygen": {
       "comfort_mg_l": 5.0,
@@ -67,7 +68,8 @@
       "min_mmHg": 742,
       "max_mmHg": 758,
       "max_drop_mmhg": 14,
-      "max_rise_mmhg": 12
+      "max_rise_mmhg": 12,
+      "pressure_recovery_hours": 2
     },
     "oxygen": {
       "comfort_mg_l": 3.0,
@@ -112,7 +114,8 @@
       "min_mmHg": 745,
       "max_mmHg": 758,
       "max_drop_mmhg": 10,
-      "max_rise_mmhg": 8
+      "max_rise_mmhg": 8,
+      "pressure_recovery_hours": 3
     },
     "oxygen": {
       "comfort_mg_l": 5.0,
@@ -157,7 +160,8 @@
       "min_mmHg": 745,
       "max_mmHg": 760,
       "max_drop_mmhg": 10,
-      "max_rise_mmhg": 8
+      "max_rise_mmhg": 8,
+      "pressure_recovery_hours": 2
     },
     "oxygen": {
       "comfort_mg_l": 5.0,
@@ -202,7 +206,8 @@
       "min_mmHg": 748,
       "max_mmHg": 762,
       "max_drop_mmhg": 8,
-      "max_rise_mmhg": 6
+      "max_rise_mmhg": 6,
+      "pressure_recovery_hours": 12
     },
     "oxygen": {
       "comfort_mg_l": 5.5,
@@ -247,7 +252,8 @@
       "min_mmHg": 738,
       "max_mmHg": 752,
       "max_drop_mmhg": 10,
-      "max_rise_mmhg": 8
+      "max_rise_mmhg": 8,
+      "pressure_recovery_hours": 4
     },
     "oxygen": {
       "comfort_mg_l": 6.0,
@@ -292,7 +298,8 @@
       "min_mmHg": 745,
       "max_mmHg": 760,
       "max_drop_mmhg": 7,
-      "max_rise_mmhg": 6
+      "max_rise_mmhg": 6,
+      "pressure_recovery_hours": 14
     },
     "oxygen": {
       "comfort_mg_l": 7.0,
@@ -337,7 +344,8 @@
       "min_mmHg": 745,
       "max_mmHg": 758,
       "max_drop_mmhg": 10,
-      "max_rise_mmhg": 8
+      "max_rise_mmhg": 8,
+      "pressure_recovery_hours": 3
     },
     "oxygen": {
       "comfort_mg_l": 5.0,
@@ -382,7 +390,8 @@
       "min_mmHg": 740,
       "max_mmHg": 752,
       "max_drop_mmhg": 10,
-      "max_rise_mmhg": 8
+      "max_rise_mmhg": 8,
+      "pressure_recovery_hours": 4
     },
     "oxygen": {
       "comfort_mg_l": 5.5,
@@ -427,7 +436,8 @@
       "min_mmHg": 740,
       "max_mmHg": 760,
       "max_drop_mmhg": 8,
-      "max_rise_mmhg": 8
+      "max_rise_mmhg": 8,
+      "pressure_recovery_hours": 18
     },
     "oxygen": {
       "comfort_mg_l": 6.0,

@@ -44,6 +44,12 @@ data class FishEntity(
      */
     val maxPressureDrop: Float = 12f,
     val maxPressureRise: Float = 12f,
+    /**
+     * За сколько часов вид отыгрывает перепад давления: открытопузырные за
+     * пару, закрытопузырные за половину суток. Задаёт окно тенденции и вес,
+     * с которым она входит в оценку.
+     */
+    val pressureRecoveryHours: Int = 3,
 
     /** Кислорода вдоволь, мг/л: ниже — рыба начинает беречь силы. */
     val oxygenComfortMgL: Float = 5f,

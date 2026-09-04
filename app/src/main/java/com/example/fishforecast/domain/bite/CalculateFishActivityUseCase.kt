@@ -74,7 +74,7 @@ class CalculateFishActivityUseCase @Inject constructor() {
 
             val temperature = temperatureFactor(waterNow ?: hour.temperature, fish, waterNow != null)
             val pressure = pressureFactor(hour.pressure.hPaToMmHg(), normal, fish)
-            val trend = pressureTrendFactor(sorted, index, normal)
+            val trend = pressureTrendFactor(sorted, index, normal, fish)
             val oxygen = if (waterNow != null) {
                 waterOxygenFactor(
                     waterNow = waterNow,
@@ -232,15 +232,23 @@ class CalculateFishActivityUseCase @Inject constructor() {
     private fun pressureTrendFactor(
         forecast: List<WeatherEntity>,
         index: Int,
-        normal: Double?
+        normal: Double?,
+        fish: FishEntity
     ): BiteFactor {
-        val previousIndex = index - TREND_WINDOW_HOURS
+        // Окно у каждого вида своё: карп отыгрывает перепад за пару часов,
+        // судака тот же перепад держит половину суток. Общее трёхчасовое окно
+        // для первого было слишком длинным, для второго — слишком коротким.
+        val window = fish.pressureRecoveryHours.coerceIn(MIN_RECOVERY_HOURS, MAX_RECOVERY_HOURS)
+        // Медленной рыбе тенденция важнее: она из перепада дольше выбирается.
+        val weight = WEIGHT_TREND * (RECOVERY_WEIGHT_BASE + RECOVERY_WEIGHT_STEP * window)
+            .coerceIn(RECOVERY_WEIGHT_MIN, RECOVERY_WEIGHT_MAX)
+        val previousIndex = index - window
         if (previousIndex < 0) {
             return BiteFactor(
                 name = "Тенденция",
                 value = 1.0,
-                weight = WEIGHT_TREND,
-                comment = "Недостаточно истории для оценки"
+                weight = weight,
+                comment = "Недостаточно истории за $window ч"
             )
         }
 
@@ -265,11 +273,11 @@ class CalculateFishActivityUseCase @Inject constructor() {
         return BiteFactor(
             name = "Тенденция",
             value = value,
-            weight = WEIGHT_TREND,
+            weight = weight,
             comment = when {
-                change <= STABLE_PRESSURE_MMHG -> "Давление стабильно за 3 часа"
-                normal == null -> "Меняется на ${change.roundToInt()} мм за 3 часа"
-                movingToNormal -> "Возвращается к норме (${change.roundToInt()} мм за 3 часа)"
+                change <= STABLE_PRESSURE_MMHG -> "Давление стабильно за $window ч"
+                normal == null -> "Меняется на ${change.roundToInt()} мм за $window ч"
+                movingToNormal -> "Возвращается к норме (${change.roundToInt()} мм за $window ч)"
                 current > previous -> "Уходит вверх от нормы на ${change.roundToInt()} мм"
                 else -> "Уходит вниз от нормы на ${change.roundToInt()} мм"
             }
@@ -692,7 +700,22 @@ class CalculateFishActivityUseCase @Inject constructor() {
         /** Отклонение, которое рыба ещё считает нормой. */
         const val AT_NORMAL_MMHG = 2.0
 
+        /** Окно хода воды и кислорода: оно про воду, а не про пузырь рыбы. */
         const val TREND_WINDOW_HOURS = 3
+
+        /** Границы окна тенденции: чужой справочник вправе прислать что угодно. */
+        const val MIN_RECOVERY_HOURS = 1
+        const val MAX_RECOVERY_HOURS = 24
+
+        /**
+         * Вес тенденции растёт с временем отыгрыша: рыба, которая выбирается
+         * из перепада половину суток, зависит от него сильнее, чем та, что
+         * приходит в себя за два часа.
+         */
+        const val RECOVERY_WEIGHT_BASE = 0.7
+        const val RECOVERY_WEIGHT_STEP = 0.05
+        const val RECOVERY_WEIGHT_MIN = 0.7
+        const val RECOVERY_WEIGHT_MAX = 1.6
         const val STABLE_PRESSURE_MMHG = 1.0
         const val NOTICEABLE_PRESSURE_MMHG = 3.0
 

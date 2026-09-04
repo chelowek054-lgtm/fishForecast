@@ -86,12 +86,24 @@ data class CatalogTemp(
 data class CatalogPressure(
     @SerialName("max_drop_mmhg") val maxDropMmHg: Double = DEFAULT_TOLERANCE,
     @SerialName("max_rise_mmhg") val maxRiseMmHg: Double = DEFAULT_TOLERANCE,
+    /**
+     * За сколько часов вид отыгрывает перепад давления.
+     *
+     * Открытопузырные — карп, плотва, лещ — стравливают газ через пищевод и
+     * приходят в себя за пару часов. Закрытопузырные — окунь, судак, налим —
+     * газообменивают пузырь через кровь, и тот же перепад держит их в апатии
+     * половину суток. Отсюда и разное окно, за которое считается тенденция.
+     */
+    @SerialName("pressure_recovery_hours") val recoveryHours: Int = DEFAULT_RECOVERY_HOURS,
     @SerialName("min_mmHg") val minMmHg: Double? = null,
     @SerialName("max_mmHg") val maxMmHg: Double? = null
 ) {
     companion object {
         /** Столько терпит рыба, про которую ничего не сказано. */
         const val DEFAULT_TOLERANCE = 12.0
+
+        /** Прежнее общее окно тенденции: столько отводится виду по умолчанию. */
+        const val DEFAULT_RECOVERY_HOURS = 3
     }
 }
 
@@ -181,6 +193,7 @@ fun CatalogFish.toEntity(existing: FishEntity? = null): FishEntity = FishEntity(
     absMaxTemp = temp.absMax.toFloat(),
     maxPressureDrop = pressure.maxDropMmHg.toFloat(),
     maxPressureRise = pressure.maxRiseMmHg.toFloat(),
+    pressureRecoveryHours = pressure.recoveryHours,
     oxygenComfortMgL = oxygen.comfortMgL.toFloat(),
     oxygenCriticalMgL = oxygen.criticalMgL.toFloat(),
     defaultHorizon = defaultHorizon,
@@ -244,7 +257,8 @@ fun FishEntity.toCatalogFish(): CatalogFish = CatalogFish(
     ),
     pressure = CatalogPressure(
         maxDropMmHg = maxPressureDrop.toDouble(),
-        maxRiseMmHg = maxPressureRise.toDouble()
+        maxRiseMmHg = maxPressureRise.toDouble(),
+        recoveryHours = pressureRecoveryHours
     ),
     oxygen = CatalogOxygen(
         comfortMgL = oxygenComfortMgL.toDouble(),

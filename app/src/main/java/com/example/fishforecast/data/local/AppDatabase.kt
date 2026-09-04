@@ -34,7 +34,7 @@ import com.example.fishforecast.data.local.entities.WeatherEntity
         FishingSessionEntity::class,
         ObservationEntity::class
     ],
-    version = 23,
+    version = 24,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -795,6 +795,25 @@ abstract class AppDatabase : RoomDatabase() {
                 )
                 db.execSQL("DROP TABLE `fish`")
                 db.execSQL("ALTER TABLE `fish_new` RENAME TO `fish`")
+            }
+        }
+
+        /**
+         * Сколько часов вид отыгрывает перепад давления.
+         *
+         * Окно тенденции было общим — три часа на всех. Но карп стравливает
+         * газ через пищевод и приходит в себя за пару часов, а судак
+         * газообменивает пузырь через кровь, и тот же перепад держит его в
+         * апатии половину суток. Одним окном это не описать.
+         *
+         * Старым строкам достаются прежние три часа: поведение не меняется,
+         * пока не приедет справочник с настоящими значениями.
+         */
+        val MIGRATION_23_24 = object : Migration(23, 24) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "ALTER TABLE `fish` ADD COLUMN `pressureRecoveryHours` INTEGER NOT NULL DEFAULT 3"
+                )
             }
         }
     }
