@@ -48,6 +48,7 @@
 | Фазы работ | `app/docs/architecture/07-phases.md` |
 | История фаз 1–5 | `app/docs/Roadmap.md` |
 | Чек-лист факторов клёва | `app/docs/BiteFactors.md` |
+| Как считается клёв: формулы и пороги | `app/docs/architecture/client/bite-score.md` |
 | Формат обмена районами | `app/docs/RegionPack.md` |
 | Требования, задачи, проверки процесса | `docs/development/` |
 | Контракт файлов процесса | `docs/development/_contract/SPEC.md` |
