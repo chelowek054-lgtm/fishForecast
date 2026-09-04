@@ -16,7 +16,7 @@ class FindBiteWindowUseCaseTest {
         id = 1, name = "Щука", description = "",
         optMinTemp = 8f, optMaxTemp = 18f,
         absMinTemp = 2f, absMaxTemp = 22f,
-        minPressure = 740f, maxPressure = 760f
+        maxPressureDrop = 12f, maxPressureRise = 12f
     )
 
     /** Карп любит теплее: в холодной воде его окно не откроется. */
@@ -24,7 +24,7 @@ class FindBiteWindowUseCaseTest {
         id = 2, name = "Карп", description = "",
         optMinTemp = 20f, optMaxTemp = 28f,
         absMinTemp = 14f, absMaxTemp = 32f,
-        minPressure = 740f, maxPressure = 750f
+        maxPressureDrop = 12f, maxPressureRise = 12f
     )
 
     private val comfortablePressureHpa = 750.0 * 1.333224

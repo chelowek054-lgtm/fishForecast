@@ -26,8 +26,8 @@ fun AddEditFishScreen(
     val optMaxTempState = viewModel.optMaxTemp.value
     val absMinTempState = viewModel.absMinTemp.value
     val absMaxTempState = viewModel.absMaxTemp.value
-    val minPressureState = viewModel.minPressure.value
-    val maxPressureState = viewModel.maxPressure.value
+    val dropState = viewModel.maxPressureDrop.value
+    val riseState = viewModel.maxPressureRise.value
 
     val snackbarHostState = SnackbarHostState()
 
@@ -128,16 +128,16 @@ fun AddEditFishScreen(
 
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedTextField(
-                    value = minPressureState,
-                    onValueChange = { viewModel.onEvent(AddEditFishEvent.EnteredMinPressure(it)) },
-                    label = { Text("Мин Давл.") },
+                    value = dropState,
+                    onValueChange = { viewModel.onEvent(AddEditFishEvent.EnteredPressureDrop(it)) },
+                    label = { Text("Терпит паден., мм") },
                     modifier = Modifier.weight(1f),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
                 )
                 OutlinedTextField(
-                    value = maxPressureState,
-                    onValueChange = { viewModel.onEvent(AddEditFishEvent.EnteredMaxPressure(it)) },
-                    label = { Text("Макс Давл.") },
+                    value = riseState,
+                    onValueChange = { viewModel.onEvent(AddEditFishEvent.EnteredPressureRise(it)) },
+                    label = { Text("Терпит рост, мм") },
                     modifier = Modifier.weight(1f),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
                 )

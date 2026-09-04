@@ -270,8 +270,12 @@ private fun FishTable(
 
         Spacer(modifier = Modifier.height(8.dp))
         Text(
-            text = "Давление: ${fish.minPressure.roundToInt()}–${fish.maxPressure.roundToInt()} " +
-                "мм рт. ст. · кислород от ${fish.oxygenComfortMgL} мг/л",
+            // Давление показано отклонением от нормы места, а не абсолютом:
+            // на высоте 500 м нормальные для водоёма 710 мм по абсолютной
+            // шкале выглядят бедствием, хотя рыба там живёт всю жизнь.
+            text = "Давление: терпит −${fish.maxPressureDrop.roundToInt()}…" +
+                "+${fish.maxPressureRise.roundToInt()} мм от нормы места · " +
+                "кислород от ${fish.oxygenComfortMgL} мг/л",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )

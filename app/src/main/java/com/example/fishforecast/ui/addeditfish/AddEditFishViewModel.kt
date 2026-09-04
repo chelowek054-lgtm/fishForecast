@@ -41,11 +41,11 @@ class AddEditFishViewModel @Inject constructor(
     private val _absMaxTemp = mutableStateOf("")
     val absMaxTemp: State<String> = _absMaxTemp
 
-    private val _minPressure = mutableStateOf("")
-    val minPressure: State<String> = _minPressure
+    private val _maxPressureRiseDrop = mutableStateOf("")
+    val maxPressureDrop: State<String> = _maxPressureRiseDrop
 
-    private val _maxPressure = mutableStateOf("")
-    val maxPressure: State<String> = _maxPressure
+    private val _maxPressureRise = mutableStateOf("")
+    val maxPressureRise: State<String> = _maxPressureRise
 
     private val _eventFlow = MutableSharedFlow<UiEvent>()
     val eventFlow = _eventFlow.asSharedFlow()
@@ -69,8 +69,8 @@ class AddEditFishViewModel @Inject constructor(
                     _optMaxTemp.value = fish.optMaxTemp.toString()
                     _absMinTemp.value = fish.absMinTemp.toString()
                     _absMaxTemp.value = fish.absMaxTemp.toString()
-                    _minPressure.value = fish.minPressure.toString()
-                    _maxPressure.value = fish.maxPressure.toString()
+                    _maxPressureRiseDrop.value = fish.maxPressureDrop.toString()
+                    _maxPressureRise.value = fish.maxPressureRise.toString()
                 }
             }
         }
@@ -84,8 +84,8 @@ class AddEditFishViewModel @Inject constructor(
             is AddEditFishEvent.EnteredOptMaxTemp -> _optMaxTemp.value = event.value
             is AddEditFishEvent.EnteredAbsMinTemp -> _absMinTemp.value = event.value
             is AddEditFishEvent.EnteredAbsMaxTemp -> _absMaxTemp.value = event.value
-            is AddEditFishEvent.EnteredMinPressure -> _minPressure.value = event.value
-            is AddEditFishEvent.EnteredMaxPressure -> _maxPressure.value = event.value
+            is AddEditFishEvent.EnteredPressureDrop -> _maxPressureRiseDrop.value = event.value
+            is AddEditFishEvent.EnteredPressureRise -> _maxPressureRise.value = event.value
             is AddEditFishEvent.SaveFish -> {
                 viewModelScope.launch {
                     try {
@@ -98,8 +98,8 @@ class AddEditFishViewModel @Inject constructor(
                                 optMaxTemp = optMax,
                                 absMinTemp = optMin,
                                 absMaxTemp = optMax,
-                                minPressure = 0f,
-                                maxPressure = 0f
+                                maxPressureDrop = DEFAULT_PRESSURE_TOLERANCE,
+                                maxPressureRise = DEFAULT_PRESSURE_TOLERANCE
                             )).copy(
                                 name = fishName.value,
                                 description = fishDescription.value,
@@ -111,8 +111,13 @@ class AddEditFishViewModel @Inject constructor(
                                     ?: optMin,
                                 absMaxTemp = absMaxTemp.value.toFloatOrNull()?.coerceAtLeast(optMax)
                                     ?: optMax,
-                                minPressure = minPressure.value.toFloatOrNull() ?: 0f,
-                                maxPressure = maxPressure.value.toFloatOrNull() ?: 0f
+                                // Пустое поле значит «не выяснено», а не «ноль»:
+                                // нулевой допуск выключил бы клёв у любого
+                                // отклонения давления.
+                                maxPressureDrop = maxPressureDrop.value.toFloatOrNull()
+                                    ?: DEFAULT_PRESSURE_TOLERANCE,
+                                maxPressureRise = maxPressureRise.value.toFloatOrNull()
+                                    ?: DEFAULT_PRESSURE_TOLERANCE
                             )
                         )
                         _eventFlow.emit(UiEvent.SaveFish)
@@ -127,5 +132,10 @@ class AddEditFishViewModel @Inject constructor(
     sealed class UiEvent {
         data class ShowSnackbar(val message: String) : UiEvent()
         object SaveFish : UiEvent()
+    }
+
+    private companion object {
+        /** Столько терпит вид, про который ничего не сказано, мм рт. ст. */
+        const val DEFAULT_PRESSURE_TOLERANCE = 12f
     }
 }

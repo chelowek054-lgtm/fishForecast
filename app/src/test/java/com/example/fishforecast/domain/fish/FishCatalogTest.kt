@@ -179,8 +179,8 @@ class FishCatalogTest {
             optMaxTemp = 22f,
             absMinTemp = 6f,
             absMaxTemp = 28f,
-            minPressure = 740f,
-            maxPressure = 760f
+            maxPressureDrop = 12f,
+            maxPressureRise = 12f
         )
 
         assertEquals(emptyList<String>(), custom.baitsCold.decodeBaits())

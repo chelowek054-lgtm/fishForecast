@@ -38,8 +38,8 @@ class RegionPackCodecTest {
         optMaxTemp = 26f,
         absMinTemp = 8f,
         absMaxTemp = 30f,
-        minPressure = 740f,
-        maxPressure = 760f
+        maxPressureDrop = 12f,
+        maxPressureRise = 12f
     )
 
     private val spot = FishingSpotEntity(

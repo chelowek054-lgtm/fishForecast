@@ -7,7 +7,7 @@ sealed class AddEditFishEvent {
     data class EnteredOptMaxTemp(val value: String) : AddEditFishEvent()
     data class EnteredAbsMinTemp(val value: String) : AddEditFishEvent()
     data class EnteredAbsMaxTemp(val value: String) : AddEditFishEvent()
-    data class EnteredMinPressure(val value: String) : AddEditFishEvent()
-    data class EnteredMaxPressure(val value: String) : AddEditFishEvent()
+    data class EnteredPressureDrop(val value: String) : AddEditFishEvent()
+    data class EnteredPressureRise(val value: String) : AddEditFishEvent()
     object SaveFish : AddEditFishEvent()
 }

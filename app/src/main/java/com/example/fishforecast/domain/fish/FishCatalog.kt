@@ -68,11 +68,32 @@ data class CatalogTemp(
     @SerialName("abs_max") val absMax: Double
 )
 
+/**
+ * Что вид терпит по давлению.
+ *
+ * Отсчёт идёт от нормы конкретного водоёма, а не от абсолютных
+ * миллиметров: на высоте 500 м нормальные для места 710 мм по абсолютной
+ * шкале выглядят катастрофой, хотя рыба там живёт всю жизнь.
+ *
+ * Допуск несимметричен намеренно: падение рыба переносит легче роста —
+ * падающее давление она встречает кормлением, растущее вгоняет её в апатию.
+ *
+ * [minMmHg] и [maxMmHg] остались от прежней, абсолютной записи. Расчёт их не
+ * читает; они лежат, пока справочник живёт в поколении `/1`, чтобы старые
+ * сборки могли разобрать новый документ.
+ */
 @Serializable
 data class CatalogPressure(
-    @SerialName("min_mmHg") val minMmHg: Double,
-    @SerialName("max_mmHg") val maxMmHg: Double
-)
+    @SerialName("max_drop_mmhg") val maxDropMmHg: Double = DEFAULT_TOLERANCE,
+    @SerialName("max_rise_mmhg") val maxRiseMmHg: Double = DEFAULT_TOLERANCE,
+    @SerialName("min_mmHg") val minMmHg: Double? = null,
+    @SerialName("max_mmHg") val maxMmHg: Double? = null
+) {
+    companion object {
+        /** Столько терпит рыба, про которую ничего не сказано. */
+        const val DEFAULT_TOLERANCE = 12.0
+    }
+}
 
 @Serializable
 data class CatalogOxygen(
@@ -158,8 +179,8 @@ fun CatalogFish.toEntity(existing: FishEntity? = null): FishEntity = FishEntity(
     optMaxTemp = temp.optMax.toFloat(),
     absMinTemp = temp.absMin.toFloat(),
     absMaxTemp = temp.absMax.toFloat(),
-    minPressure = pressure.minMmHg.toFloat(),
-    maxPressure = pressure.maxMmHg.toFloat(),
+    maxPressureDrop = pressure.maxDropMmHg.toFloat(),
+    maxPressureRise = pressure.maxRiseMmHg.toFloat(),
     oxygenComfortMgL = oxygen.comfortMgL.toFloat(),
     oxygenCriticalMgL = oxygen.criticalMgL.toFloat(),
     defaultHorizon = defaultHorizon,
@@ -222,8 +243,8 @@ fun FishEntity.toCatalogFish(): CatalogFish = CatalogFish(
         absMax = absMaxTemp.toDouble()
     ),
     pressure = CatalogPressure(
-        minMmHg = minPressure.toDouble(),
-        maxMmHg = maxPressure.toDouble()
+        maxDropMmHg = maxPressureDrop.toDouble(),
+        maxRiseMmHg = maxPressureRise.toDouble()
     ),
     oxygen = CatalogOxygen(
         comfortMgL = oxygenComfortMgL.toDouble(),

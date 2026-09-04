@@ -37,8 +37,13 @@ data class FishEntity(
     val absMinTemp: Float,
     val absMaxTemp: Float,
 
-    val minPressure: Float,
-    val maxPressure: Float,
+    /**
+     * Что вид терпит по давлению — в отклонении от нормы водоёма, а не в
+     * абсолютных миллиметрах: на высоте 500 м норма около 710, и жёсткие
+     * границы выключили бы клёв там, где рыба живёт всю жизнь.
+     */
+    val maxPressureDrop: Float = 12f,
+    val maxPressureRise: Float = 12f,
 
     /** Кислорода вдоволь, мг/л: ниже — рыба начинает беречь силы. */
     val oxygenComfortMgL: Float = 5f,

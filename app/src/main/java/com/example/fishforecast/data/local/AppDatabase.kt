@@ -34,7 +34,7 @@ import com.example.fishforecast.data.local.entities.WeatherEntity
         FishingSessionEntity::class,
         ObservationEntity::class
     ],
-    version = 22,
+    version = 23,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -730,6 +730,71 @@ abstract class AppDatabase : RoomDatabase() {
                     "CREATE INDEX IF NOT EXISTS `index_observations_mapId` " +
                         "ON `observations` (`mapId`)"
                 )
+            }
+        }
+
+        /**
+         * Давление вида — в отклонении от нормы места, а не в абсолютных
+         * миллиметрах.
+         *
+         * Прежние границы 740–755 описывали равнину и врали везде, где высота
+         * другая: на пятистах метрах норма около 710, и жёсткая нижняя граница
+         * объявила бы обычный для места фон катастрофой. Абсолютные значения
+         * расчёт не читал, но лежали они как параметр модели и ждали своего
+         * часа — теперь на их месте допуск на падение и на рост.
+         *
+         * Старым строкам достаются двенадцать миллиметров в обе стороны — тот
+         * самый допуск, который до сих пор был общим для всех видов. Настоящие
+         * значения приезжают с первым же обновлением справочника.
+         */
+        val MIGRATION_22_23 = object : Migration(22, 23) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                // Таблица пересоздаётся: абсолютные границы надо не дополнить,
+                // а убрать — иначе они останутся лежать параметром модели.
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `fish_new` (
+                        `id` INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+                        `uid` TEXT NOT NULL,
+                        `name` TEXT NOT NULL,
+                        `description` TEXT NOT NULL,
+                        `optMinTemp` REAL NOT NULL,
+                        `optMaxTemp` REAL NOT NULL,
+                        `absMinTemp` REAL NOT NULL,
+                        `absMaxTemp` REAL NOT NULL,
+                        `maxPressureDrop` REAL NOT NULL,
+                        `maxPressureRise` REAL NOT NULL,
+                        `oxygenComfortMgL` REAL NOT NULL,
+                        `oxygenCriticalMgL` REAL NOT NULL,
+                        `guild` TEXT NOT NULL,
+                        `lightActivity` TEXT NOT NULL,
+                        `preferredStructures` TEXT NOT NULL,
+                        `defaultHorizon` TEXT NOT NULL,
+                        `coldTempThreshold` REAL NOT NULL,
+                        `baitsCold` TEXT NOT NULL,
+                        `baitsWarm` TEXT NOT NULL,
+                        `groundbaitCold` TEXT NOT NULL,
+                        `groundbaitWarm` TEXT NOT NULL,
+                        `imageUrl` TEXT
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL(
+                    """
+                    INSERT INTO `fish_new`
+                    SELECT `id`, `uid`, `name`, `description`,
+                           `optMinTemp`, `optMaxTemp`, `absMinTemp`, `absMaxTemp`,
+                           12.0, 12.0,
+                           `oxygenComfortMgL`, `oxygenCriticalMgL`,
+                           `guild`, `lightActivity`, `preferredStructures`,
+                           `defaultHorizon`, `coldTempThreshold`,
+                           `baitsCold`, `baitsWarm`, `groundbaitCold`, `groundbaitWarm`,
+                           `imageUrl`
+                    FROM `fish`
+                    """.trimIndent()
+                )
+                db.execSQL("DROP TABLE `fish`")
+                db.execSQL("ALTER TABLE `fish_new` RENAME TO `fish`")
             }
         }
     }

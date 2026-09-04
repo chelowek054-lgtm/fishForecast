@@ -24,8 +24,8 @@ class CalculateFishActivityUseCaseTest {
         optMaxTemp = 18f,
         absMinTemp = 2f,
         absMaxTemp = 22f,
-        minPressure = 740f,
-        maxPressure = 760f
+        maxPressureDrop = 12f,
+        maxPressureRise = 12f
     )
 
     /** 750 мм рт. ст. в гПа — единицы у справочника и погоды разные. */
@@ -356,17 +356,64 @@ class CalculateFishActivityUseCaseTest {
     }
 
     @Test
-    fun `норма не зависит от диапазона давления рыбы`() {
-        // Раньше без нормы места подставлялась середина диапазона рыбы, и
-        // две рыбы с одинаковым комфортом по температуре получали разную
-        // оценку из-за справочника. Норма — свойство места, рыба ни при чём.
-        val lowlandFish = pike.copy(minPressure = 700f, maxPressure = 720f)
+    fun `без нормы места допуск вида ничего не решает`() {
+        // Раньше без нормы подставлялась середина диапазона рыбы, и две рыбы
+        // с одинаковым комфортом по температуре получали разную оценку из-за
+        // справочника. Норма — свойство места; нет её — фактор молчит для всех.
+        val tolerant = pike.copy(maxPressureDrop = 20f, maxPressureRise = 20f)
         val forecast = (0..5).map { hour(it) }
 
         assertEquals(
             useCase(pike, forecast).last().score,
-            useCase(lowlandFish, forecast).last().score
+            useCase(tolerant, forecast).last().score
         )
+    }
+
+    @Test
+    fun `на высоте нормальное для места давление остаётся нормой`() {
+        // Ради этого абсолютные границы и убрали: 710 мм на пятистах метрах —
+        // обычный фон, а не бедствие.
+        val highland = (0..5).map { hour(it, pressureHpa = 710.0 * 1.333224) }
+
+        val factor = useCase(pike, highland, normalPressureMmHg = 710.0)
+            .last().factors.first { it.name == "Давление" }
+
+        assertEquals(1.0, factor.value, 0.001)
+        assertTrue("должно читаться как норма: ${factor.comment}", factor.comment.contains("норма"))
+    }
+
+    @Test
+    fun `узкий допуск вида теряет больше широкого`() {
+        // Судак терпит семь миллиметров, карась четырнадцать: одно и то же
+        // отклонение стоит им разного.
+        val forecast = (0..5).map { hour(it, pressureHpa = 743.0 * 1.333224) }
+        val sensitive = pike.copy(maxPressureDrop = 7f)
+        val tough = pike.copy(maxPressureDrop = 14f)
+
+        val strict = useCase(sensitive, forecast, 750.0).last()
+        val calm = useCase(tough, forecast, 750.0).last()
+
+        assertTrue(
+            "чувствительной рыбе должно быть хуже: ${strict.score} против ${calm.score}",
+            strict.score < calm.score
+        )
+    }
+
+    @Test
+    fun `допуск несимметричен - падение переносится легче роста`() {
+        // Падающее давление рыба встречает кормлением, растущее вгоняет в
+        // апатию, поэтому у видов допуск на падение шире.
+        val fish = pike.copy(maxPressureDrop = 12f, maxPressureRise = 6f)
+        // Отклонение одно и то же — восемь миллиметров в обе стороны, — но
+        // на падении оно в пределах допуска, а на росте уже за ним.
+        val below = (0..5).map { hour(it, pressureHpa = 742.0 * 1.333224) }
+        val above = (0..5).map { hour(it, pressureHpa = 758.0 * 1.333224) }
+
+        val fall = useCase(fish, below, 750.0).last().factors.first { it.name == "Давление" }
+        val rise = useCase(fish, above, 750.0).last().factors.first { it.name == "Давление" }
+
+        assertTrue("падение мягче: ${fall.value} против ${rise.value}", fall.value > rise.value)
+        assertTrue(rise.comment.contains("не терпит"))
     }
 
     @Test

@@ -73,7 +73,7 @@ class CalculateFishActivityUseCase @Inject constructor() {
             }
 
             val temperature = temperatureFactor(waterNow ?: hour.temperature, fish, waterNow != null)
-            val pressure = pressureFactor(hour.pressure.hPaToMmHg(), normal)
+            val pressure = pressureFactor(hour.pressure.hPaToMmHg(), normal, fish)
             val trend = pressureTrendFactor(sorted, index, normal)
             val oxygen = if (waterNow != null) {
                 waterOxygenFactor(
@@ -172,10 +172,19 @@ class CalculateFishActivityUseCase @Inject constructor() {
         )
     }
 
-    /** Отклонение от нормы водоёма важнее абсолютного значения. */
+    /**
+     * Отклонение от нормы водоёма важнее абсолютного значения.
+     *
+     * Допуск берётся у вида и несимметричен: падение рыба переносит легче
+     * роста — падающее давление она встречает кормлением, растущее вгоняет в
+     * апатию. Абсолютных границ у вида больше нет: на высоте 500 м норма
+     * около 710 мм, и жёсткие 740–755 объявили бы обычный для места фон
+     * катастрофой.
+     */
     private fun pressureFactor(
         pressureMmHg: Double,
-        normal: Double?
+        normal: Double?,
+        fish: FishEntity
     ): BiteFactor {
         // Без нормы места отклонение не от чего считать. Честнее не
         // оценивать фактор вовсе, чем выдумать точку отсчёта.
@@ -190,7 +199,12 @@ class CalculateFishActivityUseCase @Inject constructor() {
         }
 
         val deviation = abs(pressureMmHg - normal)
-        val value = falloff(deviation, PRESSURE_TOLERANCE)
+        val tolerance = if (pressureMmHg < normal) {
+            fish.maxPressureDrop.toDouble()
+        } else {
+            fish.maxPressureRise.toDouble()
+        }.coerceAtLeast(MIN_TOLERANCE)
+        val value = falloff(deviation, tolerance)
 
         return BiteFactor(
             name = "Давление",
@@ -198,6 +212,10 @@ class CalculateFishActivityUseCase @Inject constructor() {
             weight = WEIGHT_PRESSURE,
             comment = "${pressureMmHg.roundToInt()} мм рт. ст. " + when {
                 deviation <= AT_NORMAL_MMHG -> "— норма водоёма"
+                deviation >= tolerance && pressureMmHg < normal ->
+                    "— ниже нормы на ${deviation.roundToInt()}, вид столько не терпит"
+                deviation >= tolerance ->
+                    "— выше нормы на ${deviation.roundToInt()}, вид столько не терпит"
                 pressureMmHg < normal -> "— ниже нормы на ${deviation.roundToInt()}"
                 else -> "— выше нормы на ${deviation.roundToInt()}"
             }
@@ -670,9 +688,6 @@ class CalculateFishActivityUseCase @Inject constructor() {
 
         /** Ширина перехода не бывает нулевой: иначе деление на ноль. */
         const val MIN_TOLERANCE = 1.0
-
-        /** Отклонение от нормы водоёма, при котором активность падает до нуля. */
-        const val PRESSURE_TOLERANCE = 12.0
 
         /** Отклонение, которое рыба ещё считает нормой. */
         const val AT_NORMAL_MMHG = 2.0
