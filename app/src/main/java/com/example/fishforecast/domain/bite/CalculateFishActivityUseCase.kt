@@ -195,24 +195,25 @@ class CalculateFishActivityUseCase @Inject constructor() {
             }
         }
 
-        val what = if (fromWater) "Вода" else "Воздух"
         val acclimated = when {
-            shift <= -ACCLIMATION_NOTICEABLE_C -> ", рыба привыкла к холодной воде"
-            shift >= ACCLIMATION_NOTICEABLE_C -> ", рыба привыкла к тёплой воде"
+            shift <= -ACCLIMATION_NOTICEABLE_C -> ", привыкла к холодной воде"
+            shift >= ACCLIMATION_NOTICEABLE_C -> ", привыкла к тёплой воде"
             else -> ""
         }
+        val band = "%.0f–%.0f°".format(optimum.start, optimum.endInclusive)
         return BiteFactor(
             name = if (fromWater) "Температура воды" else "Температура",
             value = value,
             weight = 0.0,
             limiting = true,
-            comment = "$what ${temperature.roundToInt()}°C — " + when {
-                temperature in optimum -> "оптимум вида"
-                temperature < optimum.start && value > 0 -> "холоднее оптимума"
-                temperature < optimum.start -> "холодно до оцепенения"
-                value > 0 -> "теплее оптимума"
-                else -> "жарко до оцепенения"
-            } + acclimated
+            comment = "%.0f °C%s — ".format(temperature, if (fromWater) "" else " по воздуху") +
+                when {
+                    temperature in optimum -> "оптимум вида $band"
+                    temperature < optimum.start && value > 0 -> "холоднее оптимума $band"
+                    temperature < optimum.start -> "ниже предела вида, оцепенение"
+                    value > 0 -> "теплее оптимума $band"
+                    else -> "выше предела вида, оцепенение"
+                } + acclimated
         )
     }
 
@@ -253,8 +254,8 @@ class CalculateFishActivityUseCase @Inject constructor() {
                 name = "Давление",
                 value = 1.0,
                 weight = WEIGHT_PRESSURE,
-                comment = "${pressureMmHg.roundToInt()} мм рт. ст. — норма места " +
-                    "ещё не посчитана, нужна сеть"
+                comment = "%.0f мм рт. ст. — норма места не посчитана, нужна сеть"
+                    .format(pressureMmHg)
             )
         }
 
@@ -270,14 +271,14 @@ class CalculateFishActivityUseCase @Inject constructor() {
             name = "Давление",
             value = value,
             weight = WEIGHT_PRESSURE,
-            comment = "${pressureMmHg.roundToInt()} мм рт. ст. " + when {
-                deviation <= AT_NORMAL_MMHG -> "— норма водоёма"
-                deviation >= tolerance && pressureMmHg < normal ->
-                    "— ниже нормы на ${deviation.roundToInt()}, вид столько не терпит"
-                deviation >= tolerance ->
-                    "— выше нормы на ${deviation.roundToInt()}, вид столько не терпит"
-                pressureMmHg < normal -> "— ниже нормы на ${deviation.roundToInt()}"
-                else -> "— выше нормы на ${deviation.roundToInt()}"
+            comment = "%.0f мм рт. ст. — ".format(pressureMmHg) + when {
+                deviation <= AT_NORMAL_MMHG -> "норма места %.0f".format(normal)
+                else -> "%s нормы %.0f на %.0f, вид терпит %.0f".format(
+                    if (pressureMmHg < normal) "ниже" else "выше",
+                    normal,
+                    deviation,
+                    tolerance
+                )
             }
         )
     }
@@ -308,7 +309,7 @@ class CalculateFishActivityUseCase @Inject constructor() {
                 name = "Тенденция",
                 value = 1.0,
                 weight = weight,
-                comment = "Недостаточно истории за $window ч"
+                comment = "нет истории за $window ч — тенденция не читается"
             )
         }
 
@@ -334,12 +335,12 @@ class CalculateFishActivityUseCase @Inject constructor() {
             name = "Тенденция",
             value = value,
             weight = weight,
-            comment = when {
-                change <= STABLE_PRESSURE_MMHG -> "Давление стабильно за $window ч"
-                normal == null -> "Меняется на ${change.roundToInt()} мм за $window ч"
-                movingToNormal -> "Возвращается к норме (${change.roundToInt()} мм за $window ч)"
-                current > previous -> "Уходит вверх от нормы на ${change.roundToInt()} мм"
-                else -> "Уходит вниз от нормы на ${change.roundToInt()} мм"
+            comment = "%.0f мм за %d ч — ".format(change, window) + when {
+                change <= STABLE_PRESSURE_MMHG -> "стабильно, окно вида"
+                normal == null -> "куда движется, без нормы места не сказать"
+                movingToNormal -> "возвращается к норме"
+                current > previous -> "уходит вверх от нормы"
+                else -> "уходит вниз от нормы"
             }
         )
     }
@@ -389,12 +390,11 @@ class CalculateFishActivityUseCase @Inject constructor() {
             value = value,
             weight = 0.0,
             limiting = true,
-            comment = when {
-                cooling <= -NOTICEABLE_COOLING -> "Вода остывает — кислорода прибавляется"
-                hour.temperature > warmWaterStarts ->
-                    "Для этой рыбы вода тёплая, кислорода меньше"
-                cooling >= NOTICEABLE_COOLING -> "Продолжает греться — кислорода меньше"
-                else -> "Кислорода достаточно"
+            comment = "%.0f °C по воздуху — ".format(hour.temperature) + when {
+                cooling <= -NOTICEABLE_COOLING -> "остывает, кислорода прибавится"
+                hour.temperature > warmWaterStarts -> "для этой рыбы тепло, кислорода меньше"
+                cooling >= NOTICEABLE_COOLING -> "греется, кислорода убавится"
+                else -> "кислорода достаточно"
             }
         )
     }
@@ -454,14 +454,16 @@ class CalculateFishActivityUseCase @Inject constructor() {
             value = (minOf(base, warmthPenalty) + coolingBonus).coerceIn(0.0, 1.0),
             weight = 0.0,
             limiting = true,
-            comment = "%.1f мг/л — %s".format(oxygen, oxygenLevelText(oxygenLevel(oxygen))) +
-                when {
-                    oxygen <= critical -> ", для этой рыбы критично"
-                    cooling >= WATER_COOLING_STEP -> ", вода остывает"
-                    cooling <= -WATER_COOLING_STEP -> ", вода прогревается"
-                    waterNow > warmWaterStarts -> ", для этой рыбы вода тёплая"
-                    else -> ""
-                }
+            comment = "%.1f мг/л — ".format(oxygen) + when {
+                oxygen <= critical -> "критично, вид держится от %.1f".format(critical)
+                oxygen < comfort -> "ниже комфорта вида %.1f".format(comfort)
+                else -> "выше комфорта вида %.1f".format(comfort)
+            } + when {
+                cooling >= WATER_COOLING_STEP -> ", вода остывает — прибавится"
+                cooling <= -WATER_COOLING_STEP -> ", вода греется — убавится"
+                waterNow > warmWaterStarts -> ", для этой рыбы вода тёплая"
+                else -> ""
+            }
         )
     }
 
@@ -477,12 +479,13 @@ class CalculateFishActivityUseCase @Inject constructor() {
         value = bonus.coerceIn(0.0, 1.0),
         weight = 0.0,
         limiting = true,
-        comment = place.title.replaceFirstChar { it.uppercase() } + when {
-            place.structures.isEmpty() -> " — без особенностей"
-            bonus > 1.05 -> ": " + place.structures.joinToString(", ") { it.name.lowercase() }
-            bonus < 0.95 -> ": " + place.structures.joinToString(", ") { it.name.lowercase() } +
-                " — это место против рыбы"
-            else -> ": " + place.structures.joinToString(", ") { it.name.lowercase() }
+        comment = place.title.replaceFirstChar { it.lowercase() } + " — " + when {
+            place.structures.isEmpty() -> "без особенностей"
+            else -> place.structures.joinToString(", ") { it.name.lowercase() } + when {
+                bonus > 1.05 -> ", место за рыбу"
+                bonus < 0.95 -> ", место против рыбы"
+                else -> ""
+            }
         }
     )
 
@@ -509,8 +512,8 @@ class CalculateFishActivityUseCase @Inject constructor() {
             name = "Свет",
             value = value,
             weight = WEIGHT_LIGHT,
-            comment = phase.title.replaceFirstChar { it.uppercase() } + " — " + when {
-                value >= 0.9 -> "лучшее время этого вида"
+            comment = phase.title + " — " + when {
+                value >= 0.9 -> "лучшее время вида"
                 value >= 0.7 -> "рабочее время"
                 value >= 0.4 -> "не лучший час"
                 else -> "вид в это время стоит"
@@ -543,7 +546,7 @@ class CalculateFishActivityUseCase @Inject constructor() {
                 name = "Ход за сутки",
                 value = 1.0,
                 weight = WEIGHT_PRESSURE_DAY,
-                comment = "Истории меньше $MIN_DAY_WINDOW_HOURS часов — сутки не прочитать"
+                comment = "нет истории за $MIN_DAY_WINDOW_HOURS ч — сутки не прочитать"
             )
         }
 
@@ -567,13 +570,13 @@ class CalculateFishActivityUseCase @Inject constructor() {
             name = "Ход за сутки",
             value = value,
             weight = WEIGHT_PRESSURE_DAY,
-            comment = "%+.0f мм за %d ч".format(change, hoursBack) + when {
-                change <= -DAY_FALL_MMHG -> " — падает перед фронтом, рыба кормится впрок"
-                change <= -STABLE_PRESSURE_MMHG -> " — понемногу падает, это в плюс"
-                change < STABLE_PRESSURE_MMHG -> " — сутки ровные"
-                change >= DAY_RISE_MMHG -> " — резкий рост после фронта, рыба прижата"
-                atNormal -> " — растёт, но уже у нормы места"
-                else -> " — растёт после фронта, клёв вялый"
+            comment = signed(change, "мм") + " за $hoursBack ч — " + when {
+                change <= -DAY_FALL_MMHG -> "падает перед фронтом, рыба кормится впрок"
+                change <= -STABLE_PRESSURE_MMHG -> "понемногу падает, это в плюс"
+                change < STABLE_PRESSURE_MMHG -> "сутки ровные"
+                change >= DAY_RISE_MMHG -> "резкий рост после фронта, рыба прижата"
+                atNormal -> "растёт, но уже у нормы места"
+                else -> "растёт после фронта, клёв вялый"
             }
         )
     }
@@ -616,14 +619,14 @@ class CalculateFishActivityUseCase @Inject constructor() {
             name = "Ход воды",
             value = value,
             weight = WEIGHT_WATER_TREND,
-            comment = "%+.1f° за %d ч".format(delta, hours) + when {
-                belowOptimum && warming -> " — холодная вода греется, рыба выходит кормиться"
-                belowOptimum && cooling -> " — холодает, рыба замирает"
-                belowOptimum -> " — холодная вода стоит на месте"
-                aboveOptimum && cooling -> " — жара отпускает, рыба оживает"
-                aboveOptimum && warming -> " — перегретая вода греется дальше"
-                aboveOptimum -> " — жарко и без перемен"
-                else -> " — вода в оптимуме вида"
+            comment = signed(delta, "°C") + " за $hours ч — " + when {
+                belowOptimum && warming -> "холодная греется, рыба выходит кормиться"
+                belowOptimum && cooling -> "холодает, рыба замирает"
+                belowOptimum -> "холодная и стоит на месте"
+                aboveOptimum && cooling -> "жара отпускает, рыба оживает"
+                aboveOptimum && warming -> "перегретая греется дальше"
+                aboveOptimum -> "жарко и без перемен"
+                else -> "держится оптимума вида"
             }
         )
     }
@@ -680,15 +683,15 @@ class CalculateFishActivityUseCase @Inject constructor() {
             name = "Ветер",
             value = value.coerceIn(0.0, 1.0),
             weight = WEIGHT_WIND,
-            comment = "%s %.1f м/с".format(windDirectionLabel(hour.windDirection), ms) + when {
-                turned -> " — развернулся за $WIND_SHIFT_HOURS ч, рыба перестраивается"
-                northerly && coldWater -> " — северный, студит и без того холодную воду"
-                northerly && hotWater -> " — северный, сбивает жару, кислорода прибавится"
-                steady && ms > CALM_MS -> " — держит сторону, корм идёт к наветренному берегу"
-                ms < CALM_MS -> " — штиль, вода как зеркало"
-                ms <= RIPPLE_MAX_MS -> " — рябь на воде, это в плюс"
-                ms <= STRONG_WIND_MS -> " — заметный ветер, вода перемешивается"
-                else -> " — сильный ветер, рыбалка трудная"
+            comment = "%s %.1f м/с — ".format(windDirectionLabel(hour.windDirection), ms) + when {
+                turned -> "развернулся за $WIND_SHIFT_HOURS ч, рыба перестраивается"
+                northerly && coldWater -> "северный, студит и без того холодную воду"
+                northerly && hotWater -> "северный, сбивает жару, кислорода прибавится"
+                steady && ms > CALM_MS -> "держит сторону, корм к наветренному берегу"
+                ms < CALM_MS -> "штиль, вода как зеркало"
+                ms <= RIPPLE_MAX_MS -> "рябь на воде, это в плюс"
+                ms <= STRONG_WIND_MS -> "заметный ветер, вода перемешивается"
+                else -> "сильный ветер, рыбалка трудная"
             }
         )
     }
@@ -722,11 +725,28 @@ class CalculateFishActivityUseCase @Inject constructor() {
             value = STRATIFIED_SHALLOW,
             weight = 0.0,
             limiting = true,
-            comment = "Мель %.0f°, яма %.0f° — вода расслоилась, рыба ушла с мели вниз"
+            comment = "мель %.0f°, яма %.0f° — вода расслоилась, рыба ушла с мели вниз"
                 .format(shallowNow, deepNow)
         )
     }
 
+
+    /**
+     * Знаковая величина для пояснения: «−3 мм», «+0.5 °C», «0 мм».
+     *
+     * Плюс у нуля выглядит опиской, поэтому у неразличимо малого изменения
+     * знака нет вовсе.
+     */
+    private fun signed(value: Double, unit: String): String {
+        val digits = if (unit == "мм") 0 else 1
+        val rounded = "%.${digits}f".format(abs(value))
+        val sign = when {
+            rounded.replace(',', '.').toDouble() == 0.0 -> ""
+            value < 0 -> "−"
+            else -> "+"
+        }
+        return "$sign$rounded $unit"
+    }
 
     /** Плавное затухание: у границы диапазона обрыва быть не должно. */
     private fun falloff(distance: Double, tolerance: Double): Double =

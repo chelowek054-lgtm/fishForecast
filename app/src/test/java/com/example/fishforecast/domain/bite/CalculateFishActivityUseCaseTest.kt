@@ -259,7 +259,7 @@ class CalculateFishActivityUseCaseTest {
 
         assertTrue(jumpHour.score < result[2].score)
         assertTrue(
-            jumpHour.factors.first { it.name == "Тенденция" }.comment.contains("Уходит вверх")
+            jumpHour.factors.first { it.name == "Тенденция" }.comment.contains("уходит вверх")
         )
     }
 
@@ -413,7 +413,7 @@ class CalculateFishActivityUseCaseTest {
         val rise = useCase(fish, above, 750.0).last().factors.first { it.name == "Давление" }
 
         assertTrue("падение мягче: ${fall.value} против ${rise.value}", fall.value > rise.value)
-        assertTrue(rise.comment.contains("не терпит"))
+        assertTrue("допуск должен быть назван: ${rise.comment}", rise.comment.contains("терпит 6"))
     }
 
     @Test
@@ -423,7 +423,7 @@ class CalculateFishActivityUseCaseTest {
         result.forEach { forecast ->
             val trend = forecast.factors.first { it.name == "Тенденция" }
             assertEquals(1.0, trend.value, 0.0001)
-            assertTrue(trend.comment.contains("Недостаточно истории"))
+            assertTrue(trend.comment.contains("нет истории"))
         }
     }
 
@@ -513,7 +513,7 @@ class CalculateFishActivityUseCaseTest {
 
         val factor = short.factors.first { it.name == "Ход за сутки" }
         assertEquals(1.0, factor.value, 0.001)
-        assertTrue(factor.comment.contains("Истории меньше"))
+        assertTrue(factor.comment.contains("нет истории"))
     }
 
     @Test
