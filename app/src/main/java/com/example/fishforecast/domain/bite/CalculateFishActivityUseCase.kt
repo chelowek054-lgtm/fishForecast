@@ -14,6 +14,7 @@ import com.example.fishforecast.domain.weather.windDirectionLabel
 import com.example.fishforecast.domain.weather.windTurn
 import java.time.LocalDateTime
 import com.example.fishforecast.domain.water.WaterState
+import com.example.fishforecast.domain.water.isStratified
 import com.example.fishforecast.domain.water.oxygenLevel
 import com.example.fishforecast.domain.water.oxygenLevelText
 import com.example.fishforecast.domain.water.oxygenSaturationMgL
@@ -85,6 +86,9 @@ class CalculateFishActivityUseCase @Inject constructor() {
                     ?.plus(place.waterOffsetC)
             }
             // Своё окно: вода инертна, и за три часа её ход почти не читается.
+            // Оба слоя нужны отдельно: по их разнице видно расслоение.
+            val shallowNow = water?.shallowAt(hour.time)?.plus(place.waterOffsetC)
+            val deepNow = water?.deepAt(hour.time)?.plus(place.waterOffsetC)
             val waterTrendBefore = water?.let { state ->
                 sorted.getOrNull(index - WATER_TREND_HOURS)
                     ?.let { state.layerAt(it.time, place.layer) }
@@ -123,7 +127,7 @@ class CalculateFishActivityUseCase @Inject constructor() {
             // росло давление вторые сутки или падало перед фронтом.
             val dayTrend = pressureDayFactor(sorted, index, normal)
             val waterTrend = waterTrendFactor(waterNow, waterTrendBefore, fish, WATER_TREND_HOURS)
-            val stratification = stratificationFactor(sorted, index, place, waterNow, fish)
+            val stratification = stratificationFactor(place, shallowNow, deepNow, fish)
             // Увиденное своими глазами весомее расчёта, но живёт недолго:
             // поправка тает к концу срока, записанного в словаре.
             val noticed = observationFactor(observations, guild, hour.time)
@@ -690,40 +694,39 @@ class CalculateFishActivityUseCase @Inject constructor() {
     }
 
     /**
-     * Расслоение воды в штиль.
+     * Расслоение воды.
      *
-     * Перемешивает водоём ветер. Когда его нет несколько часов подряд, а
-     * вода перегрета, столб распадается на слои: тёплый верх, холодный низ и
-     * термоклин между ними. Рыба уходит из верхнего слоя, но и в яму не
-     * идёт — там нечем дышать, — а стоит в термоклине и кормится вяло.
+     * Расслоившийся столб выгоняет рыбу из верхнего слоя: наверху жарко, а
+     * спуститься ей мешает нехватка кислорода внизу. Раньше расслоение
+     * угадывалось по шести часам штиля — теперь оно просто видно: модель
+     * считает оба слоя, и разница в три градуса и есть термоклин.
      *
-     * Фактор появляется только тогда, когда всё это сошлось: без штиля или
-     * без жары его в списке нет, и лишней строки на экране не возникает.
+     * Для ямы фактор не выставляется намеренно. Её беду — задохнувшийся
+     * гиполимнион — считает кислород своего слоя; ставить сверху ещё и
+     * множитель значило бы наказать яму дважды за одно и то же.
      */
     private fun stratificationFactor(
-        forecast: List<WeatherEntity>,
-        index: Int,
         place: PlaceContext,
-        waterNow: Double?,
+        shallowNow: Double?,
+        deepNow: Double?,
         fish: FishEntity
     ): BiteFactor? {
-        if (waterNow == null || waterNow <= fish.optMaxTemp) return null
+        if (shallowNow == null || deepNow == null) return null
+        if (place.layer == WaterLayerChoice.DEEP) return null
+        if (!isStratified(shallowNow, deepNow)) return null
+        // Пока верхний слой рыбе по нраву, расслоение её не гонит.
+        if (shallowNow <= fish.optMaxTemp) return null
 
-        val from = index - CALM_SPELL_HOURS + 1
-        if (from < 0) return null
-        val calm = (from..index).all { forecast[it].windSpeed.kmhToMs() < CALM_MS }
-        if (!calm) return null
-
-        val deep = place.layer == WaterLayerChoice.DEEP
         return BiteFactor(
             name = "Расслоение",
-            value = if (deep) STRATIFIED_DEEP else STRATIFIED_SHALLOW,
+            value = STRATIFIED_SHALLOW,
             weight = 0.0,
             limiting = true,
-            comment = "Штиль $CALM_SPELL_HOURS ч на перегретой воде: она расслоилась, " +
-                if (deep) "рыба держится термоклина над ямой" else "рыба ушла с мели вниз"
+            comment = "Мель %.0f°, яма %.0f° — вода расслоилась, рыба ушла с мели вниз"
+                .format(shallowNow, deepNow)
         )
     }
+
 
     /** Плавное затухание: у границы диапазона обрыва быть не должно. */
     private fun falloff(distance: Double, tolerance: Double): Double =
@@ -826,12 +829,8 @@ class CalculateFishActivityUseCase @Inject constructor() {
         const val NORTH_COLD_PENALTY = 0.85
         const val NORTH_HEAT_BONUS = 1.1
 
-        /** Сколько часов штиля расслаивают перегретую воду. */
-        const val CALM_SPELL_HOURS = 6
-
-        /** Что остаётся от шанса на мели и в яме, когда вода расслоилась. */
+        /** Что остаётся от шанса на мели, когда вода расслоилась. */
         const val STRATIFIED_SHALLOW = 0.8
-        const val STRATIFIED_DEEP = 0.95
 
         const val HEAT_TOLERANCE = 12.0
 

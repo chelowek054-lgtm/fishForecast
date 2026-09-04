@@ -603,26 +603,54 @@ class CalculateFishActivityUseCaseTest {
         )
     }
 
+    /** Вода двумя слоями: столько на мели, столько в яме. */
+    private fun layered(forecast: List<WeatherEntity>, shallow: Double, deep: Double) =
+        WaterState(
+            shallow = forecast.map { WaterHour(it.time, shallow) },
+            deep = forecast.map { WaterHour(it.time, deep) },
+            shallowDepthM = 1.5,
+            deepDepthM = 4.0,
+            depthsAssumed = false,
+            anchored = false
+        )
+
     @Test
-    fun `штиль на перегретой воде расслаивает её, и мель проигрывает яме`() {
-        val calm = day(750.0, 750.0, windSpeed = 2.0)
-        val hot = waterFor(calm, 21.0)
+    fun `расслоившаяся вода гонит рыбу с мели`() {
+        // Наверху жарко, внизу термоклин: рыба уходит из верхнего слоя.
+        // Раньше это угадывалось по шести часам штиля, теперь просто видно.
+        val forecast = day(750.0, 750.0)
+        val stratified = layered(forecast, shallow = 24.0, deep = 17.0)
 
-        val shallow = useCase(pike, calm, 750.0, hot, place = PlaceContext(WaterLayerChoice.SHALLOW)).last()
-        val deep = useCase(pike, calm, 750.0, hot, place = PlaceContext(WaterLayerChoice.DEEP)).last()
+        val factor = useCase(pike, forecast, 750.0, stratified)
+            .last().factors.first { it.name == "Расслоение" }
 
-        val factor = shallow.factors.first { it.name == "Расслоение" }
-        assertTrue("должно быть сказано про термоклин: ${factor.comment}", factor.comment.contains("расслоилась"))
-        assertTrue("в яме должно быть не хуже: ${deep.score} против ${shallow.score}", deep.score >= shallow.score)
+        assertEquals(0.8, factor.value, 0.001)
+        assertTrue("должно быть сказано про оба слоя: ${factor.comment}", factor.comment.contains("яма"))
     }
 
     @Test
-    fun `при ветре расслоения нет`() {
-        // Ветер перемешивает столб: слоёв не образуется, и штрафа быть не должно.
-        val forecast = day(750.0, 750.0, windSpeed = 18.0)
-        val windy = useCase(pike, forecast, 750.0, waterFor(forecast, 21.0)).last()
+    fun `перемешанный столб не расслаивается, даже если жарко`() {
+        val forecast = day(750.0, 750.0)
+        val mixed = layered(forecast, shallow = 24.0, deep = 23.0)
 
-        assertTrue(windy.factors.none { it.name == "Расслоение" })
+        val result = useCase(pike, forecast, 750.0, mixed).last()
+
+        assertTrue(result.factors.none { it.name == "Расслоение" })
+    }
+
+    @Test
+    fun `яму расслоение не штрафует - за неё отвечает кислород слоя`() {
+        // Иначе яма получила бы наказание дважды за одно и то же: сначала
+        // множителем, потом задохнувшимся гиполимнионом.
+        val forecast = day(750.0, 750.0)
+        val stratified = layered(forecast, shallow = 24.0, deep = 17.0)
+
+        val deep = useCase(
+            pike, forecast, 750.0, stratified,
+            place = PlaceContext(layer = WaterLayerChoice.DEEP)
+        ).last()
+
+        assertTrue(deep.factors.none { it.name == "Расслоение" })
     }
 
     @Test
