@@ -11,7 +11,12 @@ private const val KMH_PER_MS = 3.6
 
 fun Double.kmhToMs(): Double = this / KMH_PER_MS
 
-private val COMPASS = listOf("С", "СВ", "В", "ЮВ", "Ю", "ЮЗ", "З", "СЗ")
+/**
+ * Румбы через дефис: «С-В» читается с одного взгляда, «СВ» на бегу
+ * сливается в непонятное слово, а промежуточные направления рыболову важны
+ * не меньше главных.
+ */
+private val COMPASS = listOf("С", "С-В", "В", "Ю-В", "Ю", "Ю-З", "З", "С-З")
 
 /** Румб, откуда дует ветер: 0° — северный, 90° — восточный. */
 fun windDirectionLabel(degrees: Double): String {

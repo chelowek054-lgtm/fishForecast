@@ -160,17 +160,51 @@ private fun List<WeatherEntity>.darkHoursBefore(index: Int): Int {
     return dark
 }
 
-/** Вт/м², ниже которых считаем, что солнца нет. */
-private const val DARK_RADIATION = 1.0
+/**
+ * Вт/м², ниже которых считаем, что солнца нет.
+ *
+ * Граница света нужна и расчёту клёва: ход воды до рассвета и после него —
+ * это два разных хода, и складывать их в одно число нельзя.
+ */
+const val DARK_RADIATION = 1.0
 
 /**
- * Куда идёт вода за ближайшие часы. Остывание — то самое, ради чего всё
- * считается: вместе с ним в воду приходит кислород.
+ * Куда идёт вода за ближайшие часы.
+ *
+ * Окно обрывается на границе света: до неё и после неё вода ведёт себя
+ * противоположно, и шесть часов подряд через рассвет складывали ночное
+ * остывание с утренним прогревом в одно число. Получалось «мель
+ * прогревается» сказанное в три часа ночи — правда про сумму, ложь про
+ * сейчас. Поэтому берутся только часы, у которых свет тот же, что и в
+ * первом часе окна.
  */
-fun waterTrend(hours: List<WaterHour>, windowHours: Int = 6): Double? {
-    if (hours.size < 2) return null
-    val window = hours.take(windowHours + 1)
-    return window.last().temperature - window.first().temperature
+data class WaterTrend(
+    /** Насколько изменится температура за окно, °C. */
+    val deltaC: Double,
+    /** Сколько часов реально уместилось до границы света. */
+    val hours: Int,
+    /** Солнца в эти часы нет. */
+    val dark: Boolean
+)
+
+fun waterTrend(
+    water: List<WaterHour>,
+    weather: List<WeatherEntity>,
+    maxHours: Int = 6
+): WaterTrend? {
+    if (water.size < 2) return null
+    val lit = weather.associate { it.time to (it.shortwaveRadiation > DARK_RADIATION) }
+
+    val first = water.first()
+    val litNow = lit[first.time] ?: return null
+    val window = water.take(maxHours + 1).takeWhile { lit[it.time] == litNow }
+    if (window.size < 2) return null
+
+    return WaterTrend(
+        deltaC = window.last().temperature - first.temperature,
+        hours = window.size - 1,
+        dark = !litNow
+    )
 }
 
 /** Часы, оставшиеся от текущего момента и дальше. */

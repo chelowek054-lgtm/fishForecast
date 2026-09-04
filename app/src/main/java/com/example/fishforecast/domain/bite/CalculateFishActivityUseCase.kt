@@ -13,6 +13,7 @@ import com.example.fishforecast.domain.weather.kmhToMs
 import com.example.fishforecast.domain.weather.windDirectionLabel
 import com.example.fishforecast.domain.weather.windTurn
 import java.time.LocalDateTime
+import com.example.fishforecast.domain.water.DARK_RADIATION
 import com.example.fishforecast.domain.water.WaterState
 import com.example.fishforecast.domain.water.isStratified
 import com.example.fishforecast.domain.water.oxygenLevel
@@ -89,8 +90,13 @@ class CalculateFishActivityUseCase @Inject constructor() {
             // Оба слоя нужны отдельно: по их разнице видно расслоение.
             val shallowNow = water?.shallowAt(hour.time)?.plus(place.waterOffsetC)
             val deepNow = water?.deepAt(hour.time)?.plus(place.waterOffsetC)
-            val waterTrendBefore = water?.let { state ->
-                sorted.getOrNull(index - WATER_TREND_HOURS)
+            // Окно хода воды обрывается на границе света: до неё и после неё
+            // вода идёт в разные стороны. Шесть часов, взятые назад от
+            // полуночи, захватывали дневной прогрев, и ночью выходило
+            // «перегретая греется дальше» — правда про сумму, ложь про ночь.
+            val waterTrendHours = sorted.sameLightHoursBefore(index, WATER_TREND_HOURS)
+            val waterTrendBefore = water?.takeIf { waterTrendHours > 0 }?.let { state ->
+                sorted.getOrNull(index - waterTrendHours)
                     ?.let { state.layerAt(it.time, place.layer) }
                     ?.plus(place.waterOffsetC)
             }
@@ -126,7 +132,7 @@ class CalculateFishActivityUseCase @Inject constructor() {
             // одна и та же погода читается по-разному в зависимости от того,
             // росло давление вторые сутки или падало перед фронтом.
             val dayTrend = pressureDayFactor(sorted, index, normal)
-            val waterTrend = waterTrendFactor(waterNow, waterTrendBefore, fish, WATER_TREND_HOURS)
+            val waterTrend = waterTrendFactor(waterNow, waterTrendBefore, fish, waterTrendHours)
             val stratification = stratificationFactor(place, shallowNow, deepNow, fish)
             // Увиденное своими глазами весомее расчёта, но живёт недолго:
             // поправка тает к концу срока, записанного в словаре.
@@ -579,6 +585,23 @@ class CalculateFishActivityUseCase @Inject constructor() {
                 else -> "растёт после фронта, клёв вялый"
             }
         )
+    }
+
+    /**
+     * Сколько часов подряд перед этим светило так же, как сейчас.
+     *
+     * Свет определяется приходом радиации, а не часами на циферблате: летом
+     * ночь короткая, зимой длинная, и граница у каждых суток своя.
+     */
+    private fun List<WeatherEntity>.sameLightHoursBefore(index: Int, limit: Int): Int {
+        val lit = getOrNull(index)?.let { it.shortwaveRadiation > DARK_RADIATION } ?: return 0
+        var hours = 0
+        while (hours < limit) {
+            val previous = getOrNull(index - hours - 1) ?: break
+            if ((previous.shortwaveRadiation > DARK_RADIATION) != lit) break
+            hours++
+        }
+        return hours
     }
 
     /**

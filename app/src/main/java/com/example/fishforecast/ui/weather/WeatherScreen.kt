@@ -55,6 +55,7 @@ import com.example.fishforecast.domain.water.fromNow
 import com.example.fishforecast.domain.water.oxygenLevel
 import com.example.fishforecast.domain.water.oxygenLevelText
 import com.example.fishforecast.domain.water.oxygenSaturationMgL
+import com.example.fishforecast.domain.water.WaterTrend
 import com.example.fishforecast.domain.water.waterTrend
 import com.example.fishforecast.domain.weather.DailyForecast
 import com.example.fishforecast.domain.weather.PressureDirection
@@ -207,12 +208,12 @@ fun WeatherScreen(
 
                     if (!water.isEmpty && current != null) {
                         item {
-                            WaterCard(water = water, currentTime = current.time)
+                            WaterCard(water = water, currentTime = current.time, forecast = forecast)
                         }
                         if (upcoming.size >= 2) {
                             item {
                                 ChartSection(
-                                    title = "Температура воды",
+                                    title = "Температура воды, °C",
                                     subtitle = "Мель %.1f м и яма %.1f м%s".format(
                                         water.shallowDepthM,
                                         water.deepDepthM,
@@ -238,15 +239,18 @@ fun WeatherScreen(
                                         series = listOf(
                                             ChartSeries(
                                                 values = shallow.map { it.temperature },
-                                                color = MaterialTheme.colorScheme.primary
+                                                color = MaterialTheme.colorScheme.primary,
+                                                name = "Мель %.1f м".format(water.shallowDepthM)
                                             ),
                                             ChartSeries(
                                                 values = deep.map { it.temperature },
                                                 color = MaterialTheme.colorScheme.outline,
-                                                labelAbove = false
+                                                labelAbove = false,
+                                                name = "Яма %.1f м".format(water.deepDepthM)
                                             )
                                         ),
-                                        valueSuffix = "°"
+                                        valueSuffix = "°",
+                                        highlightIndex = window.nowIndex
                                     )
                                 }
                             }
@@ -264,7 +268,7 @@ fun WeatherScreen(
                         }
                         item {
                             ChartSection(
-                                title = "Температура",
+                                title = "Температура воздуха, °C",
                                 subtitle = "От −$HOURS_BACK ч до +$HOURS_FORWARD ч"
                             ) {
                                 LineChart(
@@ -455,16 +459,18 @@ private fun CurrentWeatherCard(
  * Кислород выводится из температуры, поэтому стоит рядом, а не отдельно.
  */
 @Composable
-private fun WaterCard(water: WaterState, currentTime: String) {
+private fun WaterCard(water: WaterState, currentTime: String, forecast: List<WeatherEntity>) {
     val shallowNow = water.shallowAt(currentTime) ?: return
     val deepNow = water.deepAt(currentTime) ?: return
     val oxygenNow = water.oxygenAt(currentTime) ?: oxygenSaturationMgL(shallowNow)
-    val trend = waterTrend(water.shallow.fromNow())
+    val trend = waterTrend(water.shallow.fromNow(), forecast)
 
     Card(
         modifier = Modifier.fillMaxWidth(),
+        // secondaryContainer, а не tertiaryContainer: третий контейнер в этой
+        // теме выходит светлым и на тёмном экране читается как чужая вставка.
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.tertiaryContainer
+            containerColor = MaterialTheme.colorScheme.secondaryContainer
         )
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
@@ -496,22 +502,50 @@ private fun WaterCard(water: WaterState, currentTime: String) {
                 )
             }
 
-            trend?.let { delta ->
+            trend?.let { move ->
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(
-                    text = when {
-                        delta <= -COOLING_THRESHOLD ->
-                            "Мель остывает на %.1f° за %d часов — вода насыщается кислородом"
-                                .format(abs(delta), TREND_WINDOW_HOURS)
-                        delta >= COOLING_THRESHOLD ->
-                            "Мель прогревается на %.1f° за %d часов — кислорода станет меньше"
-                                .format(delta, TREND_WINDOW_HOURS)
-                        else -> "Вода стоит ровно"
-                    },
+                    text = waterTrendText(move),
                     style = MaterialTheme.typography.bodySmall
                 )
             }
         }
+    }
+}
+
+/**
+ * Ход воды словами.
+ *
+ * Названо и время суток, и за сколько часов: «прогревается за 6 часов»,
+ * сказанное ночью, читается как обещание тёплой ночи, хотя речь про утро.
+ * Ночной прогрев бывает — тёплый влажный воздух не даёт воде остыть, — но
+ * тогда это надо объяснить, а не выдать за обычный дневной нагрев.
+ */
+private fun waterTrendText(trend: WaterTrend): String {
+    val part = if (trend.dark) "ночи" else "дня"
+    val hours = "%d %s %s".format(trend.hours, hourWord(trend.hours), part)
+    return when {
+        trend.deltaC <= -COOLING_THRESHOLD ->
+            "Мель остывает на %.1f° за %s — вода насыщается кислородом"
+                .format(abs(trend.deltaC), hours)
+        trend.deltaC >= COOLING_THRESHOLD && trend.dark ->
+            "Мель прогревается на %.1f° за %s — воздух теплее воды, остывания не будет"
+                .format(trend.deltaC, hours)
+        trend.deltaC >= COOLING_THRESHOLD ->
+            "Мель прогревается на %.1f° за %s — кислорода станет меньше"
+                .format(trend.deltaC, hours)
+        else -> "Вода стоит ровно ближайшие %s".format(hours)
+    }
+}
+
+/** «час», «часа», «часов» — иначе строка спотыкается на каждом числе. */
+private fun hourWord(hours: Int): String {
+    val tail = hours % 100
+    if (tail in 11..14) return "часов"
+    return when (hours % 10) {
+        1 -> "час"
+        2, 3, 4 -> "часа"
+        else -> "часов"
     }
 }
 
@@ -687,6 +721,13 @@ private fun HourlyStrip(window: HourWindow<WeatherEntity>) {
                         style = MaterialTheme.typography.labelSmall
                     )
                 }
+                // Стрелку на бегу не разглядеть, а румб читается словом:
+                // «северный» и «южный» решают за рыболова больше, чем скорость.
+                Text(
+                    text = windDirectionLabel(hour.windDirection),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
             }
         }
     }
@@ -738,6 +779,11 @@ private fun WeekForecast(days: List<DailyForecast>) {
                             )
                         }
                         Text(
+                            text = windDirectionLabel(day.windDirection),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Text(
                             text = "${day.pressureMmHg.roundToInt()} мм",
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -748,7 +794,7 @@ private fun WeekForecast(days: List<DailyForecast>) {
 
             Spacer(modifier = Modifier.height(8.dp))
             Text(
-                text = "Стрелка — откуда дует, м/с. Ниже — среднее давление дня.",
+                text = "Ветер — откуда дует, м/с и румб. Ниже — среднее давление дня.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(horizontal = 12.dp)

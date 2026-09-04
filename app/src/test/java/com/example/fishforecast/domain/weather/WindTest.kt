@@ -13,7 +13,7 @@ class WindTest {
         assertEquals("В", windDirectionLabel(90.0))
         assertEquals("Ю", windDirectionLabel(180.0))
         assertEquals("З", windDirectionLabel(270.0))
-        assertEquals("СЗ", windDirectionLabel(315.0))
+        assertEquals("С-З", windDirectionLabel(315.0))
     }
 
     @Test

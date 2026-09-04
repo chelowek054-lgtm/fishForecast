@@ -5,12 +5,19 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathEffect
@@ -84,6 +91,9 @@ fun LineChart(
         fun yOf(value: Double) =
             topInset + plotHeight * (1 - ((value - min) / span)).toFloat()
 
+        // Подпись, которой некуда встать, не рисуется: см. drawCenteredText.
+        val taken = mutableListOf<Rect>()
+
         referenceValue?.let { reference ->
             val y = yOf(reference)
             drawLine(
@@ -94,11 +104,14 @@ fun LineChart(
                 pathEffect = PathEffect.dashPathEffect(floatArrayOf(8f, 8f))
             )
             referenceLabel?.let { label ->
-                drawText(
+                drawCenteredText(
                     textMeasurer = textMeasurer,
                     text = label,
                     style = labelStyle,
-                    topLeft = Offset(0f, (y - 14.dp.toPx()).coerceAtLeast(0f))
+                    centerX = 0f,
+                    top = (y - 14.dp.toPx()).coerceAtLeast(0f),
+                    maxWidth = size.width,
+                    taken = taken
                 )
             }
         }
@@ -134,7 +147,8 @@ fun LineChart(
                 style = valueStyle,
                 centerX = x,
                 top = (y - 20.dp.toPx()).coerceAtLeast(0f),
-                maxWidth = size.width
+                maxWidth = size.width,
+                taken = taken
             )
             drawCenteredText(
                 textMeasurer = textMeasurer,
@@ -142,7 +156,8 @@ fun LineChart(
                 style = labelStyle,
                 centerX = x,
                 top = size.height - bottomInset + 2.dp.toPx(),
-                maxWidth = size.width
+                maxWidth = size.width,
+                taken = taken
             )
         }
     }
@@ -220,7 +235,9 @@ data class ChartSeries(
     val values: List<Double>,
     val color: Color,
     /** Подписи сверху или снизу: две кривые рядом иначе сливаются. */
-    val labelAbove: Boolean = true
+    val labelAbove: Boolean = true,
+    /** Как называется кривая в легенде: без неё две линии неразличимы. */
+    val name: String = ""
 )
 
 /**
@@ -236,84 +253,160 @@ fun MultiLineChart(
     valueSuffix: String,
     modifier: Modifier = Modifier,
     height: Dp = 150.dp,
-    labelEvery: Int = 6
+    labelEvery: Int = 6,
+    highlightIndex: Int? = null
 ) {
     if (series.isEmpty() || series.any { it.values.size < 2 }) return
 
     val textMeasurer = rememberTextMeasurer()
     val labelStyle = TextStyle(fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    val nowColor = MaterialTheme.colorScheme.onSurfaceVariant
 
     val all = series.flatMap { it.values }
     val min = all.min()
     val max = all.max()
     val span = (max - min).takeIf { it > 0.5 } ?: 1.0
 
-    Canvas(
-        modifier = modifier
-            .fillMaxWidth()
-            .height(height)
-    ) {
-        val topInset = 22.dp.toPx()
-        val bottomInset = 18.dp.toPx()
-        val plotHeight = size.height - topInset - bottomInset
-        val step = size.width / (labels.size - 1).coerceAtLeast(1)
-
-        fun yOf(value: Double) =
-            topInset + plotHeight * (1 - ((value - min) / span)).toFloat()
-
-        series.forEach { line ->
-            val path = Path()
-            line.values.forEachIndexed { index, value ->
-                val x = index * step
-                val y = yOf(value)
-                if (index == 0) path.moveTo(x, y) else path.lineTo(x, y)
-            }
-            drawPath(path, color = line.color, style = Stroke(width = 2.dp.toPx()))
-
-            line.values.forEachIndexed { index, value ->
-                if (index % labelEvery != 0) return@forEachIndexed
-                val x = index * step
-                val y = yOf(value)
-                drawCircle(color = line.color, radius = 2.5.dp.toPx(), center = Offset(x, y))
-                drawCenteredText(
-                    textMeasurer = textMeasurer,
-                    text = "%.0f%s".format(value, valueSuffix),
-                    style = TextStyle(fontSize = 11.sp, color = line.color),
-                    centerX = x,
-                    top = if (line.labelAbove) y - 18.dp.toPx() else y + 6.dp.toPx(),
-                    maxWidth = size.width
-                )
-            }
+    Column(modifier = modifier.fillMaxWidth()) {
+        // Легенда обязательна: без неё две линии — просто две линии.
+        if (series.any { it.name.isNotEmpty() }) {
+            ChartLegend(series)
+            Spacer(modifier = Modifier.height(4.dp))
         }
 
-        labels.forEachIndexed { index, label ->
-            if (index % labelEvery != 0) return@forEachIndexed
-            drawCenteredText(
-                textMeasurer = textMeasurer,
-                text = label,
-                style = labelStyle,
-                centerX = index * step,
-                top = size.height - bottomInset + 2.dp.toPx(),
-                maxWidth = size.width
-            )
+        Canvas(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(height)
+        ) {
+            val topInset = 22.dp.toPx()
+            val bottomInset = 18.dp.toPx()
+            val plotHeight = size.height - topInset - bottomInset
+            val step = size.width / (labels.size - 1).coerceAtLeast(1)
+
+            fun yOf(value: Double) =
+                topInset + plotHeight * (1 - ((value - min) / span)).toFloat()
+
+            // Занятые прямоугольники: подпись, которая налезла бы на уже
+            // нарисованную, не рисуется вовсе. Пустое место честнее каши.
+            val taken = mutableListOf<Rect>()
+
+            highlightIndex?.takeIf { it in labels.indices }?.let { index ->
+                val x = index * step
+                drawLine(
+                    color = nowColor.copy(alpha = 0.35f),
+                    start = Offset(x, topInset - 4.dp.toPx()),
+                    end = Offset(x, topInset + plotHeight),
+                    strokeWidth = 1.5.dp.toPx()
+                )
+            }
+
+            series.forEach { line ->
+                val path = Path()
+                line.values.forEachIndexed { index, value ->
+                    val x = index * step
+                    val y = yOf(value)
+                    if (index == 0) path.moveTo(x, y) else path.lineTo(x, y)
+                }
+                drawPath(path, color = line.color, style = Stroke(width = 2.dp.toPx()))
+            }
+
+            labels.forEachIndexed { index, label ->
+                if (index % labelEvery != 0) return@forEachIndexed
+                drawCenteredText(
+                    textMeasurer = textMeasurer,
+                    text = label,
+                    style = labelStyle,
+                    centerX = index * step,
+                    top = size.height - bottomInset + 2.dp.toPx(),
+                    maxWidth = size.width,
+                    taken = taken
+                )
+            }
+
+            // Значения рисуются последними: ось со временем важнее — без неё
+            // непонятно, когда всё это будет, — поэтому место занимает она.
+            series.forEach { line ->
+                line.values.forEachIndexed { index, value ->
+                    if (index % labelEvery != 0) return@forEachIndexed
+                    val x = index * step
+                    val y = yOf(value)
+                    drawCircle(color = line.color, radius = 2.5.dp.toPx(), center = Offset(x, y))
+                    drawCenteredText(
+                        textMeasurer = textMeasurer,
+                        text = "%.1f%s".format(value, valueSuffix),
+                        style = TextStyle(fontSize = 11.sp, color = line.color),
+                        centerX = x,
+                        top = if (line.labelAbove) y - 18.dp.toPx() else y + 6.dp.toPx(),
+                        maxWidth = size.width,
+                        taken = taken
+                    )
+                }
+            }
+
         }
     }
 }
 
-/** Подпись у точки: без центрирования цифры съезжают с колонок. */
+/** Какая линия что означает. */
+@Composable
+private fun ChartLegend(series: List<ChartSeries>) {
+    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        series.filter { it.name.isNotEmpty() }.forEach { line ->
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Canvas(modifier = Modifier.size(width = 14.dp, height = 2.dp)) {
+                    drawLine(
+                        color = line.color,
+                        start = Offset(0f, size.height / 2),
+                        end = Offset(size.width, size.height / 2),
+                        strokeWidth = size.height
+                    )
+                }
+                Spacer(modifier = Modifier.width(4.dp))
+                Text(
+                    text = line.name,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = line.color
+                )
+            }
+        }
+    }
+}
+
+/**
+ * Подпись у точки: без центрирования цифры съезжают с колонок.
+ *
+ * @param taken уже занятые места. Когда список передан, подпись, которая
+ *        налезла бы на соседнюю, не рисуется: два числа друг поверх друга
+ *        не читаются ни одно, а пропуск виден и не мешает.
+ */
 private fun DrawScope.drawCenteredText(
     textMeasurer: TextMeasurer,
     text: String,
     style: TextStyle,
     centerX: Float,
     top: Float,
-    maxWidth: Float
+    maxWidth: Float,
+    taken: MutableList<Rect>? = null
 ) {
     val measured = textMeasurer.measure(text, style)
     val left = (centerX - measured.size.width / 2f)
         .coerceIn(0f, (maxWidth - measured.size.width).coerceAtLeast(0f))
+    val rect = Rect(
+        left = left,
+        top = top,
+        right = left + measured.size.width,
+        bottom = top + measured.size.height
+    )
+    if (taken != null) {
+        if (taken.any { it.overlaps(rect.inflate(LABEL_GAP)) }) return
+        taken += rect
+    }
     drawText(textLayoutResult = measured, topLeft = Offset(left, top))
 }
+
+/** Зазор между подписями, px: вплотную они всё равно читаются как одна. */
+private const val LABEL_GAP = 2f
 
 /** Заголовок блока: без него график — просто линия неизвестно чего. */
 @Composable
