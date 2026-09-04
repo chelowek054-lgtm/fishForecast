@@ -143,7 +143,8 @@ Bite Score.
 
 Как именно из этих факторов получается число — в
 [architecture/client/bite-score.md](architecture/client/bite-score.md): там
-формулы, пороги и пример расчёта.
+формулы, пороги и пример расчёта. Что из этого пока не доведено —
+в [architecture/client/bite-score-gaps.md](architecture/client/bite-score-gaps.md).
 
 ## Динамика: откуда пришла погода
 
