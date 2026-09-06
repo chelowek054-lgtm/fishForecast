@@ -73,6 +73,10 @@ import com.example.fishforecast.domain.bite.PartOfDay
 import com.example.fishforecast.domain.bite.PartActivity
 import com.example.fishforecast.domain.bite.DayActivity
 import androidx.compose.ui.text.style.TextAlign
+import java.time.LocalDateTime
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.clickable
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -233,11 +237,16 @@ fun BiteScreen(
             )
             Text(
                 text = "$HOURS_BACK часов позади и $HOURS_FORWARD впереди — " +
-                    "клёв читается в ходе, а не в одном срезе",
+                    "клёв читается в ходе, а не в одном срезе. " +
+                    "Нажмите на столбик, чтобы увидеть точный балл и причины",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
-            BiteChart(forecast = state.forecast, nowIndex = state.nowIndex)
+            BiteChart(
+                forecast = state.forecast,
+                nowIndex = state.nowIndex,
+                fishName = state.selectedFish?.name
+            )
 
             WeekActivityBlock(week = state.week, fishName = state.selectedFish?.name)
         }
@@ -267,7 +276,7 @@ private fun WeekActivityBlock(week: List<DayActivity>, fishName: String?) {
         fontWeight = FontWeight.Bold
     )
     Text(
-        text = fishName?.let { "Средний балл по частям суток для «$it» — чтобы спланировать выезд" }
+        text = fishName?.let { "$it: средний балл по частям суток — чтобы спланировать выезд" }
             ?: "Средний балл по частям суток",
         style = MaterialTheme.typography.bodySmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -537,8 +546,12 @@ private fun CurrentBiteCard(forecast: BiteForecast, fishName: String) {
  * значение не с чем сопоставить.
  */
 @Composable
-private fun BiteChart(forecast: List<BiteForecast>, nowIndex: Int) {
+private fun BiteChart(forecast: List<BiteForecast>, nowIndex: Int, fishName: String?) {
     if (forecast.isEmpty()) return
+
+    // Выбранный столбик. Сбрасывается при смене ряда: индекс от старого
+    // прогноза указывал бы на чужой час.
+    var selected by remember(forecast) { mutableStateOf<Int?>(null) }
 
     val ticks = remember(forecast, nowIndex) {
         chartTicks(forecast.map { it.time }, nowIndex)
@@ -581,8 +594,12 @@ private fun BiteChart(forecast: List<BiteForecast>, nowIndex: Int) {
                             hour = hour,
                             tick = ticks[index],
                             past = nowIndex >= 0 && index < nowIndex,
+                            selected = selected == index,
                             dayColor = dayColor,
-                            nowColor = nowColor
+                            nowColor = nowColor,
+                            // Повторное нажатие снимает выбор: карточка не
+                            // должна залипать поверх графика.
+                            onClick = { selected = if (selected == index) null else index }
                         )
                     }
                 }
@@ -600,6 +617,94 @@ private fun BiteChart(forecast: List<BiteForecast>, nowIndex: Int) {
 
         Spacer(modifier = Modifier.height(8.dp))
         ChartLegend()
+
+        selected?.let { index ->
+            forecast.getOrNull(index)?.let { hour ->
+                Spacer(modifier = Modifier.height(8.dp))
+                HourDetails(
+                    hour = hour,
+                    fishName = fishName,
+                    onClose = { selected = null }
+                )
+            }
+        }
+    }
+}
+
+/**
+ * Разбор одного часа: точное время, балл и что его составило.
+ *
+ * По столбику видно только «примерно шестьдесят» — высоты в двадцать
+ * пикселей на большее не хватает. Разница между 58 и 67 решает, ехать после
+ * работы или отложить, а прочитать её было неоткуда.
+ *
+ * Карточка живёт под графиком, а не всплывает над ним: всплывающая подсказка
+ * закрывает соседние часы, ради сравнения с которыми на график и смотрят.
+ */
+@Composable
+private fun HourDetails(hour: BiteForecast, fishName: String?, onClose: () -> Unit) {
+    val moment = remember(hour.time) {
+        runCatching { LocalDateTime.parse(hour.time) }.getOrNull()
+    }
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = hour.level.container(),
+            contentColor = hour.level.onContainer()
+        )
+    ) {
+        Column(modifier = Modifier.padding(12.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = moment?.format(DETAIL_TIME_FORMAT)?.replaceFirstChar {
+                            it.uppercase()
+                        } ?: hour.time,
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        text = listOfNotNull(fishName, hour.level.title().lowercase())
+                            .joinToString(" · "),
+                        style = MaterialTheme.typography.labelSmall
+                    )
+                }
+                Row(verticalAlignment = Alignment.Bottom) {
+                    Text(
+                        text = "${hour.score}",
+                        style = MaterialTheme.typography.headlineMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        text = " из 100",
+                        style = MaterialTheme.typography.labelSmall,
+                        modifier = Modifier.padding(bottom = 4.dp)
+                    )
+                }
+            }
+
+            if (hour.factors.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(8.dp))
+                hour.factors.forEach { factor ->
+                    Text(
+                        text = "${factor.name}: ${factor.comment}",
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                }
+            }
+
+            TextButton(
+                onClick = onClose,
+                modifier = Modifier.align(Alignment.End)
+            ) {
+                Text(text = "Скрыть", color = hour.level.onContainer())
+            }
+        }
     }
 }
 
@@ -667,18 +772,29 @@ private fun HourBar(
     hour: BiteForecast,
     tick: HourTick,
     past: Boolean,
+    selected: Boolean,
     dayColor: Color,
-    nowColor: Color
+    nowColor: Color,
+    onClick: () -> Unit
 ) {
     val barColor = hour.level.bar()
+    val outlineColor = MaterialTheme.colorScheme.onSurface
 
     Box(
         modifier = Modifier
             .width(CELL_WIDTH)
             .fillMaxHeight()
+            // Столбик уже 18 dp — для пальца мало, поэтому нажатие ловит вся
+            // колонка во всю высоту графика, а не сам прямоугольник.
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                onClick = onClick
+            )
             // Прошедшее бледнее: оно объясняет, откуда пришли, но решение
-            // принимают по тому, что впереди.
-            .alpha(if (past) PAST_ALPHA else 1f)
+            // принимают по тому, что впереди. Выбранный час возвращает себе
+            // полный цвет — иначе разбор читался бы бледнее графика.
+            .alpha(if (past && !selected) PAST_ALPHA else 1f)
     ) {
         Canvas(modifier = Modifier.fillMaxSize()) {
             if (tick.dayStart) {
@@ -698,6 +814,17 @@ private fun HourBar(
                 size = Size(size.width - padding * 2, barHeight),
                 cornerRadius = CornerRadius(4f, 4f)
             )
+
+            if (selected) {
+                // Обводка по всей колонке, а не по столбику: у низкого часа
+                // рамка вокруг трёх пикселей была бы незаметна.
+                drawRect(
+                    color = outlineColor,
+                    topLeft = Offset(padding / 2, 0f),
+                    size = Size(size.width - padding, size.height),
+                    style = Stroke(width = SELECTED_STROKE)
+                )
+            }
 
             if (tick.now) {
                 drawLine(
@@ -831,6 +958,12 @@ private fun BiteLevel.bar(): Color = when (this) {
 }
 
 /** Сколько часов показывать назад и вперёд на графике активности. */
+/** Толщина обводки выбранного часа, px. */
+private const val SELECTED_STROKE = 3f
+
+private val DETAIL_TIME_FORMAT: DateTimeFormatter =
+    DateTimeFormatter.ofPattern("EEE, d MMMM, HH:mm", Locale("ru"))
+
 internal const val HOURS_BACK = 12
 internal const val HOURS_FORWARD = 24
 
