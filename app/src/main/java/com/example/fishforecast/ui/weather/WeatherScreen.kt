@@ -70,6 +70,7 @@ import com.example.fishforecast.domain.weather.windArrowRotation
 import com.example.fishforecast.domain.weather.windDescription
 import com.example.fishforecast.domain.weather.windDirectionLabel
 import com.example.fishforecast.ui.common.NoActiveMapMessage
+import com.example.fishforecast.ui.common.ActiveMapTitle
 import java.time.Duration
 import java.time.LocalDate
 import java.time.LocalDateTime
@@ -150,18 +151,9 @@ fun WeatherScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = {
-                    Column {
-                        Text("Прогноз погоды")
-                        // Рыболову важно видеть, для какого района цифры.
-                        activeMap?.let { map ->
-                            Text(
-                                text = map.name,
-                                style = MaterialTheme.typography.bodySmall
-                            )
-                        }
-                    }
-                },
+                // Район и виден, и переключается прямо отсюда: вопрос «а что
+                // на другом пруду» возникает именно на экране погоды.
+                title = { ActiveMapTitle(section = "Прогноз погоды") },
                 actions = {
                     IconButton(onClick = { viewModel.loadWeatherInfo() }) {
                         Icon(Icons.Default.Refresh, contentDescription = "Обновить")

@@ -59,6 +59,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.example.fishforecast.data.local.entities.CatchEntity
 import com.example.fishforecast.data.local.entities.FishEntity
 import com.example.fishforecast.data.local.entities.FishingSpotEntity
+import com.example.fishforecast.ui.common.ActiveMapTitle
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -73,7 +74,7 @@ fun JournalScreen(
     var showAddDialog by remember { mutableStateOf(false) }
 
     Scaffold(
-        topBar = { TopAppBar(title = { Text("Журнал трофеев") }) },
+        topBar = { TopAppBar(title = { ActiveMapTitle(section = "Журнал трофеев") }) },
         floatingActionButton = {
             FloatingActionButton(onClick = { showAddDialog = true }) {
                 Icon(Icons.Default.Add, contentDescription = "Записать улов")

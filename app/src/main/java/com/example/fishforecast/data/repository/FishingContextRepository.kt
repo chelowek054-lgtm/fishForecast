@@ -65,10 +65,6 @@ class FishingContextRepository @Inject constructor(
     }
 
     /**
-     * Тип выбранного района из словаря знаний. Пока рыболов не выбрал,
-     * считаем район прудом: это самый частый и самый капризный случай.
-     */
-    /**
      * Область общих потоков района.
      *
      * Репозиторий живёт всё приложение, поэтому область своя, а не чужого
@@ -77,6 +73,10 @@ class FishingContextRepository @Inject constructor(
      */
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
+    /**
+     * Тип выбранного района из словаря знаний. Пока рыболов не выбрал,
+     * считаем район прудом: это самый частый и самый капризный случай.
+     */
     val activeWaterBody: Flow<WaterBodyType?> =
         combine(activeMap, knowledgeRepository.catalog) { map, catalog ->
             catalog.waterBody(map?.waterBodyType ?: KnowledgeCatalog.DEFAULT_WATERBODY)

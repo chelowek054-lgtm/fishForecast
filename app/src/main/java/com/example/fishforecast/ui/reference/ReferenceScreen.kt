@@ -33,6 +33,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.example.fishforecast.ui.common.ActiveMapTitle
 
 /**
  * Справочник — база знаний приложения.
@@ -74,10 +75,13 @@ fun ReferenceScreen(
             TopAppBar(
                 title = {
                     Column {
-                        Text("Справочник")
+                        ActiveMapTitle(section = "Справочник")
+                        // Подпись раздела идёт третьей строкой: район важнее,
+                        // потому что от него зависят все цифры ниже.
                         Text(
                             text = section.subtitle(cards?.size, knowledge.version.takeIf { it > 0 }),
-                            style = MaterialTheme.typography.bodySmall
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                 },

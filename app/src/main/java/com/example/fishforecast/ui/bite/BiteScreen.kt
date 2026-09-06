@@ -66,6 +66,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.example.fishforecast.domain.bite.BiteForecast
 import com.example.fishforecast.ui.common.NoActiveMapMessage
 import com.example.fishforecast.domain.bite.BiteLevel
+import com.example.fishforecast.ui.common.ActiveMapTitle
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -92,18 +93,10 @@ fun BiteScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = {
-                    Column {
-                        Text("Рыбалка")
-                        // Расчёт идёт по выбранному району, а не по месту,
-                        // где сейчас телефон: без этой строки цифры легко
-                        // принять за «здесь и сейчас».
-                        Text(
-                            text = region?.name ?: "Район не выбран",
-                            style = MaterialTheme.typography.bodySmall
-                        )
-                    }
-                }
+                // Расчёт идёт по выбранному району, а не по месту, где сейчас
+                // телефон: без этой строки цифры легко принять за «здесь и
+                // сейчас». Отсюда же район и меняется.
+                title = { ActiveMapTitle(section = "Рыбалка") }
             )
         },
         snackbarHost = { SnackbarHost(snackbarHostState) }
