@@ -11,7 +11,14 @@ import kotlinx.coroutines.flow.map
 import javax.inject.Inject
 import javax.inject.Singleton
 
-private val Context.settings by preferencesDataStore(name = "fish_forecast_settings")
+/**
+ * Общий файл настроек приложения.
+ *
+ * Не приватный: тем же файлом пользуется память уведомлений. Два DataStore с
+ * одним именем — это падение при первом обращении, поэтому объявление одно на
+ * всех, а ключи у каждого свои.
+ */
+internal val Context.settings by preferencesDataStore(name = "fish_forecast_settings")
 
 /**
  * Какая карта сейчас выбрана. Это настройка, а не данные, поэтому живёт в

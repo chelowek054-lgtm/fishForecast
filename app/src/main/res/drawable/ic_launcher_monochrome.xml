@@ -1,0 +1,34 @@
+<!--
+  Монохромный слой значка приложения: из него система делает тематический
+  значок под обои пользователя.
+
+  Раньше здесь стоял ic_launcher_foreground — шаблонный зелёный робот из
+  заготовки Android Studio. Тематический значок приложения о рыбалке выглядел
+  роботом.
+
+  Форма та же, что в строке состояния, но в сетке 108: у адаптивного значка
+  безопасная зона — центральные 66 из 108, поэтому рыба занимает середину и не
+  попадает под обрезку любой формой маски.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <group
+        android:scaleX="2.6"
+        android:scaleY="2.6"
+        android:translateX="22.8"
+        android:translateY="22.8">
+
+        <path
+            android:fillColor="#FFFFFFFF"
+            android:fillType="evenOdd"
+            android:pathData="M9.6,5.2 C13,4.6 16.2,6.1 18,9.2 L20.4,12 L18,14.8 C16.2,17.9 13,19.4 9.6,18.8 C6.2,18.2 3.6,15.6 2.6,12 C3.6,8.4 6.2,5.8 9.6,5.2 Z M7.1,10.3 C6.2,10.3 5.5,11 5.5,11.9 C5.5,12.8 6.2,13.5 7.1,13.5 C8,13.5 8.7,12.8 8.7,11.9 C8.7,11 8,10.3 7.1,10.3 Z" />
+
+        <path
+            android:fillColor="#FFFFFFFF"
+            android:pathData="M19.2,12 L23,7.6 L22.3,12 L23,16.4 Z" />
+    </group>
+</vector>

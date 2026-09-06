@@ -49,6 +49,26 @@ class FindBiteWindowUseCase @Inject constructor(
             .maxByOrNull { it.forecast.score }
     }
 
+    /**
+     * Балл одной рыбы на ближайший к моменту час.
+     *
+     * Нужен, чтобы было с чем сравнивать окно: без этого «клёв 80» звучит
+     * одинаково и когда сейчас сорок, и когда сейчас семьдесят восемь.
+     */
+    fun scoreAt(
+        fish: FishEntity,
+        forecast: List<WeatherEntity>,
+        at: LocalDateTime,
+        normalPressureMmHg: Double? = null,
+        water: WaterState? = null,
+        sunTimes: List<DailySunEntity> = emptyList()
+    ): Int? = calculateFishActivity(fish, forecast, normalPressureMmHg, water, sunTimes)
+        .minByOrNull { hour ->
+            val time = hour.time.toLocalDateTimeOrNull() ?: return@minByOrNull Long.MAX_VALUE
+            kotlin.math.abs(java.time.Duration.between(time, at).toMinutes())
+        }
+        ?.score
+
     /** Время приходит из чужого источника, поэтому разбор не должен падать. */
     private fun String.toLocalDateTimeOrNull(): LocalDateTime? =
         runCatching { LocalDateTime.parse(this) }.getOrNull()
