@@ -30,6 +30,7 @@
 | [client/overview.md](client/overview.md) | Модули, слои и правила зависимостей (C4 L3) |
 | [client/offline-sync.md](client/offline-sync.md) | Офлайн-первый контракт: очередь исходящего, uid, версии, конфликты |
 | [client/bite-score.md](client/bite-score.md) | Клёв целиком: формулы, пороги, данные, что учтено и чего нет |
+| [client/trip-plan.md](client/trip-plan.md) | Сборы на выезд: фаза сезона вида, аппетит, снасть и стол |
 | [client/knowledge-updates.md](client/knowledge-updates.md) | Как приезжают словари, справочник видов и модель клёва |
 | [client/bathymetry.md](client/bathymetry.md) | Слой глубин: импорт эхолота, хранение, отрисовка, связь с водой |
 
