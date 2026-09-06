@@ -82,6 +82,8 @@ import androidx.compose.foundation.clickable
 @Composable
 fun BiteScreen(
     onOpenMap: () -> Unit = {},
+    /** Открыть список сохранённых карт: оттуда районы заводят и правят. */
+    onOpenLibrary: () -> Unit = {},
     viewModel: BiteViewModel = hiltViewModel(),
     sessionViewModel: FishingSessionViewModel = hiltViewModel()
 ) {
@@ -106,7 +108,7 @@ fun BiteScreen(
                 // Расчёт идёт по выбранному району, а не по месту, где сейчас
                 // телефон: без этой строки цифры легко принять за «здесь и
                 // сейчас». Отсюда же район и меняется.
-                title = { ActiveMapTitle(section = "Рыбалка") }
+                title = { ActiveMapTitle(section = "Рыбалка", onOpenLibrary = onOpenLibrary) }
             )
         },
         snackbarHost = { SnackbarHost(snackbarHostState) }

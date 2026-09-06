@@ -141,6 +141,7 @@ fun FishForecastAppNavigation() {
         ) {
             composable<FishListRoute> {
                 ReferenceScreen(
+                    onOpenLibrary = { navController.navigate(LibraryRoute) },
                     onAddFish = {
                         navController.navigate(AddEditFishRoute())
                     },
@@ -150,16 +151,22 @@ fun FishForecastAppNavigation() {
                 )
             }
             composable<WeatherRoute> {
-                WeatherScreen(onOpenMap = { navController.navigate(MapRoute) })
+                WeatherScreen(
+                    onOpenMap = { navController.navigate(MapRoute) },
+                    onOpenLibrary = { navController.navigate(LibraryRoute) }
+                )
             }
             composable<BiteRoute> {
-                BiteScreen(onOpenMap = { navController.navigate(MapRoute) })
+                BiteScreen(
+                    onOpenMap = { navController.navigate(MapRoute) },
+                    onOpenLibrary = { navController.navigate(LibraryRoute) }
+                )
             }
             composable<MapRoute> {
                 MapScreen(onOpenLibrary = { navController.navigate(LibraryRoute) })
             }
             composable<JournalRoute> {
-                JournalScreen()
+                JournalScreen(onOpenLibrary = { navController.navigate(LibraryRoute) })
             }
             composable<LibraryRoute> {
                 SavedMapsScreen(onOpenMap = { navController.navigate(MapRoute) })

@@ -107,6 +107,8 @@ private val DAY_FORMATTER = DateTimeFormatter.ofPattern("dd.MM")
 @Composable
 fun WeatherScreen(
     onOpenMap: () -> Unit = {},
+    /** Открыть список сохранённых карт: оттуда районы заводят и правят. */
+    onOpenLibrary: () -> Unit = {},
     viewModel: WeatherViewModel = hiltViewModel()
 ) {
     val forecast by viewModel.forecast.collectAsState()
@@ -153,7 +155,7 @@ fun WeatherScreen(
             TopAppBar(
                 // Район и виден, и переключается прямо отсюда: вопрос «а что
                 // на другом пруду» возникает именно на экране погоды.
-                title = { ActiveMapTitle(section = "Прогноз погоды") },
+                title = { ActiveMapTitle(section = "Прогноз погоды", onOpenLibrary = onOpenLibrary) },
                 actions = {
                     IconButton(onClick = { viewModel.loadWeatherInfo() }) {
                         Icon(Icons.Default.Refresh, contentDescription = "Обновить")

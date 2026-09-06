@@ -43,8 +43,16 @@ data class FishCard(
     val score: Int?,
     /** Оценка в яме: тот же час, другое место. */
     val deepScore: Int? = null,
-    /** Температура мели, °C; null — район не выбран. */
+    /** Температура мели, °C; null — прогноза для района ещё нет. */
     val waterTemperature: Double?,
+    /**
+     * Район выбран.
+     *
+     * Отдельно от температуры: без района и без прогноза воды одинаково нет,
+     * но советы разные. Раньше карточка в обоих случаях просила выбрать
+     * район — в том числе когда он уже был выбран.
+     */
+    val mapChosen: Boolean = false,
     val oxygenMgL: Double?,
     /** Фаза света этого часа; null — данных о восходе ещё нет. */
     val lightPhase: LightPhase? = null
@@ -99,7 +107,7 @@ class ReferenceViewModel @Inject constructor(
         val normal = fishingContext.normalPressureFor(map)
 
         fishList
-            .map { fish -> fish.toCard(forecast, water, normal, sunTimes) }
+            .map { fish -> fish.toCard(forecast, water, normal, sunTimes, map != null) }
             // Кто сегодня активнее — тот и выше: справочник должен отвечать
             // на вопрос «за кем ехать», а не хранить алфавитный порядок.
             .sortedWith(
@@ -153,10 +161,17 @@ class ReferenceViewModel @Inject constructor(
         forecast: List<com.example.fishforecast.data.local.entities.WeatherEntity>,
         water: WaterState,
         normalPressureMmHg: Double?,
-        sunTimes: List<DailySunEntity>
+        sunTimes: List<DailySunEntity>,
+        mapChosen: Boolean
     ): FishCard {
         if (forecast.isEmpty()) {
-            return FishCard(fish = this, score = null, waterTemperature = null, oxygenMgL = null)
+            return FishCard(
+                fish = this,
+                score = null,
+                waterTemperature = null,
+                oxygenMgL = null,
+                mapChosen = mapChosen
+            )
         }
 
         val now = LocalDateTime.now()
@@ -201,7 +216,8 @@ class ReferenceViewModel @Inject constructor(
             // а не только от температуры.
             oxygenMgL = hour?.let { water.oxygenAt(it.time) }
                 ?: waterNow?.let { oxygenSaturationMgL(it) },
-            lightPhase = phase
+            lightPhase = phase,
+            mapChosen = mapChosen
         )
     }
 

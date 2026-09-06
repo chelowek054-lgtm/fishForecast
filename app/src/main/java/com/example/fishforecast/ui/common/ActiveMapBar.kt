@@ -8,7 +8,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -41,6 +43,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 fun ActiveMapTitle(
     section: String,
     modifier: Modifier = Modifier,
+    /** Открыть список карт; null — экран не умеет туда переходить. */
+    onOpenLibrary: (() -> Unit)? = null,
     viewModel: ActiveMapViewModel = hiltViewModel()
 ) {
     val maps by viewModel.savedMaps.collectAsStateWithLifecycle()
@@ -53,10 +57,10 @@ fun ActiveMapTitle(
         Box {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier
-                    // Переключать нечего, пока карта одна: тогда строка
-                    // остаётся подписью, а не притворяется кнопкой.
-                    .clickable(enabled = maps.size > 1) { expanded = true }
+                // Кликабельна всегда, даже когда карта одна. Скрытая стрелка
+                // выглядела так, будто переключателя нет вовсе, — а с одним
+                // районом он нужнее всего: из меню заводят второй.
+                modifier = Modifier.clickable { expanded = true }
             ) {
                 Text(
                     text = active?.name ?: "Район не выбран",
@@ -65,14 +69,12 @@ fun ActiveMapTitle(
                     overflow = TextOverflow.Ellipsis,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
-                if (maps.size > 1) {
-                    Icon(
-                        imageVector = Icons.Default.ArrowDropDown,
-                        contentDescription = "Сменить район",
-                        modifier = Modifier.size(20.dp),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
+                Icon(
+                    imageVector = Icons.Default.ArrowDropDown,
+                    contentDescription = "Сменить район",
+                    modifier = Modifier.size(20.dp),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
             }
 
             DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
@@ -96,6 +98,34 @@ fun ActiveMapTitle(
                         onClick = {
                             expanded = false
                             viewModel.select(map.id)
+                        },
+                        modifier = Modifier.padding(horizontal = 4.dp),
+                        trailingIcon = {
+                            if (map.id == active?.id) {
+                                Icon(
+                                    imageVector = Icons.Default.Check,
+                                    contentDescription = "Выбран",
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
+                        }
+                    )
+                }
+
+                // Выход к списку карт: оттуда район заводят, правят и удаляют.
+                // Без него меню с одной картой было бы тупиком.
+                onOpenLibrary?.let { open ->
+                    HorizontalDivider()
+                    DropdownMenuItem(
+                        text = {
+                            Text(
+                                text = if (maps.isEmpty()) "Добавить район" else "Все карты",
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                        },
+                        onClick = {
+                            expanded = false
+                            open()
                         },
                         modifier = Modifier.padding(horizontal = 4.dp)
                     )

@@ -399,7 +399,13 @@ private fun ScoreBadge(score: Int) {
 
 /** Что означает эта рыба для сегодняшней воды — одной строкой. */
 private fun FishCard.verdict(): String {
-    val water = waterTemperature ?: return "Выберите район — покажу, берёт ли сейчас"
+    val water = waterTemperature ?: return if (mapChosen) {
+        // Район выбран, а прогноза для него нет: просить выбрать район было бы
+        // неправдой, а рыболову нужно знать, чего именно не хватает.
+        "Нет прогноза для района — откройте «Погоду» при сети"
+    } else {
+        "Выберите район — покажу, берёт ли сейчас"
+    }
     val fish = fish
     return when {
         water < fish.absMinTemp -> "Вода ${water.roundToInt()}° — холодно до оцепенения"

@@ -68,13 +68,15 @@ import java.util.Locale
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun JournalScreen(
+    /** Открыть список сохранённых карт: оттуда районы заводят и правят. */
+    onOpenLibrary: () -> Unit = {},
     viewModel: JournalViewModel = hiltViewModel()
 ) {
     val state by viewModel.state.collectAsState()
     var showAddDialog by remember { mutableStateOf(false) }
 
     Scaffold(
-        topBar = { TopAppBar(title = { ActiveMapTitle(section = "Журнал трофеев") }) },
+        topBar = { TopAppBar(title = { ActiveMapTitle(section = "Журнал трофеев", onOpenLibrary = onOpenLibrary) }) },
         floatingActionButton = {
             FloatingActionButton(onClick = { showAddDialog = true }) {
                 Icon(Icons.Default.Add, contentDescription = "Записать улов")

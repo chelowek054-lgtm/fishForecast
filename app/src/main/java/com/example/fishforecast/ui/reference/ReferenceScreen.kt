@@ -50,6 +50,8 @@ import com.example.fishforecast.ui.common.ActiveMapTitle
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ReferenceScreen(
+    /** Открыть список сохранённых карт: оттуда районы заводят и правят. */
+    onOpenLibrary: () -> Unit = {},
     onAddFish: () -> Unit,
     onEditFish: (Int) -> Unit,
     viewModel: ReferenceViewModel = hiltViewModel()
@@ -75,7 +77,7 @@ fun ReferenceScreen(
             TopAppBar(
                 title = {
                     Column {
-                        ActiveMapTitle(section = "Справочник")
+                        ActiveMapTitle(section = "Справочник", onOpenLibrary = onOpenLibrary)
                         // Подпись раздела идёт третьей строкой: район важнее,
                         // потому что от него зависят все цифры ниже.
                         Text(
