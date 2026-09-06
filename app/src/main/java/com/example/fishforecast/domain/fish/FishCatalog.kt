@@ -57,7 +57,30 @@ data class CatalogFish(
     val preferredStructures: List<String> = emptyList(),
     val baits: CatalogBaits = CatalogBaits(),
     @SerialName("groundbait_rules")
-    val groundbaitRules: CatalogGroundbaitRules = CatalogGroundbaitRules()
+    val groundbaitRules: CatalogGroundbaitRules = CatalogGroundbaitRules(),
+    /** Сезон вида: нерест, порог кормления, оцепенение. */
+    val season: CatalogSeason = CatalogSeason()
+)
+
+/**
+ * Сезонные пороги вида.
+ *
+ * Всё в градусах воды, а не в датах: календарь у каждого водоёма свой, а
+ * термометр один. Числа необязательные — про иной вид нерест может быть
+ * неизвестен, и тогда честнее промолчать, чем подставить среднее по больнице.
+ */
+@Serializable
+data class CatalogSeason(
+    @SerialName("spawn_temp_min")
+    val spawnTempMin: Double? = null,
+    @SerialName("spawn_temp_max")
+    val spawnTempMax: Double? = null,
+    @SerialName("feed_start_c")
+    val feedStartC: Double? = null,
+    @SerialName("dormant_above_c")
+    val dormantAboveC: Double? = null,
+    @SerialName("post_spawn_recovery_days")
+    val postSpawnRecoveryDays: Int = 10
 )
 
 @Serializable
@@ -197,6 +220,11 @@ fun CatalogFish.toEntity(existing: FishEntity? = null): FishEntity = FishEntity(
     oxygenComfortMgL = oxygen.comfortMgL.toFloat(),
     oxygenCriticalMgL = oxygen.criticalMgL.toFloat(),
     defaultHorizon = defaultHorizon,
+    spawnTempMinC = season.spawnTempMin?.toFloat(),
+    spawnTempMaxC = season.spawnTempMax?.toFloat(),
+    feedStartC = season.feedStartC?.toFloat(),
+    dormantAboveC = season.dormantAboveC?.toFloat(),
+    postSpawnRecoveryDays = season.postSpawnRecoveryDays,
     coldTempThreshold = coldTempThreshold.toFloat(),
     guild = guild,
     lightActivity = lightActivity.encodeLightActivity(),
@@ -265,6 +293,13 @@ fun FishEntity.toCatalogFish(): CatalogFish = CatalogFish(
         criticalMgL = oxygenCriticalMgL.toDouble()
     ),
     defaultHorizon = defaultHorizon,
+    season = CatalogSeason(
+        spawnTempMin = spawnTempMinC?.toDouble(),
+        spawnTempMax = spawnTempMaxC?.toDouble(),
+        feedStartC = feedStartC?.toDouble(),
+        dormantAboveC = dormantAboveC?.toDouble(),
+        postSpawnRecoveryDays = postSpawnRecoveryDays
+    ),
     coldTempThreshold = coldTempThreshold.toDouble(),
     guild = guild,
     lightActivity = lightActivity.decodeLightActivity(),

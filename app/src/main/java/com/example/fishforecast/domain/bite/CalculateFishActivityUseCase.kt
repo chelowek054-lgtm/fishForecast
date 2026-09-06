@@ -7,6 +7,9 @@ import com.example.fishforecast.domain.fish.Guild
 import com.example.fishforecast.domain.fish.decodeLightActivity
 import com.example.fishforecast.domain.light.lightActivity
 import com.example.fishforecast.domain.light.lightPhaseAt
+import com.example.fishforecast.domain.season.SeasonPhase
+import com.example.fishforecast.domain.season.SeasonState
+import com.example.fishforecast.domain.season.seasonPhaseOf
 import com.example.fishforecast.domain.sensor.hPaToMmHg
 import com.example.fishforecast.domain.weather.isNortherlyWind
 import com.example.fishforecast.domain.weather.kmhToMs
@@ -57,6 +60,19 @@ class CalculateFishActivityUseCase @Inject constructor() {
     ): List<BiteForecast> {
         val sorted = forecast.sortedBy { it.time }
         val normal = normalPressureMmHg
+
+        // Фаза сезона считается один раз на весь прогноз: она меняется за
+        // недели, а не за часы, и пересчитывать её на каждый час значило бы
+        // делать вид, что к вечеру рыба отнерестится.
+        val season = water?.let { state ->
+            val history = when (place.layer) {
+                WaterLayerChoice.DEEP -> state.deep
+                else -> state.shallow
+            }
+            sorted.firstOrNull()?.let { first ->
+                runCatching { LocalDateTime.parse(first.time) }.getOrNull()
+            }?.let { start -> seasonPhaseOf(fish, history, start) }
+        }
 
         // Средняя вода за неделю до каждого часа: температура акклимации.
         // Считается один раз бегущей суммой — иначе на каждый час пришлось бы
@@ -140,7 +156,8 @@ class CalculateFishActivityUseCase @Inject constructor() {
 
             val factors = listOfNotNull(
                 temperature, oxygen, pressure, trend, dayTrend,
-                waterTrend, wind, light, stratification, noticed
+                waterTrend, wind, light, stratification, noticed,
+                seasonFactor(season)
             )
 
             // Ограничители перемножаются: непригодную для рыбы воду не
@@ -588,6 +605,55 @@ class CalculateFishActivityUseCase @Inject constructor() {
     }
 
     /**
+     * Сезон вида: то, чего не видно в погоде этого часа.
+     *
+     * Температура уже наказана отдельным фактором, и повторять её здесь
+     * нельзя — иначе холод считался бы дважды. Сезон отвечает за другое: за
+     * то, чем рыба занята помимо еды. Нерестящаяся рыба не кормится при любой
+     * идеальной погоде, налим в июле спит при любом давлении, а рыба, идущая
+     * к нересту снизу, ест так, как не будет есть весь остальной год.
+     *
+     * Поэтому фактор ограничивающий и множится со всем остальным, а не
+     * добавляет баллов к сумме условий.
+     */
+    private fun seasonFactor(season: SeasonState?): BiteFactor? {
+        if (season == null) return null
+
+        val value = when (season.phase) {
+            SeasonPhase.DORMANT -> DORMANT_VALUE
+            SeasonPhase.SPAWN -> SPAWN_VALUE
+            SeasonPhase.POST_SPAWN -> POST_SPAWN_VALUE
+            SeasonPhase.WINTER -> WINTER_VALUE
+            SeasonPhase.PRE_SPAWN -> PRE_SPAWN_VALUE
+            SeasonPhase.AUTUMN -> AUTUMN_VALUE
+            SeasonPhase.HEAT, SeasonPhase.SUMMER -> 1.0
+        }
+
+        val drift = signed(season.driftC, "°C") + " за ${season.overDays} сут"
+        val comment = season.phase.title.replaceFirstChar { it.lowercase() } + " — " + when (season.phase) {
+            SeasonPhase.DORMANT -> "вид спит, вода вне его полосы жизни"
+            SeasonPhase.WINTER -> "вода ниже порога кормления вида"
+            SeasonPhase.PRE_SPAWN -> "$drift, рыба идёт к нересту и ест впрок"
+            SeasonPhase.SPAWN -> "$drift, рыбе не до еды"
+            SeasonPhase.POST_SPAWN -> season.daysSinceSpawn
+                ?.let { "нерест был $it сут назад, рыба отходит" }
+                ?: "рыба отходит после нереста"
+
+            SeasonPhase.AUTUMN -> "$drift, рыба нагуливает перед зимой"
+            SeasonPhase.HEAT -> "вода выше оптимума вида"
+            SeasonPhase.SUMMER -> "$drift, вода в оптимуме вида"
+        }
+
+        return BiteFactor(
+            name = "Сезон",
+            value = value,
+            weight = 0.0,
+            limiting = true,
+            comment = comment
+        )
+    }
+
+    /**
      * Сколько часов подряд перед этим светило так же, как сейчас.
      *
      * Свет определяется приходом радиации, а не часами на циферблате: летом
@@ -795,6 +861,21 @@ class CalculateFishActivityUseCase @Inject constructor() {
         // сутки 0.13, свет 0.25, ветер 0.13, ход воды 0.04.
         const val WEIGHT_PRESSURE_DAY = 0.15
         const val WEIGHT_WATER_TREND = 0.05
+
+        /**
+         * Во что обходится фаза сезона.
+         *
+         * Оцепенение почти обнуляет шанс, но не до нуля: налима летом изредка
+         * достают, и приложение не должно утверждать невозможное. Нерест и
+         * восстановление наказывают сильно, жор и нагул поднимают — но меньше,
+         * чем наказывает нерест: не есть рыба умеет решительнее, чем есть.
+         */
+        const val DORMANT_VALUE = 0.15
+        const val SPAWN_VALUE = 0.45
+        const val POST_SPAWN_VALUE = 0.65
+        const val WINTER_VALUE = 0.85
+        const val PRE_SPAWN_VALUE = 1.20
+        const val AUTUMN_VALUE = 1.15
 
         /** Ширина перехода не бывает нулевой: иначе деление на ноль. */
         const val MIN_TOLERANCE = 1.0

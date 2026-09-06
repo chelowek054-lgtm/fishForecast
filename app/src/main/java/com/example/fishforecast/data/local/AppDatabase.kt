@@ -34,7 +34,7 @@ import com.example.fishforecast.data.local.entities.WeatherEntity
         FishingSessionEntity::class,
         ObservationEntity::class
     ],
-    version = 24,
+    version = 25,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -813,6 +813,27 @@ abstract class AppDatabase : RoomDatabase() {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL(
                     "ALTER TABLE `fish` ADD COLUMN `pressureRecoveryHours` INTEGER NOT NULL DEFAULT 3"
+                )
+            }
+        }
+
+        /**
+         * Сезон вида: нерест, порог кормления, оцепенение.
+         *
+         * Пороги допускают пустоту — про иной вид нерест неизвестен, и столбец
+         * должен уметь это выразить. Срок восстановления не пустой: он есть у
+         * всех, у кого вообще бывает нерест, а десять суток — середина
+         * наблюдаемого разброса от недели до двух.
+         */
+        val MIGRATION_24_25 = object : Migration(24, 25) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `fish` ADD COLUMN `spawnTempMinC` REAL")
+                db.execSQL("ALTER TABLE `fish` ADD COLUMN `spawnTempMaxC` REAL")
+                db.execSQL("ALTER TABLE `fish` ADD COLUMN `feedStartC` REAL")
+                db.execSQL("ALTER TABLE `fish` ADD COLUMN `dormantAboveC` REAL")
+                db.execSQL(
+                    "ALTER TABLE `fish` ADD COLUMN `postSpawnRecoveryDays` " +
+                        "INTEGER NOT NULL DEFAULT 10"
                 )
             }
         }
