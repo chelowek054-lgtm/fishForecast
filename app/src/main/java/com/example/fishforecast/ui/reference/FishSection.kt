@@ -35,6 +35,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -79,7 +80,8 @@ import kotlin.math.roundToInt
  */
 @Composable
 fun FishSection(
-    cards: List<FishCard>,
+    /** `null` — расчёт ещё идёт: рисовать нечего и врать про пустоту нельзя. */
+    cards: List<FishCard>?,
     error: String?,
     busy: Boolean,
     onEditFish: (Int) -> Unit,
@@ -87,7 +89,12 @@ fun FishSection(
     modifier: Modifier = Modifier
 ) {
     Box(modifier = modifier.fillMaxSize()) {
-        if (cards.isEmpty()) {
+        // Пока расчёт не дошёл, экран пуст, но не утверждает пустоту.
+        if (cards == null && error == null) {
+            CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
+        }
+
+        if (cards?.isEmpty() == true || error != null) {
             Text(
                 text = error ?: "Справочник пуст. Добавьте первый вид.",
                 color = if (error != null) MaterialTheme.colorScheme.error else Color.Unspecified,
@@ -105,7 +112,7 @@ fun FishSection(
             if (busy) {
                 item { LinearProgressIndicator(modifier = Modifier.fillMaxWidth()) }
             }
-            items(cards, key = { it.fish.id }) { card ->
+            items(cards.orEmpty(), key = { it.fish.id }) { card ->
                 FishCardItem(
                     card = card,
                     onEdit = { onEditFish(card.fish.id) },

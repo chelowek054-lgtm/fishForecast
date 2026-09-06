@@ -76,7 +76,7 @@ fun ReferenceScreen(
                     Column {
                         Text("Справочник")
                         Text(
-                            text = section.subtitle(cards.size, knowledge.version.takeIf { it > 0 }),
+                            text = section.subtitle(cards?.size, knowledge.version.takeIf { it > 0 }),
                             style = MaterialTheme.typography.bodySmall
                         )
                     }
@@ -162,8 +162,9 @@ enum class ReferenceSection(val title: String) {
     BAITING("Закорм"),
     OBSERVATIONS("Наблюдения");
 
-    fun subtitle(fishCount: Int, knowledgeVersion: Int?): String = when (this) {
-        FISH -> "Кто сегодня берёт · видов: $fishCount"
+    /** @param fishCount `null` — виды ещё считаются: числа пока нет. */
+    fun subtitle(fishCount: Int?, knowledgeVersion: Int?): String = when (this) {
+        FISH -> "Кто сегодня берёт" + (fishCount?.let { " · видов: $it" } ?: "")
         WATERBODIES -> "Течение и размер меняют воду и кислород"
         STRUCTURES -> "Что делает место местом"
         BAITING -> "Как ложится корм и кого он зовёт"

@@ -9,6 +9,7 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
@@ -31,10 +32,16 @@ class KnowledgeRepository @Inject constructor(
     private val store: CatalogStore,
     @ApplicationContext private val context: Context
 ) {
-    /** Действующие словари: скачанные, а если их нет — встроенные. */
+    /**
+     * Действующие словари: скачанные, а если их нет — встроенные.
+     *
+     * Разбор скачанного документа — это разбор JSON на десятки килобайт, и
+     * делать его на том потоке, который рисует экран, нельзя: словари слушают
+     * сразу несколько вкладок.
+     */
     val catalog: Flow<KnowledgeCatalog> = store.knowledgeDocument.map { saved ->
         saved?.let { KnowledgeCodec.decode(it).getOrNull() } ?: builtIn()
-    }
+    }.flowOn(Dispatchers.Default)
 
     val knowledgeUrl: Flow<String?> = store.knowledgeUrl
 

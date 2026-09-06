@@ -4,6 +4,7 @@ import androidx.compose.runtime.State
 import androidx.compose.runtime.mutableStateOf
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.Dispatchers
 import com.example.fishforecast.data.local.entities.FishEntity
 import com.example.fishforecast.data.local.entities.FishingSessionEntity
 import com.example.fishforecast.data.repository.FishRepository
@@ -21,6 +22,7 @@ import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
@@ -72,7 +74,9 @@ class FishingSessionViewModel @Inject constructor(
             deepDepthM = map.deepDepthM ?: DEFAULT_DEEP.depthM,
             depthsAssumed = map.shallowDepthM == null || map.deepDepthM == null
         )
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+    }
+        .flowOn(Dispatchers.Default)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
     val active: StateFlow<FishingSessionEntity?> = sessions.active
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)

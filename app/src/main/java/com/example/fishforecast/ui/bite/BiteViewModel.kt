@@ -2,6 +2,7 @@ package com.example.fishforecast.ui.bite
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import com.example.fishforecast.data.local.entities.DailySunEntity
 import com.example.fishforecast.data.local.entities.FishEntity
@@ -26,6 +27,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.stateIn
 import java.time.LocalDateTime
 import java.time.temporal.ChronoUnit
@@ -124,7 +126,11 @@ class BiteViewModel @Inject constructor(
             observationTypes = catalog.observations,
             noted = noted
         )
-    }.stateIn(
+    }
+        // Считается не на главном потоке: пока расчёт идёт, экран остаётся
+        // живым, а данных просто ещё нет — их и не рисуют.
+        .flowOn(Dispatchers.Default)
+        .stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),
         initialValue = BiteUiState()

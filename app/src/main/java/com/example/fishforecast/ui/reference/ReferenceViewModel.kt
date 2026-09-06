@@ -4,6 +4,7 @@ import androidx.compose.runtime.State
 import androidx.compose.runtime.mutableStateOf
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.Dispatchers
 import com.example.fishforecast.data.local.entities.DailySunEntity
 import com.example.fishforecast.data.local.entities.FishEntity
 import com.example.fishforecast.domain.light.LightPhase
@@ -22,6 +23,7 @@ import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -80,7 +82,14 @@ class ReferenceViewModel @Inject constructor(
     private val calculateFishActivity: CalculateFishActivityUseCase
 ) : ViewModel() {
 
-    val cards: StateFlow<List<FishCard>> = combine(
+    /**
+     * Карточки видов; `null` — расчёт ещё не дошёл.
+     *
+     * Пустой список и «ещё не готово» — разные вещи, и путать их нельзя:
+     * пока считались двадцать прогонов модели, экран показывал «Справочник
+     * пуст. Добавьте первый вид», хотя видов десять.
+     */
+    val cards: StateFlow<List<FishCard>?> = combine(
         repository.getAllFish(),
         fishingContext.activeForecast,
         fishingContext.activeMap,
@@ -96,10 +105,15 @@ class ReferenceViewModel @Inject constructor(
             .sortedWith(
                 compareByDescending<FishCard> { it.bestScore ?: -1 }.thenBy { it.fish.name }
             )
-    }.stateIn(
+    }
+        // Десять видов по два слоя — двадцать прогонов модели клёва. На
+        // главном потоке это и есть та задержка, с которой открывалась
+        // вкладка: список появится мгновением позже, но экран не замрёт.
+        .flowOn(Dispatchers.Default)
+        .stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),
-        initialValue = emptyList()
+        initialValue = null
     )
 
     /** Словари знаний: типы водоёмов, структуры, наблюдения. */
@@ -151,12 +165,19 @@ class ReferenceViewModel @Inject constructor(
                 java.time.Duration.between(LocalDateTime.parse(it.time), now).toMinutes()
             )
         }
+        // Карточке нужен один час, а модель считает весь ряд: тенденции и
+        // акклимация требуют истории. История нужна, будущее — нет, поэтому
+        // всё, что позже искомого часа, отбрасывается. На семи сутках назад и
+        // двух вперёд это треть работы впустую.
+        val upToHour = hour?.let { target ->
+            forecast.filter { it.time <= target.time }
+        } ?: forecast
         // Считаем оба места: разница между мелью и ямой и есть ответ на
         // вопрос «куда встать», ради которого вода считается двумя слоями.
         fun scoreAt(layer: WaterLayerChoice): Int? = hour?.let {
             calculateFishActivity(
                 fish = this,
-                forecast = forecast,
+                forecast = upToHour,
                 normalPressureMmHg = normalPressureMmHg,
                 water = water,
                 sunTimes = sunTimes,

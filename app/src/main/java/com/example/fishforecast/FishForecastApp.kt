@@ -7,6 +7,9 @@ import com.example.fishforecast.data.worker.BiteAlertWorker
 import com.example.fishforecast.data.worker.WeatherSyncWorker
 import org.maplibre.android.MapLibre
 import dagger.hilt.android.HiltAndroidApp
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 @HiltAndroidApp
@@ -27,7 +30,12 @@ class FishForecastApp : Application(), Configuration.Provider {
         // управлять из «Хранилища», не открывая экран карты.
         MapLibre.getInstance(this)
 
-        WeatherSyncWorker.schedule(this)
-        BiteAlertWorker.schedule(this)
+        // Планирование заданий открывает собственную базу WorkManager, то есть
+        // лезет на диск. Первому кадру это не нужно: расписание не влияет ни на
+        // что, что рыболов увидит в первую секунду.
+        CoroutineScope(Dispatchers.Default).launch {
+            WeatherSyncWorker.schedule(this@FishForecastApp)
+            BiteAlertWorker.schedule(this@FishForecastApp)
+        }
     }
 }

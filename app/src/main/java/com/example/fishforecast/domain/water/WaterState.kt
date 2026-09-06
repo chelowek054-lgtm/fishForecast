@@ -84,6 +84,12 @@ fun calculateWaterState(
     val shallow = simulateWaterTemperature(forecast, shallowLayer, anchor, waterBody)
     val deepHours = simulateWaterTemperature(forecast, deepLayer, anchor, waterBody)
     val sorted = forecast.sortedBy { it.time }
+    // Позиция часа по времени. Раньше её искали перебором внутри перебора:
+    // на двух сотнях часов это сорок тысяч сравнений строк на каждый слой, и
+    // всё это на том потоке, который рисует экран.
+    val indexByTime = HashMap<String, Int>(sorted.size)
+    sorted.forEachIndexed { index, hour -> indexByTime.putIfAbsent(hour.time, index) }
+    val darkBefore = sorted.darkHoursBefore()
 
     return WaterState(
         shallow = shallow,
@@ -93,15 +99,15 @@ fun calculateWaterState(
         depthsAssumed = map?.shallowDepthM == null || map.deepDepthM == null,
         anchored = anchor != null,
         oxygen = shallow.associate { hour ->
-            val index = sorted.indexOfFirst { it.time == hour.time }
+            val index = indexByTime[hour.time] ?: -1
             hour.time to availableOxygenMgL(
                 waterTemperatureC = hour.temperature,
                 waterBody = waterBody,
-                darkHours = sorted.darkHoursBefore(index),
+                darkHours = darkBefore.getOrElse(index) { 0 },
                 windMs = sorted.getOrNull(index)?.windSpeed?.kmhToMs() ?: 0.0
             )
         },
-        oxygenDeep = deepLayerOxygen(shallow, deepHours, sorted, waterBody),
+        oxygenDeep = deepLayerOxygen(shallow, deepHours, sorted, indexByTime, darkBefore, waterBody),
         waterBody = waterBody
     )
 }
@@ -117,6 +123,8 @@ private fun deepLayerOxygen(
     shallow: List<WaterHour>,
     deep: List<WaterHour>,
     sorted: List<WeatherEntity>,
+    indexByTime: Map<String, Int>,
+    darkBefore: IntArray,
     waterBody: WaterBodyType?
 ): Map<String, Double> {
     val shallowByTime = shallow.associate { it.time to it.temperature }
@@ -130,32 +138,36 @@ private fun deepLayerOxygen(
             0
         }
 
-        val index = sorted.indexOfFirst { it.time == hour.time }
+        val index = indexByTime[hour.time] ?: -1
         hour.time to deepOxygenMgL(
             deepTemperatureC = hour.temperature,
             shallowTemperatureC = above ?: hour.temperature,
             waterBody = waterBody,
             stratifiedHours = stratifiedHours,
-            darkHours = sorted.darkHoursBefore(index),
+            darkHours = darkBefore.getOrElse(index) { 0 },
             windMs = sorted.getOrNull(index)?.windSpeed?.kmhToMs() ?: 0.0
         )
     }
 }
 
 /**
- * Сколько часов подряд перед этим не было солнца.
+ * Сколько часов подряд перед этим не было солнца — сразу для всех часов.
  *
  * Ночь определяется приходом радиации, а не часами: летом она короткая, и
  * кислород проседает меньше, чем в декабре. Заодно это работает без данных
  * о восходе — они появились позже самой модели.
+ *
+ * Считается одним проходом: раньше на каждый час отматывали ночь назад заново,
+ * и длинная зимняя ночь стоила квадрата от своей длины.
  */
-private fun List<WeatherEntity>.darkHoursBefore(index: Int): Int {
-    if (index <= 0) return 0
-    var dark = 0
-    var cursor = index - 1
-    while (cursor >= 0 && this[cursor].shortwaveRadiation <= DARK_RADIATION) {
-        dark++
-        cursor--
+private fun List<WeatherEntity>.darkHoursBefore(): IntArray {
+    val dark = IntArray(size)
+    for (index in 1 until size) {
+        dark[index] = if (this[index - 1].shortwaveRadiation <= DARK_RADIATION) {
+            dark[index - 1] + 1
+        } else {
+            0
+        }
     }
     return dark
 }

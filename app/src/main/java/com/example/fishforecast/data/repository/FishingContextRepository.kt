@@ -11,6 +11,12 @@ import com.example.fishforecast.domain.knowledge.KnowledgeCatalog
 import com.example.fishforecast.domain.knowledge.WaterBodyType
 import com.example.fishforecast.domain.water.WaterState
 import com.example.fishforecast.domain.water.calculateWaterState
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.flow.shareIn
 import com.example.fishforecast.ui.map.BaseLayer
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
@@ -62,6 +68,15 @@ class FishingContextRepository @Inject constructor(
      * Тип выбранного района из словаря знаний. Пока рыболов не выбрал,
      * считаем район прудом: это самый частый и самый капризный случай.
      */
+    /**
+     * Область общих потоков района.
+     *
+     * Репозиторий живёт всё приложение, поэтому область своя, а не чужого
+     * экрана: иначе посчитанная вода умирала бы вместе с первой вкладкой,
+     * которая её попросила.
+     */
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+
     val activeWaterBody: Flow<WaterBodyType?> =
         combine(activeMap, knowledgeRepository.catalog) { map, catalog ->
             catalog.waterBody(map?.waterBodyType ?: KnowledgeCatalog.DEFAULT_WATERBODY)
@@ -77,6 +92,13 @@ class FishingContextRepository @Inject constructor(
         combine(activeForecast, activeMap, activeWaterBody) { forecast, map, waterBody ->
             calculateWaterState(forecast, map, waterBody)
         }
+            // Модель гоняет двести часов через две сотни шагов теплообмена.
+            // Без этого она считалась на том потоке, который рисует экран, —
+            // и переход на вкладку ждал, пока она закончит.
+            .flowOn(Dispatchers.Default)
+            // Вода — свойство района, а не экрана: пусть считается один раз на
+            // всех, а не заново на каждого, кто её слушает.
+            .shareIn(scope, SharingStarted.WhileSubscribed(SHARE_TIMEOUT_MS), replay = 1)
 
     suspend fun currentWater(): WaterState = activeWater.first()
 
@@ -203,3 +225,11 @@ class FishingContextRepository @Inject constructor(
         }.map { it.normalMmHg }
     }
 }
+
+/**
+ * Сколько ждать нового подписчика, прежде чем бросить расчёт.
+ *
+ * Переход между вкладками — это отписка и подписка подряд; пять секунд
+ * покрывают её с запасом, и вода не пересчитывается на каждом касании.
+ */
+private const val SHARE_TIMEOUT_MS = 5000L
