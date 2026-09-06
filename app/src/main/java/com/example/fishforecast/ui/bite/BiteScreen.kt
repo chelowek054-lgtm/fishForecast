@@ -67,6 +67,12 @@ import com.example.fishforecast.domain.bite.BiteForecast
 import com.example.fishforecast.ui.common.NoActiveMapMessage
 import com.example.fishforecast.domain.bite.BiteLevel
 import com.example.fishforecast.ui.common.ActiveMapTitle
+import java.util.Locale
+import java.time.format.DateTimeFormatter
+import com.example.fishforecast.domain.bite.PartOfDay
+import com.example.fishforecast.domain.bite.PartActivity
+import com.example.fishforecast.domain.bite.DayActivity
+import androidx.compose.ui.text.style.TextAlign
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -232,10 +238,148 @@ fun BiteScreen(
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             BiteChart(forecast = state.forecast, nowIndex = state.nowIndex)
+
+            WeekActivityBlock(week = state.week, fishName = state.selectedFish?.name)
         }
         }
     }
 }
+
+/**
+ * Клёв на неделю по частям суток.
+ *
+ * График по часам отвечает на вопрос «ехать ли сегодня». Этот блок — на
+ * другой: «когда брать отгул». Поэтому и вид другой: не кривая, а таблица,
+ * где неделя видна целиком и лучший день находится взглядом, а не прокруткой.
+ *
+ * В клетке — средний балл части: рыболов проводит там все шесть часов, а не
+ * один. Час пика подписан отдельной строкой под лучшей частью дня — по нему
+ * решают, к какому времени быть на воде.
+ */
+@Composable
+private fun WeekActivityBlock(week: List<DayActivity>, fishName: String?) {
+    if (week.isEmpty()) return
+
+    Spacer(modifier = Modifier.height(16.dp))
+    Text(
+        text = "Активность на неделю",
+        style = MaterialTheme.typography.titleMedium,
+        fontWeight = FontWeight.Bold
+    )
+    Text(
+        text = fishName?.let { "Средний балл по частям суток для «$it» — чтобы спланировать выезд" }
+            ?: "Средний балл по частям суток",
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant
+    )
+    Spacer(modifier = Modifier.height(8.dp))
+
+    // Шапка: те же четыре колонки, что и в строках дней.
+    Row(modifier = Modifier.fillMaxWidth()) {
+        Spacer(modifier = Modifier.width(DAY_COLUMN_WIDTH))
+        PartOfDay.entries.forEach { part ->
+            Text(
+                text = part.title,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.weight(1f)
+            )
+        }
+    }
+
+    week.forEach { day -> WeekDayRow(day) }
+
+    Spacer(modifier = Modifier.height(8.dp))
+    ScaleLegend()
+    Text(
+        text = "Прочерк — эта часть суток уже прошла",
+        style = MaterialTheme.typography.labelSmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant
+    )
+}
+
+/** Один день: подпись слева, четыре клетки справа. */
+@Composable
+private fun WeekDayRow(day: DayActivity) {
+    val best = day.best
+
+    Column(modifier = Modifier.padding(top = 6.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.width(DAY_COLUMN_WIDTH)) {
+                Text(
+                    text = day.date.format(WEEKDAY_FORMAT).replaceFirstChar { it.uppercase() },
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    text = day.date.format(DATE_FORMAT),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+
+            PartOfDay.entries.forEach { part ->
+                val activity = day.parts.firstOrNull { it.part == part }
+                PartCell(activity = activity, modifier = Modifier.weight(1f))
+            }
+        }
+
+        // Час пика — только у лучшей части дня: подписывать все четыре значило
+        // бы вернуть на экран те же двадцать четыре часа, от которых уходили.
+        if (best != null && best.level != BiteLevel.POOR) {
+            Text(
+                text = "лучше всего в ${best.bestHour}, ${best.part.title.lowercase()} — ${best.bestScore}",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(start = DAY_COLUMN_WIDTH, top = 2.dp)
+            )
+        }
+    }
+}
+
+/** Клетка части суток; пустая — часть уже прошла или не попала в прогноз. */
+@Composable
+private fun PartCell(activity: PartActivity?, modifier: Modifier = Modifier) {
+    if (activity == null) {
+        Box(modifier = modifier.height(CELL_HEIGHT), contentAlignment = Alignment.Center) {
+            Text(
+                text = "—",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.outlineVariant
+            )
+        }
+        return
+    }
+
+    Box(
+        modifier = modifier
+            .padding(horizontal = 2.dp)
+            .height(CELL_HEIGHT)
+            .clip(RoundedCornerShape(8.dp))
+            .background(activity.level.container()),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = activity.score.toString(),
+            style = MaterialTheme.typography.labelLarge,
+            fontWeight = FontWeight.Bold,
+            color = activity.level.onContainer()
+        )
+    }
+}
+
+/** Ширина колонки с днём: под «Пн» и дату, без переносов. */
+private val DAY_COLUMN_WIDTH = 56.dp
+private val CELL_HEIGHT = 34.dp
+
+private val WEEKDAY_FORMAT: DateTimeFormatter =
+    DateTimeFormatter.ofPattern("EEE", Locale("ru"))
+private val DATE_FORMAT: DateTimeFormatter =
+    DateTimeFormatter.ofPattern("dd.MM", Locale("ru"))
 
 /**
  * Что видно с берега.
@@ -600,16 +744,22 @@ private fun HourLabel(tick: HourTick) {
 @Composable
 private fun ChartLegend() {
     Column {
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            LegendItem(BiteLevel.GOOD.bar(), "от $GOOD_SCORE")
-            LegendItem(BiteLevel.MODERATE.bar(), "$MODERATE_SCORE–${GOOD_SCORE - 1}")
-            LegendItem(BiteLevel.POOR.bar(), "до $MODERATE_SCORE")
-        }
+        ScaleLegend()
         Text(
             text = "Бледные столбики — прошедшие часы, цифры под ними — час суток",
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
+    }
+}
+
+/** Только шкала цветов: она общая у графика и у таблицы недели. */
+@Composable
+private fun ScaleLegend() {
+    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        LegendItem(BiteLevel.GOOD.bar(), "от $GOOD_SCORE")
+        LegendItem(BiteLevel.MODERATE.bar(), "$MODERATE_SCORE–${GOOD_SCORE - 1}")
+        LegendItem(BiteLevel.POOR.bar(), "до $MODERATE_SCORE")
     }
 }
 

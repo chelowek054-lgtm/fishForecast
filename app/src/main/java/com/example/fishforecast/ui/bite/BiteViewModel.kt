@@ -11,6 +11,8 @@ import com.example.fishforecast.data.local.entities.SavedMapEntity
 import com.example.fishforecast.data.repository.FishRepository
 import com.example.fishforecast.data.repository.FishingContextRepository
 import com.example.fishforecast.domain.bite.BiteForecast
+import com.example.fishforecast.domain.bite.DayActivity
+import com.example.fishforecast.domain.bite.weekActivity
 import com.example.fishforecast.data.local.entities.ObservationEntity
 import com.example.fishforecast.data.repository.KnowledgeRepository
 import com.example.fishforecast.data.repository.ObservationRepository
@@ -49,7 +51,14 @@ data class BiteUiState(
     /** Что вообще можно отметить: словарь наблюдений. */
     val observationTypes: List<ObservationType> = emptyList(),
     /** Что уже отмечено на этом районе. */
-    val noted: List<ObservationEntity> = emptyList()
+    val noted: List<ObservationEntity> = emptyList(),
+    /**
+     * Клёв на неделю по частям суток.
+     *
+     * Тот же расчёт, что и в графике, свёрнутый до четырёх клеток в сутки:
+     * почасовой ряд отвечает «ехать ли сегодня», а этот — «когда брать отгул».
+     */
+    val week: List<DayActivity> = emptyList()
 )
 
 /** Всё, что описывает район: карта, вода, солнце и словари знаний. */
@@ -124,7 +133,8 @@ class BiteViewModel @Inject constructor(
             nowIndex = window.nowIndex,
             weatherMissing = weather.isEmpty(),
             observationTypes = catalog.observations,
-            noted = noted
+            noted = noted,
+            week = weekActivity(calculated, LocalDateTime.now())
         )
     }
         // Считается не на главном потоке: пока расчёт идёт, экран остаётся
