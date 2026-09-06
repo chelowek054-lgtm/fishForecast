@@ -144,7 +144,10 @@ class SavedMapsViewModel @Inject constructor(
                     val stream = openStream(uri) ?: error("Не удалось прочитать файл")
                     stream.use(GpxParser::parse)
                 }
-                parsed.forEach { spotRepository.addSpot(it) }
+                // Чужой GPX ложится на выбранный район: файл о районах не
+                // знает, а точка без района никому не видна.
+                val mapId = fishingContext.currentMap()?.id
+                parsed.forEach { spotRepository.addSpot(it.copy(mapId = mapId)) }
                 parsed.size
             }.fold(
                 onSuccess = { count ->

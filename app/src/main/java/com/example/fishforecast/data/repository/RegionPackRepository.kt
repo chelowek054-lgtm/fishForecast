@@ -140,7 +140,12 @@ class RegionPackRepository @Inject constructor(
             val known = spotDao.getSpotByUid(spot.uid)
             val fishId = contents.spotFish[spot.uid]?.let { fishIdByUid[it] }
             if (known == null) spotsAdded++
-            spotDao.insertSpot(spot.copy(id = known?.id ?: 0, fishId = fishId))
+            // Точки пакета принадлежат его же району: идентификатор известен
+            // только после того, как район лёг в базу, поэтому проставляется
+            // здесь, а не при разборе файла.
+            spotDao.insertSpot(
+                spot.copy(id = known?.id ?: 0, fishId = fishId, mapId = mapId)
+            )
         }
 
         ImportSummary(

@@ -112,13 +112,7 @@ class FishingContextRepository @Inject constructor(
      * ссылкой: тогда точки, импортированные из чужого GPX, тоже находятся.
      */
     val activeSpots: Flow<List<FishingSpotEntity>> = activeMap.flatMapLatest { map ->
-        if (map == null) {
-            flowOf(emptyList())
-        } else {
-            spotRepository.spots.map { spots ->
-                spots.filter { map.contains(it.latitude, it.longitude) }
-            }
-        }
+        if (map == null) flowOf(emptyList()) else spotRepository.spotsForMap(map.id)
     }
 
     /** Схема по умолчанию: она векторная и работает офлайн. */

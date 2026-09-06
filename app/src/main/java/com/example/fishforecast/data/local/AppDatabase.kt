@@ -34,7 +34,7 @@ import com.example.fishforecast.data.local.entities.WeatherEntity
         FishingSessionEntity::class,
         ObservationEntity::class
     ],
-    version = 25,
+    version = 26,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -825,6 +825,73 @@ abstract class AppDatabase : RoomDatabase() {
          * всех, у кого вообще бывает нерест, а десять суток — середина
          * наблюдаемого разброса от недели до двух.
          */
+        /**
+         * Точки получают район, а район — право унести их с собой.
+         *
+         * Раньше принадлежность точки определялась геометрией: попадает в
+         * границы — значит, района. Точка удалённого района оставалась в базе
+         * навсегда, невидимая и никому не нужная, а точка на стыке двух
+         * районов принадлежала обоим сразу.
+         *
+         * Столбец заполняется той же геометрией, по которой раньше и считали,
+         * — так ни одна существующая точка не теряет района. Когда границы
+         * накладываются, выигрывает меньший район: он точнее описывает место.
+         * Точки, не попавшие никуда, остаются без района, а не привязываются
+         * наугад: догадка здесь хуже пустоты.
+         *
+         * Внешний ключ в SQLite добавляется только пересозданием таблицы.
+         */
+        val MIGRATION_25_26 = object : Migration(25, 26) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `fishing_spots_new` (
+                        `id` INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+                        `uid` TEXT NOT NULL,
+                        `name` TEXT NOT NULL,
+                        `latitude` REAL NOT NULL,
+                        `longitude` REAL NOT NULL,
+                        `mapId` INTEGER,
+                        `fishId` INTEGER,
+                        `note` TEXT NOT NULL,
+                        `placement` TEXT NOT NULL,
+                        `structures` TEXT NOT NULL,
+                        `createdAt` INTEGER NOT NULL,
+                        FOREIGN KEY(`fishId`) REFERENCES `fish`(`id`) ON UPDATE NO ACTION ON DELETE SET NULL,
+                        FOREIGN KEY(`mapId`) REFERENCES `saved_maps`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL(
+                    """
+                    INSERT INTO `fishing_spots_new`
+                        (`id`, `uid`, `name`, `latitude`, `longitude`, `mapId`, `fishId`,
+                         `note`, `placement`, `structures`, `createdAt`)
+                    SELECT s.`id`, s.`uid`, s.`name`, s.`latitude`, s.`longitude`,
+                           (
+                               SELECT m.`id` FROM `saved_maps` m
+                               WHERE s.`latitude` BETWEEN m.`south` AND m.`north`
+                                 AND s.`longitude` BETWEEN m.`west` AND m.`east`
+                               ORDER BY (m.`north` - m.`south`) * (m.`east` - m.`west`) ASC
+                               LIMIT 1
+                           ),
+                           s.`fishId`, s.`note`, s.`placement`, s.`structures`, s.`createdAt`
+                    FROM `fishing_spots` s
+                    """.trimIndent()
+                )
+                db.execSQL("DROP TABLE `fishing_spots`")
+                db.execSQL("ALTER TABLE `fishing_spots_new` RENAME TO `fishing_spots`")
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_fishing_spots_fishId` " +
+                        "ON `fishing_spots` (`fishId`)"
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_fishing_spots_mapId` " +
+                        "ON `fishing_spots` (`mapId`)"
+                )
+            }
+        }
+
         val MIGRATION_24_25 = object : Migration(24, 25) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE `fish` ADD COLUMN `spawnTempMinC` REAL")

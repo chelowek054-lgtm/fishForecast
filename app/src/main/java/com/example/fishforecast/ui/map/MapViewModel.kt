@@ -180,6 +180,9 @@ class MapViewModel @Inject constructor(
                     name = name,
                     latitude = latitude,
                     longitude = longitude,
+                    // Точка ставится на открытой карте — ей и принадлежит.
+                    // Без района она была бы ничьей и пропала бы из списка.
+                    mapId = activeMap.value?.id,
                     fishId = fishId,
                     note = note,
                     placement = placement.name,
