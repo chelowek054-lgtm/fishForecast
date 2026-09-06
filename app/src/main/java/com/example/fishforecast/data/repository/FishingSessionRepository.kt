@@ -9,6 +9,7 @@ import com.example.fishforecast.domain.light.lightPhaseAt
 import com.example.fishforecast.domain.sensor.hPaToMmHg
 import com.example.fishforecast.domain.session.FishingStrategy
 import com.example.fishforecast.domain.session.HourContext
+import com.example.fishforecast.domain.season.seasonPhaseOf
 import com.example.fishforecast.domain.session.SessionConditions
 import com.example.fishforecast.domain.session.SessionPlanInput
 import com.example.fishforecast.domain.session.buildStrategy
@@ -192,12 +193,16 @@ class FishingSessionRepository @Inject constructor(
             waterBodyId = map?.waterBodyType,
             forecast = bite,
             hours = hours,
-            rainLastDayMm = rain
+            rainLastDayMm = rain,
+            // Фаза сезона судится по мели: там вода отзывается на погоду
+            // быстрее, и именно она ведёт рыбу к нересту и обратно.
+            season = seasonPhaseOf(input.fish, water.shallow, now)
         )
     }
 
     /** Плоский текст плана: он должен читаться и через год, без кода. */
     private fun FishingStrategy.asText(): String = buildList {
+        season?.let { add("${it.title}: ${it.value} — ${it.reason}") }
         add("${place.title}: ${place.value} — ${place.reason}")
         add("${horizon.title}: ${horizon.value} — ${horizon.reason}")
         bait?.let { add("${it.title}: ${it.value} — ${it.reason}") }

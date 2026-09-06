@@ -36,6 +36,7 @@ import com.example.fishforecast.domain.session.CatchGoal
 import com.example.fishforecast.domain.session.DayPart
 import com.example.fishforecast.domain.session.FishingStrategy
 import com.example.fishforecast.domain.session.StrategyAdvice
+import kotlin.math.roundToInt
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -102,7 +103,7 @@ fun SessionSetup(
 
             if (form.fish?.let { it.guild != "predator" } == true) {
                 Spacer(modifier = Modifier.height(12.dp))
-                Text(text = "За кем едем", style = MaterialTheme.typography.labelLarge)
+                Text(text = "За чем едем", style = MaterialTheme.typography.labelLarge)
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     CatchGoal.entries.forEach { goal ->
                         FilterChip(
@@ -160,9 +161,17 @@ fun StrategyCard(strategy: FishingStrategy) {
             style = MaterialTheme.typography.titleSmall,
             fontWeight = FontWeight.Bold
         )
+        // Аппетит стоит в шапке: он объясняет сразу и объём стола, и размер
+        // насадки, и почему в один день план щедрый, а в другой скупой.
+        Text(
+            text = "Аппетит вида сегодня: %d %%".format((strategy.appetite * 100).roundToInt()),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
         Spacer(modifier = Modifier.height(8.dp))
 
         listOfNotNull(
+            strategy.season,
             strategy.place,
             strategy.horizon,
             strategy.bait,

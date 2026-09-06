@@ -2,6 +2,8 @@ package com.example.fishforecast.ui.reference
 
 import com.example.fishforecast.domain.fish.GroundbaitRule
 import com.example.fishforecast.domain.fish.Guild
+import com.example.fishforecast.domain.fish.flavorText
+import com.example.fishforecast.domain.fish.horizonText
 
 /**
  * Перевод словарных значений справочника на человеческий.
@@ -35,30 +37,12 @@ fun sweetnessText(value: String): String = when (value) {
     else -> value
 }
 
-fun flavorText(value: String): String = when (value) {
-    "none" -> "без аромата"
-    "spicy_salty" -> "пряно-солёный аромат"
-    "sweet_fruity" -> "сладко-фруктовый аромат"
-    "garlic_hemp" -> "чеснок и конопля"
-    "vanilla_honey" -> "ваниль и мёд"
-    "fish_blood" -> "рыба и кровь"
-    "meat_spicy" -> "мясной пряный аромат"
-    "sweet_spicy" -> "сладко-пряный аромат"
-    else -> value.replace('_', ' ')
-}
-
 /** Гильдия словами: рыболов думает «хищник», а не `predator`. */
 fun guildText(guild: Guild): String = when (guild) {
     Guild.PREDATOR -> "хищник"
     Guild.PEACEFUL -> "мирная"
 }
 
-fun horizonText(value: String): String = when (value) {
-    "bottom" -> "у дна"
-    "mid" -> "в толще"
-    "top" -> "у поверхности"
-    else -> value
-}
 
 /** Строка правила прикормки без пустых мест. */
 fun GroundbaitRule.summary(): String = listOf(

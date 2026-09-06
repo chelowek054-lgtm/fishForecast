@@ -65,6 +65,22 @@ data class SeasonState(
     val falling: Boolean get() = driftC <= -DRIFT_STEP_C
 }
 
+/** Час истории с уже разобранным временем: разбирать его заново дорого. */
+private data class Moment(val at: LocalDateTime, val temperature: Double)
+
+/**
+ * История воды до текущего момента, разобранная один раз.
+ *
+ * Справочник считается сразу по десяти видам, история хранится за неделю, и
+ * каждый разбор `LocalDateTime.parse` на этом умножается. Поэтому время
+ * разбирается одним проходом, а всё остальное работает уже с готовым.
+ */
+private fun List<WaterHour>.past(now: LocalDateTime): List<Moment> = mapNotNull { hour ->
+    runCatching { LocalDateTime.parse(hour.time) }.getOrNull()
+        ?.takeIf { !it.isAfter(now) }
+        ?.let { Moment(it, hour.temperature) }
+}
+
 /**
  * Куда идёт вода за несколько суток.
  *
@@ -72,21 +88,17 @@ data class SeasonState(
  * только на масштабе суток. Берётся столько, сколько есть в истории, но не
  * больше [DRIFT_WINDOW_DAYS].
  */
-fun waterDrift(history: List<WaterHour>, now: LocalDateTime): Pair<Double, Int>? {
-    if (history.size < 2) return null
-    val past = history.filter { hour ->
-        runCatching { !LocalDateTime.parse(hour.time).isAfter(now) }.getOrDefault(false)
-    }
+fun waterDrift(history: List<WaterHour>, now: LocalDateTime): Pair<Double, Int>? =
+    driftOf(history.past(now))
+
+private fun driftOf(past: List<Moment>): Pair<Double, Int>? {
     if (past.size < 2) return null
 
     val last = past.last()
-    val lastTime = LocalDateTime.parse(last.time)
-    val earliest = lastTime.minusDays(DRIFT_WINDOW_DAYS.toLong())
-    val first = past.firstOrNull { hour ->
-        !LocalDateTime.parse(hour.time).isBefore(earliest)
-    } ?: return null
+    val earliest = last.at.minusDays(DRIFT_WINDOW_DAYS.toLong())
+    val first = past.firstOrNull { !it.at.isBefore(earliest) } ?: return null
 
-    val days = Duration.between(LocalDateTime.parse(first.time), lastTime).toHours() / HOURS_PER_DAY
+    val days = Duration.between(first.at, last.at).toHours() / HOURS_PER_DAY
     if (days < 1) return null
     return (last.temperature - first.temperature) to days.toInt()
 }
@@ -105,17 +117,16 @@ fun seasonPhaseOf(
     history: List<WaterHour>,
     now: LocalDateTime = LocalDateTime.now()
 ): SeasonState? {
-    val water = history.lastOrNull { hour ->
-        runCatching { !LocalDateTime.parse(hour.time).isAfter(now) }.getOrDefault(false)
-    }?.temperature ?: return null
-    val (drift, days) = waterDrift(history, now) ?: return null
+    val past = history.past(now)
+    val water = past.lastOrNull()?.temperature ?: return null
+    val (drift, days) = driftOf(past) ?: return null
 
     val base = SeasonState(
         phase = SeasonPhase.SUMMER,
         waterC = water,
         driftC = drift,
         overDays = days,
-        daysSinceSpawn = daysSinceSpawn(fish, history, now)
+        daysSinceSpawn = daysSinceSpawn(fish, past, now)
     )
 
     // Оцепенение сильнее всего: налиму летом не поможет ни давление, ни ветер.
@@ -162,18 +173,15 @@ fun seasonPhaseOf(
  */
 private fun daysSinceSpawn(
     fish: FishEntity,
-    history: List<WaterHour>,
+    past: List<Moment>,
     now: LocalDateTime
 ): Int? {
     val min = fish.spawnTempMinC ?: return null
     val max = fish.spawnTempMaxC ?: return null
 
-    val inBand = history.lastOrNull { hour ->
-        hour.temperature in min..max &&
-            runCatching { !LocalDateTime.parse(hour.time).isAfter(now) }.getOrDefault(false)
-    } ?: return null
+    val inBand = past.lastOrNull { it.temperature in min..max } ?: return null
 
-    val hours = Duration.between(LocalDateTime.parse(inBand.time), now).toHours()
+    val hours = Duration.between(inBand.at, now).toHours()
     if (hours < 0) return null
     return (hours / HOURS_PER_DAY).toInt()
 }

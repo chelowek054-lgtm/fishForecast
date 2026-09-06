@@ -77,7 +77,8 @@ class FishingStrategyTest {
         // Тот самый вечер: карп гуляет поверху, а флэт лежит на дне.
         val plan = carpPlan(conditions(shallow = 28.0, oxygen = 5.2))
 
-        assertEquals("Толща воды", plan.horizon.value)
+        // Горизонты теперь называются словарём вида: «Дно», «Полводы», «Верх».
+        assertEquals("Полводы", plan.horizon.value)
         assertTrue(
             "должно быть сказано, что снасть работает не там: ${plan.horizon.reason}",
             plan.horizon.reason.contains("дну")

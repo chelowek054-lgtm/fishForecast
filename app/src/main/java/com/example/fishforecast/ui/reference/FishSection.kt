@@ -65,6 +65,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.example.fishforecast.data.local.entities.FishEntity
 import com.example.fishforecast.domain.bite.WaterLayerChoice
 import com.example.fishforecast.domain.fish.Guild
+import com.example.fishforecast.domain.fish.horizonText
 import com.example.fishforecast.domain.fish.decodeBaits
 import com.example.fishforecast.domain.fish.decodeGroundbait
 import kotlin.math.roundToInt

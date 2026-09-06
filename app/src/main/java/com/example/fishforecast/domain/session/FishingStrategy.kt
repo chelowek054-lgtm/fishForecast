@@ -13,7 +13,12 @@ import com.example.fishforecast.domain.knowledge.KnowledgeCatalog
 import com.example.fishforecast.domain.knowledge.LureGuide
 import com.example.fishforecast.domain.knowledge.LureType
 import com.example.fishforecast.domain.knowledge.StructureType
+import com.example.fishforecast.domain.fish.flavorText
+import com.example.fishforecast.domain.fish.horizonText
+import com.example.fishforecast.domain.fish.horizonTitle
 import com.example.fishforecast.domain.light.LightPhase
+import com.example.fishforecast.domain.season.SeasonPhase
+import com.example.fishforecast.domain.season.SeasonState
 import com.example.fishforecast.domain.water.oxygenLevel
 import com.example.fishforecast.domain.water.OxygenLevel
 import kotlin.math.roundToInt
@@ -32,6 +37,21 @@ import kotlin.math.roundToInt
 data class FishingStrategy(
     val fish: FishEntity,
     val guild: Guild,
+    /**
+     * Чем вид занят в это время года.
+     *
+     * Стоит первым: пока не сказано, что рыба на нересте или спит, все
+     * остальные советы читаются как обещание, что она вообще кормится.
+     */
+    val season: StrategyAdvice?,
+    /**
+     * Насколько рыба готова есть: 0 — не ест вовсе, 1 — берёт всё.
+     *
+     * Из него следует объём стола, размер насадки и темп докорма. Раньше эти
+     * три вещи решались порогом «холодно или тепло», хотя аппетит меняется
+     * плавно и зависит ещё и от сезона.
+     */
+    val appetite: Double,
     /** Где ловить: слой и почему. Приложение выбирает его само. */
     val place: StrategyAdvice,
     /** Куда рыба пойдёт в течение суток и что делать в каждый отрезок. */
@@ -143,7 +163,9 @@ data class SessionConditions(
     /** Ближайшие сутки по часам: из них строится раскладка. */
     val hours: List<HourContext> = emptyList(),
     /** Осадки за прошедшие сутки, мм: по ним судим о мутности. */
-    val rainLastDayMm: Double = 0.0
+    val rainLastDayMm: Double = 0.0,
+    /** Фаза сезона вида; null — истории воды не хватило, чтобы её определить. */
+    val season: SeasonState? = null
 )
 
 /**
@@ -168,6 +190,8 @@ fun buildStrategy(
         WaterLayerChoice.DEEP -> conditions.waterDeepC
     }
     val cold = (water ?: Double.MAX_VALUE) < fish.coldTempThreshold
+    val season = conditions.season
+    val appetite = appetiteOf(fish, water, season, conditions)
 
     val horizon = horizonAdvice(fish, guild, conditions, method)
     val warnings = warnings(fish, guild, conditions, method, horizon)
@@ -185,19 +209,125 @@ fun buildStrategy(
     return FishingStrategy(
         fish = fish,
         guild = guild,
+        season = seasonAdvice(fish, season),
+        appetite = appetite,
         place = placeAdvice(layer, conditions),
         day = dayParts(fish, guild, conditions),
         horizon = horizon,
-        bait = baitAdvice(fish, guild, cold, conditions, knowledge, backup = false),
-        backupBait = baitAdvice(fish, guild, cold, conditions, knowledge, backup = true),
-        groundbait = groundbaitAdvice(fish, guild, cold, conditions, input, method),
-        baiting = baitingAdvice(baitingPlan, input, cold, method),
-        selection = selectionAdvice(baitingPlan),
+        bait = baitAdvice(fish, guild, cold, season, conditions, knowledge, backup = false),
+        backupBait = baitAdvice(fish, guild, cold, season, conditions, knowledge, backup = true),
+        groundbait = groundbaitAdvice(fish, guild, cold, appetite, conditions, input, method),
+        baiting = baitingAdvice(baitingPlan, input, cold, appetite, method),
+        selection = selectionAdvice(baitingPlan, appetite),
         rig = rigAdvice(method),
         window = windowAdvice(conditions),
         lookFor = fish.preferredStructures.decodeBaits().mapNotNull { knowledge.structure(it) },
         warnings = warnings
     )
+}
+
+/**
+ * Насколько рыба готова есть: 0…1.
+ *
+ * Три вещи складываются в одно число. Первое — насколько вода далека от
+ * оптимума вида: опорожнение кишечника у карповых зависит от температуры
+ * экспонентой, поэтому аппетит и падает плавно, а не ступенькой у порога.
+ * Второе — фаза сезона: нерестящаяся рыба не ест при любой воде, а идущая к
+ * нересту ест сверх обычного. Третье — сегодняшняя погода в виде балла клёва:
+ * при давлении, которое вид не терпит, кормить полным столом незачем.
+ *
+ * Отсюда объём корма, размер насадки и темп докорма — то, что раньше решалось
+ * одним порогом «холодно или тепло».
+ */
+internal fun appetiteOf(
+    fish: FishEntity,
+    water: Double?,
+    season: SeasonState?,
+    conditions: SessionConditions
+): Double {
+    // Без воды судить не о чем: считаем рыбу умеренно голодной и говорим об
+    // этом в советах, а не подставляем уверенную единицу.
+    if (water == null) return NEUTRAL_APPETITE
+
+    val thermal = when {
+        water in fish.optMinTemp.toDouble()..fish.optMaxTemp.toDouble() -> 1.0
+        water > fish.optMaxTemp -> falloff(water - fish.optMaxTemp, fish.absMaxTemp - fish.optMaxTemp)
+        else -> falloff(fish.optMinTemp - water, fish.optMinTemp - fish.absMinTemp)
+    }
+
+    val seasonal = when (season?.phase) {
+        SeasonPhase.DORMANT -> 0.0
+        SeasonPhase.SPAWN -> 0.2
+        SeasonPhase.POST_SPAWN -> 0.5
+        SeasonPhase.WINTER -> 0.6
+        SeasonPhase.PRE_SPAWN, SeasonPhase.AUTUMN -> 1.0
+        else -> 0.9
+    }
+
+    // Балл клёва входит мягко: он про «ехать ли», а не про «сколько сыпать»,
+    // и не должен один решать судьбу стола.
+    val today = conditions.forecast.firstOrNull()?.score?.let { score ->
+        SCORE_FLOOR + (1 - SCORE_FLOOR) * (score / MAX_SCORE)
+    } ?: 1.0
+
+    return (thermal * seasonal * today).coerceIn(0.0, 1.0)
+}
+
+/** Плавный спад от единицы до нуля на всю ширину запаса. */
+private fun falloff(distance: Double, span: Float): Double {
+    val width = span.toDouble().takeIf { it > 0 } ?: return 0.0
+    return (1 - distance / width).coerceIn(0.0, 1.0)
+}
+
+/**
+ * Чем вид занят в это время года.
+ *
+ * Формат тот же, что в карточке клёва: измеренное значение, тире, что оно
+ * значит для этого вида с его порогом цифрой.
+ */
+private fun seasonAdvice(fish: FishEntity, season: SeasonState?): StrategyAdvice? {
+    if (season == null) {
+        return StrategyAdvice(
+            title = "Сезон",
+            value = "неизвестен",
+            reason = "Истории воды меньше суток: направление сезона определить не по чему"
+        )
+    }
+
+    val drift = "%s%.1f° за %d сут".format(
+        if (season.driftC >= 0) "+" else "−",
+        kotlin.math.abs(season.driftC),
+        season.overDays
+    )
+
+    val reason = when (season.phase) {
+        SeasonPhase.DORMANT -> "Вода %.1f° выше %.1f°, при которых вид впадает в оцепенение"
+            .format(season.waterC, fish.dormantAboveC ?: 0f)
+
+        SeasonPhase.WINTER -> "Вода %.1f° ниже %.1f°, с которых вид начинает кормиться"
+            .format(season.waterC, fish.feedStartC ?: 0f)
+
+        SeasonPhase.PRE_SPAWN -> "Вода %.0f°, $drift — идёт к нересту с %.0f°, ест впрок"
+            .format(season.waterC, fish.spawnTempMinC ?: 0f)
+
+        SeasonPhase.SPAWN -> "Вода %.0f° в нерестовой полосе %.0f–%.0f° на подъёме"
+            .format(season.waterC, fish.spawnTempMinC ?: 0f, fish.spawnTempMaxC ?: 0f)
+
+        SeasonPhase.POST_SPAWN -> season.daysSinceSpawn
+            ?.let { "Нерест был %d сут назад, вид отходит %d".format(it, fish.postSpawnRecoveryDays) }
+            ?: "Вид отходит после нереста"
+
+        SeasonPhase.HEAT -> "Вода %.0f° выше оптимума %.0f–%.0f°"
+            .format(season.waterC, fish.optMinTemp, fish.optMaxTemp)
+
+        SeasonPhase.AUTUMN -> "Вода %.0f°, $drift — прошла оптимум сверху, рыба нагуливает"
+            .format(season.waterC)
+
+        SeasonPhase.SUMMER -> "Вода %.0f° в оптимуме %.0f–%.0f°, $drift"
+            .format(season.waterC, fish.optMinTemp, fish.optMaxTemp)
+    }
+
+    return StrategyAdvice(title = "Сезон", value = season.phase.title, reason = reason)
 }
 
 /**
@@ -287,7 +417,7 @@ private fun dayNote(
     layer: WaterLayerChoice,
     horizon: String
 ): String = when {
-    horizon != "Дно" -> "Рыба выше дна: донная снасть промолчит"
+    horizon != HORIZON_BOTTOM -> "Рыба стоит ${horizon.lowercase()}: донная снасть промолчит"
     layer == WaterLayerChoice.DEEP && hour.phase == LightPhase.DAY ->
         "Пережидает жару на глубине, кормится вяло"
     hour.phase == LightPhase.DAWN || hour.phase == LightPhase.DUSK ->
@@ -320,23 +450,35 @@ private fun horizonAdvice(
     val water = conditions.waterShallowC
     val oxygen = conditions.oxygenMgL
     val value = horizonFor(fish, guild, water, oxygen, conditions.lightPhase)
+    val usual = horizonTitle(fish.defaultHorizon)
+    // В заголовке совета «Дно», а в предложении нужен предлог: «вид и так у дна».
+    val whereUsually = horizonText(fish.defaultHorizon)
     val warmForFish = water != null && water > fish.optMaxTemp
     val poorOxygen = oxygen != null && oxygenLevel(oxygen) != OxygenLevel.RICH &&
         oxygen < fish.oxygenComfortMgL + 1
 
     val reason = when {
+        water == null -> "Вид держится $whereUsually; вода ещё не посчитана"
+
         warmForFish && poorOxygen ->
-            "Вода %.0f° теплее оптимума и кислорода %.1f мг/л: у дна душно, рыба выше"
-                .format(water, oxygen)
+            "Вода %.1f° выше оптимума %.0f–%.0f° и кислорода %.1f мг/л: вид обычно %s, сейчас поднимается выше"
+                .format(water, fish.optMinTemp, fish.optMaxTemp, oxygen, whereUsually)
 
-        warmForFish -> "Вода %.0f° теплее оптимума вида: у дна ей тяжелее, чем в полводы"
-            .format(water)
+        warmForFish ->
+            "Вода %.1f° выше оптимума %.0f–%.0f°: вид обычно %s, сейчас поднимается выше"
+                .format(water, fish.optMinTemp, fish.optMaxTemp, whereUsually)
 
-        value != "Дно" -> "Сумерки: мирная рыба поднимается к поверхности"
-        else -> "Вода в пределах комфорта: рыба кормится со дна"
+        value != usual -> "Сумерки: вид поднимается выше обычного для себя горизонта"
+
+        water < fish.optMinTemp ->
+            "Вода %.0f° ниже оптимума %.0f–%.0f°: холодной рыбе не до подъёма, вид и так %s"
+                .format(water, fish.optMinTemp, fish.optMaxTemp, whereUsually)
+
+        else -> "Вода %.0f° в оптимуме %.0f–%.0f°: вид стоит там, где обычно"
+            .format(water, fish.optMinTemp, fish.optMaxTemp)
     }
 
-    val mismatch = method != null && method.horizon == "bottom" && value != "Дно"
+    val mismatch = method != null && method.horizon == "bottom" && value != HORIZON_BOTTOM
     return StrategyAdvice(
         title = "Горизонт",
         value = value,
@@ -351,8 +493,14 @@ private fun horizonAdvice(
 /**
  * На каком горизонте держать насадку в этот час.
  *
- * В прогретой воде рыба поднимается над дном, и донная снасть в этот момент
- * бесполезна: насадка лежит там, где рыбы нет.
+ * Начинается с того, где вид держится вообще: плотва стоит в толще, амур у
+ * поверхности, лещ у дна. Раньше этого не спрашивали вовсе — горизонт считался
+ * только по воде и кислороду, и всем видам в обычную погоду выпадало дно.
+ * Амуру, которого ловят с поверхности на камыш, приложение советовало дно.
+ *
+ * Вода, кислород и свет остаются поправками: в прогретой воде рыба поднимается
+ * над своим обычным горизонтом, и донная снасть кладёт насадку туда, где рыбы
+ * нет.
  */
 private fun horizonFor(
     fish: FishEntity,
@@ -361,39 +509,81 @@ private fun horizonFor(
     oxygen: Double?,
     phase: LightPhase?
 ): String {
+    val base = horizonTitle(fish.defaultHorizon)
     val warmForFish = water != null && water > fish.optMaxTemp
     val poorOxygen = oxygen != null && oxygenLevel(oxygen) != OxygenLevel.RICH &&
         oxygen < fish.oxygenComfortMgL + 1
 
     return when {
-        warmForFish -> "Толща воды"
-        phase == LightPhase.DUSK && guild == Guild.PEACEFUL -> "Верх и полводы"
-        poorOxygen && water != null && water > fish.optMaxTemp - 2 -> "Толща воды"
-        else -> "Дно"
+        // Верх поднимать некуда: вид и так там.
+        base == HORIZON_TOP -> base
+        warmForFish -> raise(base)
+        poorOxygen && water != null && water > fish.optMaxTemp - HEAT_MARGIN_C -> raise(base)
+        phase == LightPhase.DUSK && guild == Guild.PEACEFUL -> raise(base)
+        else -> base
     }
+}
+
+/** На ступень выше обычного горизонта вида. */
+private fun raise(horizon: String): String = when (horizon) {
+    HORIZON_BOTTOM -> HORIZON_MID
+    HORIZON_MID -> HORIZON_TOP
+    else -> horizon
 }
 
 private fun baitAdvice(
     fish: FishEntity,
     guild: Guild,
     cold: Boolean,
+    season: SeasonState?,
     conditions: SessionConditions,
     knowledge: KnowledgeCatalog,
     backup: Boolean
 ): StrategyAdvice? {
-    if (guild == Guild.PREDATOR) return lureAdvice(conditions, knowledge, backup)
+    // Сезон проверяется раньше гильдии: спящему налиму приманку подбирать так
+    // же незачем, как спящему карпу насадку. У налима летом список «тёплых»
+    // наживок пуст намеренно, и выдумывать вместо него нечего.
+    if (season?.phase == SeasonPhase.DORMANT) return null
 
-    val baits = (if (cold) fish.baitsCold else fish.baitsWarm).decodeBaits()
-    val choice = baits.getOrNull(if (backup) 1 else 0) ?: return null
+    if (guild == Guild.PREDATOR) return lureAdvice(fish, conditions, knowledge, backup)
+
+    // На нагуле рыба тянется к животному, и говорить об этом, оставляя в руках
+    // кукурузу, бессмысленно: пусть животная насадка станет запасной.
+    val autumnShift = !cold && backup && season?.phase == SeasonPhase.AUTUMN
+    val baits = when {
+        autumnShift -> fish.baitsCold.decodeBaits()
+        cold -> fish.baitsCold.decodeBaits()
+        else -> fish.baitsWarm.decodeBaits()
+    }
+    val choice = baits.getOrNull(if (backup && !autumnShift) 1 else 0) ?: return null
+
+    val water = conditions.waterShallowC
+    val threshold = fish.coldTempThreshold.roundToInt()
+    val base = if (water != null) {
+        if (cold) {
+            "Вода %.0f° ниже %d° для этого вида — берёт животное".format(water, threshold)
+        } else {
+            "Вода %.0f° выше %d° для этого вида — работает растительное и сладкое"
+                .format(water, threshold)
+        }
+    } else {
+        if (cold) "Холодная вода: вид берёт животное" else "Тёплая вода: работает растительное"
+    }
+
+    val seasonNote = when {
+        autumnShift -> ". На нагуле рыба тянется к животному — держите его вторым"
+        season?.phase == SeasonPhase.PRE_SPAWN -> ". Перед нерестом берёт крупно и жадно"
+        season?.phase == SeasonPhase.SPAWN -> ". На нересте берёт редко: рассчитывать не стоит"
+        season?.phase == SeasonPhase.POST_SPAWN -> ". После нереста берёт мелко и осторожно"
+        season?.phase == SeasonPhase.AUTUMN -> ". На нагуле держите про запас животное"
+        season?.phase == SeasonPhase.WINTER -> ". Зимой только животное и по одной штуке"
+        else -> ""
+    }
 
     return StrategyAdvice(
         title = if (backup) "Запасная насадка" else "Насадка",
         value = choice,
-        reason = if (cold) {
-            "Вода холоднее ${fish.coldTempThreshold.roundToInt()}°: рыба берёт животное"
-        } else {
-            "Вода теплее ${fish.coldTempThreshold.roundToInt()}°: работает растительное и сладкое"
-        }
+        reason = base + seasonNote
     )
 }
 
@@ -404,6 +594,7 @@ private fun baitAdvice(
  * тогда рыба ищет приманку боковой линией, а не глазами.
  */
 private fun lureAdvice(
+    fish: FishEntity,
     conditions: SessionConditions,
     knowledge: KnowledgeCatalog,
     backup: Boolean
@@ -414,7 +605,9 @@ private fun lureAdvice(
         LightPhase.DAWN, LightPhase.DUSK, LightPhase.EVENING -> "low"
         else -> "bright"
     }
-    val coldWater = (conditions.waterShallowC ?: 20.0) < COLD_WATER_C
+    // Порог свой у каждого хищника: щука догоняет приманку с десяти
+    // градусов, судаку нужно двенадцать. Общая константа врала обоим.
+    val coldWater = (conditions.waterShallowC ?: 20.0) < fish.coldTempThreshold
 
     // Правило про температуру старше общего: в холодной воде важнее не
     // цвет, а то, что приманку надо вести медленно.
@@ -428,14 +621,19 @@ private fun lureAdvice(
         ?: return null
 
     val type = lureTypeFor(conditions, knowledge, coldWater, backup) ?: return null
+    val water = conditions.waterShallowC
     val color = guide.colors.getOrNull(if (backup) 1 else 0) ?: guide.colors.firstOrNull().orEmpty()
 
     return StrategyAdvice(
         title = if (backup) "Запасная приманка" else "Приманка",
         value = listOf(type.name, color, guide.size).filter { it.isNotBlank() }.joinToString(", "),
-        reason = listOf(guide.notes, "Подача: ${guide.action}")
-            .filter { it.isNotBlank() }
-            .joinToString(" ")
+        reason = listOf(
+            water?.let {
+                "Вода %.0f°, порог вида %.0f°".format(it, fish.coldTempThreshold)
+            },
+            guide.notes,
+            "Подача: ${guide.action}"
+        ).filterNotNull().filter { it.isNotBlank() }.joinToString(". ")
     )
 }
 
@@ -468,6 +666,7 @@ private fun groundbaitAdvice(
     fish: FishEntity,
     guild: Guild,
     cold: Boolean,
+    appetite: Double,
     conditions: SessionConditions,
     input: SessionPlanInput,
     method: FishingMethod?
@@ -480,6 +679,13 @@ private fun groundbaitAdvice(
         )
     }
     if (!input.hasGroundbait || method?.groundbait == false) return null
+    if (conditions.season?.phase == SeasonPhase.DORMANT) {
+        return StrategyAdvice(
+            title = "Прикормка",
+            value = "Не нужна",
+            reason = "Вид в оцепенении: стол ему сейчас не нужен ни в каком объёме"
+        )
+    }
 
     val rule = (if (cold) fish.groundbaitCold else fish.groundbaitWarm).decodeGroundbait()
     val oxygen = conditions.oxygenMgL
@@ -487,21 +693,69 @@ private fun groundbaitAdvice(
     val heatCut = water != null && water > fish.optMaxTemp - HEAT_MARGIN_C &&
         oxygen != null && oxygen < fish.oxygenComfortMgL + 1
 
-    val volume = if (heatCut) "меньше обычного" else volumeWord(rule.volume)
-    val reason = if (heatCut) {
-        "Вода %.0f° и кислорода %.1f мг/л: обильный стол сейчас во вред — рыба встанет над кормом"
-            .format(water, oxygen)
-    } else {
-        rule.notes.ifBlank { "По справочнику для этой воды" }
+    // Объём идёт от аппетита, а не от одного порога: он и так собран из воды,
+    // сезона и сегодняшнего балла.
+    val volume = when {
+        heatCut -> "меньше обычного"
+        else -> appetiteVolume(appetite, rule.volume)
     }
+
+    val reason = buildList {
+        if (heatCut) {
+            add(
+                "Вода %.0f° и кислорода %.1f мг/л: обильный стол сейчас во вред — рыба встанет над кормом"
+                    .format(water, oxygen)
+            )
+        } else {
+            add(appetiteReason(appetite, conditions.season))
+        }
+        add(rule.notes)
+    }.map { it.trimEnd('.', ' ') }.filter { it.isNotBlank() }.joinToString(". ")
 
     return StrategyAdvice(
         title = "Прикормка",
-        value = listOf(volume, fractionWord(rule.fraction), sweetWord(rule.sweetness))
-            .filter { it.isNotBlank() }
-            .joinToString(", "),
+        value = listOf(
+            volume,
+            fractionWord(rule.fraction),
+            sweetWord(rule.sweetness),
+            flavorText(rule.flavorProfile).takeIf { rule.flavorProfile != "none" }.orEmpty()
+        ).filter { it.isNotBlank() }.joinToString(", "),
         reason = reason
     )
+}
+
+/**
+ * Объём стола под аппетит.
+ *
+ * Справочник задаёт объём для вида в его обычном состоянии; аппетит говорит,
+ * насколько рыба сегодня от этого состояния отстоит. Вверх объём не растёт:
+ * перекормить проще, чем недокормить, и цена ошибки разная.
+ */
+private fun appetiteVolume(appetite: Double, ruleVolume: String): String = when {
+    appetite < APPETITE_NONE -> "почти не кормить"
+    appetite < APPETITE_LOW -> "мало корма"
+    appetite < APPETITE_MID -> "умеренно"
+    else -> volumeWord(ruleVolume)
+}
+
+/**
+ * Почему стол именно такой.
+ *
+ * Объясняется решение, а не фаза вообще: сказать «стол можно держать полным»
+ * рядом со словом «умеренно» — значит противоречить себе в одной строке.
+ */
+private fun appetiteReason(appetite: Double, season: SeasonState?): String {
+    val percent = (appetite * 100).roundToInt()
+    val phase = season?.phase?.title?.lowercase()
+
+    val decision = when {
+        appetite < APPETITE_NONE -> "кормить почти нечем: рыба сейчас не ест"
+        appetite < APPETITE_LOW -> "стол малый: лишний корм насытит рыбу раньше крючка"
+        appetite < APPETITE_MID -> "стол умеренный: до полного рыба сегодня не доедает"
+        else -> "стол можно держать полным"
+    }
+
+    return if (phase != null) "Аппетит $percent %, $phase — $decision" else "Аппетит $percent % — $decision"
 }
 
 /**
@@ -540,6 +794,7 @@ private fun baitingAdvice(
     plan: BaitingPlan?,
     input: SessionPlanInput,
     cold: Boolean,
+    appetite: Double,
     method: FishingMethod?
 ): StrategyAdvice? {
     if (plan == null) return null
@@ -556,13 +811,24 @@ private fun baitingAdvice(
         if (input.goal == CatchGoal.TROPHY && plan.goal != CatchGoal.TROPHY.key && cold) {
             add("Трофейные схемы оставьте на тёплую воду: сейчас решает не объём стола, а точность")
         }
-    }.filter { it.isNotBlank() }.joinToString(". ")
+        if (appetite < APPETITE_MID) {
+            add(
+                "Схема остаётся, объём — нет: при аппетите %d %% сыпьте вполовину от неё"
+                    .format((appetite * 100).roundToInt())
+            )
+        }
+    }.map { it.trimEnd('.', ' ') }.filter { it.isNotBlank() }.joinToString(". ")
+
+    // Объём схемы не должен спорить с объёмом стола строкой выше.
+    val volume = if (appetite < APPETITE_MID) {
+        appetiteVolume(appetite, plan.volume)
+    } else {
+        volumeWord(plan.volume)
+    }
 
     return StrategyAdvice(
         title = "Схема закорма",
-        value = listOf(plan.name, volumeWord(plan.volume))
-            .filter { it.isNotBlank() }
-            .joinToString(", "),
+        value = listOf(plan.name, volume).filter { it.isNotBlank() }.joinToString(", "),
         reason = reason
     )
 }
@@ -574,8 +840,19 @@ private fun baitingAdvice(
  * просто не справляются с крупной сушёной насадкой, а рыба с развитыми
  * глоточными зубами справляется.
  */
-private fun selectionAdvice(plan: BaitingPlan?): StrategyAdvice? {
+private fun selectionAdvice(plan: BaitingPlan?, appetite: Double): StrategyAdvice? {
     val size = plan?.baitSizeMm?.takeIf { it.isNotBlank() } ?: return null
+
+    // Вялая рыба не берёт крупное: она не станет тратить силы на то, что
+    // тяжело всосать. Схема остаётся, а размер уходит вниз.
+    if (appetite < APPETITE_LOW) {
+        return StrategyAdvice(
+            title = "Размер насадки",
+            value = "мельче схемы, одна-две штуки",
+            reason = "Аппетит %d %%: крупную насадку вялая рыба не возьмёт, как её ни суши"
+                .format((appetite * 100).roundToInt())
+        )
+    }
 
     return StrategyAdvice(
         title = "Размер насадки",
@@ -630,6 +907,36 @@ private fun warnings(
     method: FishingMethod?,
     horizon: StrategyAdvice
 ): List<String> = buildList {
+    // Сезон идёт первым: если рыба спит или на нересте, всё остальное —
+    // подробности о снасти, которая сегодня не понадобится.
+    when (conditions.season?.phase) {
+        SeasonPhase.DORMANT -> add(
+            "Вода %.1f° выше %.1f°: %s в оцепенении и почти не питается — сегодня стоит ехать за кем-то другим"
+                .format(
+                    conditions.season.waterC,
+                    fish.dormantAboveC ?: 0f,
+                    fish.name.lowercase()
+                )
+        )
+
+        SeasonPhase.SPAWN -> add(
+            "Вода %.0f° в нерестовой полосе %.0f–%.0f° на подъёме: рыба на нересте, " +
+                "и в большинстве регионов в это время действует запрет — проверьте правила своей области"
+                    .format(
+                        conditions.season.waterC,
+                        fish.spawnTempMinC ?: 0f,
+                        fish.spawnTempMaxC ?: 0f
+                    )
+        )
+
+        SeasonPhase.POST_SPAWN -> add(
+            "Рыба отходит после нереста: поклёвки будут редкими ещё до %d суток"
+                .format(fish.postSpawnRecoveryDays)
+        )
+
+        else -> Unit
+    }
+
     val oxygen = conditions.oxygenMgL
     if (oxygen != null && oxygen < fish.oxygenComfortMgL) {
         add(
@@ -645,8 +952,14 @@ private fun warnings(
     add("Точку стоит пройти грузилом: без промера корм ложится вслепую")
 
     val water = conditions.waterShallowC
-    if (water != null && water > fish.absMaxTemp) {
-        add("Вода теплее предела вида: сегодня стоит ехать за кем-то другим")
+    // Про оцепенение уже сказано выше своими словами — не повторяем дважды.
+    if (water != null && water > fish.absMaxTemp &&
+        conditions.season?.phase != SeasonPhase.DORMANT
+    ) {
+        add(
+            "Вода %.0f° выше предела вида %.0f°: сегодня стоит ехать за кем-то другим"
+                .format(water, fish.absMaxTemp)
+        )
     }
 
     if (guild == Guild.PEACEFUL && conditions.lightPhase == LightPhase.DAY) {
@@ -683,8 +996,30 @@ private fun sweetWord(value: String): String = when (value) {
 /** Столько дождя за сутки уже поднимает муть. */
 private const val MUDDY_RAIN_MM = 8.0
 
-/** Ниже этой воды хищник не догоняет быструю приманку. */
-private const val COLD_WATER_C = 12.0
+/**
+ * Пороги аппетита: где стол меняется качественно, а не на четверть горсти.
+ *
+ * Ниже [APPETITE_NONE] кормить незачем вовсе, ниже [APPETITE_LOW] рыба не
+ * возьмёт крупную насадку, ниже [APPETITE_MID] полный стол насытит её раньше
+ * крючка.
+ */
+private const val APPETITE_NONE = 0.15
+private const val APPETITE_LOW = 0.35
+private const val APPETITE_MID = 0.65
+
+/** Аппетит, когда воду ещё не посчитали: не уверенная единица и не ноль. */
+internal const val NEUTRAL_APPETITE = 0.6
+
+/** Насколько мягко балл клёва влияет на стол: от него остаётся не меньше этого. */
+private const val SCORE_FLOOR = 0.6
+
+/** Верх шкалы клёва. */
+private const val MAX_SCORE = 100.0
+
+/** Горизонты словами: те же строки, что показывает совет. */
+private const val HORIZON_BOTTOM = "Дно"
+private const val HORIZON_MID = "Полводы"
+private const val HORIZON_TOP = "Верх"
 
 /** За сколько градусов до предела вида стол пора урезать. */
 private const val HEAT_MARGIN_C = 2.0
