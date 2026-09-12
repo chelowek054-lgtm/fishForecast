@@ -78,7 +78,8 @@ class PlaceContextTest {
 
     @Test
     fun `место не заменяет собой погоду и не обнуляет шанс`() {
-        // Даже самое рыбное место остаётся множителем, а не приговором.
+        // Даже самое рыбное место остаётся множителем, а не приговором:
+        // сдвиг не больше трети в любую сторону.
         val best = placeOf(
             spot("""["snags","hump","drop_off","point","bridge_piles"]"""),
             WaterLayerChoice.SHALLOW,
@@ -86,8 +87,40 @@ class PlaceContextTest {
         )
         val worst = placeOf(spot("""["rotten_silt","rotten_silt"]"""), WaterLayerChoice.SHALLOW, catalog)
 
-        assertEquals(1.6, best.bonusFor(Guild.PREDATOR), 0.001)
-        assertEquals(0.4, worst.bonusFor(Guild.PREDATOR), 0.001)
+        assertEquals(1.25, best.bonusFor(Guild.PREDATOR), 0.001)
+        assertEquals(0.7, worst.bonusFor(Guild.PREDATOR), 0.001)
+    }
+
+    @Test
+    fun `пять структур за рыбу весят как самая сильная из них`() {
+        // Сумма уводила балл под потолок от числа галочек, а точка — одно
+        // место: второй коряжник не делает его вдвое рыбнее.
+        val many = placeOf(
+            spot("""["snags","hump","drop_off","point","bridge_piles"]"""),
+            WaterLayerChoice.SHALLOW,
+            catalog
+        )
+        val one = placeOf(spot("""["snags"]"""), WaterLayerChoice.SHALLOW, catalog)
+
+        assertEquals(one.bonusFor(Guild.PREDATOR), many.bonusFor(Guild.PREDATOR), 0.001)
+        assertEquals(one.bonusFor(Guild.PEACEFUL), many.bonusFor(Guild.PEACEFUL), 0.1)
+    }
+
+    @Test
+    fun `довод за и довод против сходятся между собой`() {
+        // Коряжник на гнилом иле остаётся коряжником на гнилом иле.
+        val place = placeOf(spot("""["snags","rotten_silt"]"""), WaterLayerChoice.SHALLOW, catalog)
+
+        assertEquals(0.95, place.bonusFor(Guild.PREDATOR), 0.001)
+    }
+
+    @Test
+    fun `поправки к воде и кислороду не копятся`() {
+        val springs = placeOf(spot("""["spring","spring"]"""), WaterLayerChoice.SHALLOW, catalog)
+        val airy = placeOf(spot("""["inflow","windward_shore"]"""), WaterLayerChoice.SHALLOW, catalog)
+
+        assertEquals("два родника холодят как один", -3.0, springs.waterOffsetC, 0.001)
+        assertEquals("приток с наветренным — как приток", 0.5, airy.oxygenOffsetMgL, 0.001)
     }
 
     @Test

@@ -5,6 +5,7 @@ import com.example.fishforecast.domain.fish.Guild
 import com.example.fishforecast.domain.fish.decodeBaits
 import com.example.fishforecast.domain.knowledge.KnowledgeCatalog
 import com.example.fishforecast.domain.knowledge.StructureType
+import kotlin.math.abs
 
 /**
  * Место, для которого считается клёв.
@@ -26,33 +27,50 @@ data class PlaceContext(
      * Множитель, а не слагаемое: коряжник не заменяет кислород и не отменяет
      * давление — он поднимает или роняет шанс на том, что осталось. Место
      * без особенностей даёт ровно единицу и ничего не меняет.
+     *
+     * Структуры не складываются. Точка — одно место, и коряжник с бровкой
+     * говорят об одном: рыбе здесь есть где стоять. Сумма уводила балл под
+     * потолок от числа галочек, поэтому в расчёт идут самая сильная
+     * структура за рыбу и самая сильная против.
      */
     fun bonusFor(guild: Guild): Double {
         if (structures.isEmpty()) return 1.0
 
-        val sum = structures.sumOf { structure ->
+        val bonuses = unique.map { structure ->
             when (guild) {
                 Guild.PREDATOR -> structure.predatorBonus
                 Guild.PEACEFUL -> structure.peacefulBonus
             }
         }
-        return (1.0 + sum).coerceIn(MIN_BONUS, MAX_BONUS)
+        return (1.0 + strongest(bonuses)).coerceIn(MIN_BONUS, MAX_BONUS)
     }
 
-    /** Поправка к температуре воды: донный ключ холодит своё место. */
-    val waterOffsetC: Double get() = structures.sumOf { it.waterOffsetC }
+    /**
+     * Поправка к температуре воды: донный ключ холодит своё место. Берётся
+     * самая сильная, а не сумма: два родника не холодят на шесть градусов.
+     */
+    val waterOffsetC: Double
+        get() = unique.map { it.waterOffsetC }.maxByOrNull { abs(it) } ?: 0.0
 
-    /** Поправка к кислороду: приток добавляет, гнилой ил отнимает. */
-    val oxygenOffsetMgL: Double get() = structures.sumOf { it.oxygenBonusMgL }
+    /** Поправка к кислороду: лучшая прибавка и худшая убыль, без сложения. */
+    val oxygenOffsetMgL: Double get() = strongest(unique.map { it.oxygenBonusMgL })
+
+    /** Повтор одной структуры в точке — та же структура, а не вторая. */
+    private val unique: List<StructureType> get() = structures.distinctBy { it.id }
 
     private companion object {
         /** Даже самое гиблое место не обнуляет шанс полностью. */
-        const val MIN_BONUS = 0.4
+        const val MIN_BONUS = 0.7
 
-        /** И самое рыбное не заменяет собой погоду. */
-        const val MAX_BONUS = 1.6
+        /** И самое рыбное не заменяет собой погоду: сдвиг не больше трети. */
+        const val MAX_BONUS = 1.3
     }
 }
+
+/** Лучший довод «за» плюс худший «против»: доводы одной стороны не копятся. */
+private fun strongest(values: List<Double>): Double =
+    (values.maxOrNull() ?: 0.0).coerceAtLeast(0.0) +
+        (values.minOrNull() ?: 0.0).coerceAtMost(0.0)
 
 /** Какой слой воды имеется в виду. */
 enum class WaterLayerChoice(val title: String) {

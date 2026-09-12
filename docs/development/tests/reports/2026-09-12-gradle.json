@@ -1,0 +1,6 @@
+{
+  "contract": "docdd.workspace/1",
+  "runner": "gradle",
+  "started_at": "2026-09-12T12:06:17Z",
+  "verifications": { "V-0003": "passed" }
+}
