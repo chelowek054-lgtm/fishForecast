@@ -2,7 +2,7 @@
 id: R-0009
 type: requirement
 title: Заведённый водоём доступен другим рыболовам
-status: review
+status: approved
 owner: architect
 created: 2026-09-12
 updated: 2026-09-12
@@ -28,3 +28,4 @@ links:
 
 - 2026-09-12 · заведено · модель
 - 2026-09-12 · на подтверждение · модель
+- 2026-09-12 · подтверждён · architect

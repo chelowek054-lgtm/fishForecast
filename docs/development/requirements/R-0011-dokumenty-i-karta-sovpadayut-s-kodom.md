@@ -2,7 +2,7 @@
 id: R-0011
 type: requirement
 title: Документы и карта проекта говорят то же, что код
-status: review
+status: approved
 owner: architect
 created: 2026-09-12
 updated: 2026-09-12
@@ -25,3 +25,4 @@ links:
 
 - 2026-09-12 · заведено · модель
 - 2026-09-12 · на подтверждение · модель
+- 2026-09-12 · подтверждён · architect

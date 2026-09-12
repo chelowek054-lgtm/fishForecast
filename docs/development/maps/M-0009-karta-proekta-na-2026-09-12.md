@@ -2,7 +2,7 @@
 id: M-0009
 type: map
 title: Карта проекта на 2026-09-12
-status: approved
+status: superseded
 created: 2026-09-12
 updated: 2026-09-12
 links:
@@ -6908,3 +6908,4 @@ links:
 - 2026-09-12 · заведена черновиком · модель
 - 2026-09-12 · на подтверждение · architect
 - 2026-09-12 · подтверждён · architect
+- 2026-09-12 · заменён · architect

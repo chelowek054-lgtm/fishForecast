@@ -2,7 +2,7 @@
 id: R-0006
 type: requirement
 title: Приложение в цветах своей иконки, фон рыболов выбирает сам
-status: review
+status: approved
 owner: architect
 created: 2026-09-12
 updated: 2026-09-12
@@ -30,3 +30,4 @@ links:
 
 - 2026-09-12 · заведено · модель
 - 2026-09-12 · на подтверждение · модель
+- 2026-09-12 · подтверждён · architect

@@ -2,7 +2,7 @@
 id: V-0004
 type: verification
 title: Круг видов рыболова собирается из его данных
-status: review
+status: approved
 owner: dev
 created: 2026-09-12
 updated: 2026-09-12
@@ -26,3 +26,4 @@ links:
 
 - 2026-09-12 · заведена · модель
 - 2026-09-12 · на подтверждение · модель
+- 2026-09-12 · подтверждён · architect

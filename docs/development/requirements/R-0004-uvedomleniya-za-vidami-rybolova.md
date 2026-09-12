@@ -2,7 +2,7 @@
 id: R-0004
 type: requirement
 title: Уведомление зовёт только за теми видами, за которыми рыболов ездит
-status: review
+status: approved
 owner: architect
 created: 2026-09-12
 updated: 2026-09-12
@@ -34,3 +34,4 @@ links:
 
 - 2026-09-12 · заведено · модель
 - 2026-09-12 · на подтверждение · модель
+- 2026-09-12 · подтверждён · architect

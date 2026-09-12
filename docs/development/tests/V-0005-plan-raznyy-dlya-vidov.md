@@ -2,7 +2,7 @@
 id: V-0005
 type: verification
 title: План расходится по видам и объясняет себя
-status: review
+status: approved
 owner: dev
 created: 2026-09-12
 updated: 2026-09-12
@@ -24,3 +24,4 @@ links:
 
 - 2026-09-12 · заведена · модель
 - 2026-09-12 · на подтверждение · модель
+- 2026-09-12 · подтверждён · architect

@@ -2,7 +2,7 @@
 id: R-0010
 type: requirement
 title: Рыболовы видят уловы друг друга на стене и обсуждают их
-status: review
+status: approved
 owner: architect
 created: 2026-09-12
 updated: 2026-09-12
@@ -29,3 +29,4 @@ links:
 
 - 2026-09-12 · заведено · модель
 - 2026-09-12 · на подтверждение · модель
+- 2026-09-12 · подтверждён · architect

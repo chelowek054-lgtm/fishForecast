@@ -2,7 +2,7 @@
 id: R-0003
 type: requirement
 title: Место меняет оценку клёва в пределах, а не в разы
-status: review
+status: approved
 owner: architect
 created: 2026-09-12
 updated: 2026-09-12
@@ -32,3 +32,4 @@ links:
 
 - 2026-09-12 · заведено · модель
 - 2026-09-12 · на подтверждение · модель
+- 2026-09-12 · подтверждён · architect
