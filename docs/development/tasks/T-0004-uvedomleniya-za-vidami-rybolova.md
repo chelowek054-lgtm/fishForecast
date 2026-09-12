@@ -2,7 +2,7 @@
 id: T-0004
 type: task
 title: Уведомления зовут за видами рыболова и узнаются по картинке
-status: in_review
+status: done
 owner: dev
 created: 2026-09-12
 updated: 2026-09-12
@@ -46,3 +46,4 @@ links:
 - 2026-09-12 · готова к работе · architect
 - 2026-09-12 · в разработку · architect
 - 2026-09-12 · на проверку · модель
+- 2026-09-12 · закрыта · architect
