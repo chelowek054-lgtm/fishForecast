@@ -1,5 +1,5 @@
 # Манифест проекта для приложения контроля процесса.
-# Схема: _contract/schemas/project.schema.json
+# Схема: DocDD Console, docs/schemas/project.schema.json
 
 contract: docdd.workspace/1
 

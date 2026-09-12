@@ -15,7 +15,7 @@
 local.properties
 .idea
 
-# Кэш приложения контроля процесса (docs/development/_contract/app-contract.md)
+# Кэш и рабочие деревья DocDD Console (её docs/01-architecture.md, docs/09-execution.md)
 .docdd/
 
 # Логи компилятора Kotlin: мусор сборки, не история проекта

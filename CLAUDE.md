@@ -50,7 +50,7 @@
 | Клёв: модель, данные и пробелы | `app/docs/architecture/client/bite-score.md` |
 | Формат обмена районами | `app/docs/RegionPack.md` |
 | Требования, задачи, проверки процесса | `docs/development/` |
-| Контракт файлов процесса | `docs/development/_contract/SPEC.md` |
+| Контракт файлов процесса | DocDD Console: `D:/work/docdd-console/docs/02-workspace-contract.md` |
 
 Знание о рыбе и водоёмах — не код: оно живёт в `app/src/main/assets/`
 (`initial_fish.json`, `knowledge.json`) и правится как документ.
@@ -86,6 +86,13 @@
 
 ```bash
 ./gradlew :app:testDebugUnitTest -Dorg.gradle.java.home="D:/android/jbr"
+```
+
+Записи процесса в `docs/development` проверяет DocDD Console, из её каталога
+`D:/work/docdd-console`:
+
+```bash
+npm run check -- D:\work\fishForecast
 ```
 
 Перед тем как считать работу законченной: тесты зелёные, документ и код
