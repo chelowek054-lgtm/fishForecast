@@ -2,7 +2,7 @@
 id: T-0003
 type: task
 title: Место перестаёт умножать балл от числа структур
-status: in_review
+status: done
 owner: dev
 created: 2026-09-12
 updated: 2026-09-12
@@ -50,3 +50,4 @@ links:
 - 2026-09-12 · готова к работе · architect
 - 2026-09-12 · в разработку · architect
 - 2026-09-12 · на проверку · модель
+- 2026-09-12 · закрыта · architect
