@@ -54,12 +54,12 @@ class RegionPackRepository @Inject constructor(
     /**
      * Собирает пакет района в файл кэша.
      *
-     * В пакет попадают точки внутри границ, а не все подряд: район — это
-     * место, и чужие точки с другого водоёма получателю ни к чему.
+     * В пакет попадают точки этого района — по ссылке, а не по рамке: точка на
+     * стыке двух районов иначе уехала бы с обоими, хотя принадлежит одному.
      */
     suspend fun exportRegion(mapId: Int): Result<File> = runCatching {
         val map = savedMapDao.getRegionById(mapId) ?: error("Район не найден")
-        val spots = spotDao.allSpots().filter { map.contains(it.latitude, it.longitude) }
+        val spots = spotDao.getSpotsForMap(mapId).first()
         val allFish = fishDao.allFish()
         // Справочник уезжает не целиком: только те виды, которые привязаны к
         // точкам этого района. Остальное — знание о других водоёмах.

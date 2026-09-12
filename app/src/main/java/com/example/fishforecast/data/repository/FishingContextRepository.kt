@@ -108,8 +108,8 @@ class FishingContextRepository @Inject constructor(
     }
 
     /**
-     * Точки внутри границ карты. Принадлежность определяется геометрией, а не
-     * ссылкой: тогда точки, импортированные из чужого GPX, тоже находятся.
+     * Точки выбранной карты — по ссылке, а не по геометрии: точка на стыке двух
+     * районов иначе считалась бы в обоих, а точка удалённого — ничьей.
      */
     val activeSpots: Flow<List<FishingSpotEntity>> = activeMap.flatMapLatest { map ->
         if (map == null) flowOf(emptyList()) else spotRepository.spotsForMap(map.id)

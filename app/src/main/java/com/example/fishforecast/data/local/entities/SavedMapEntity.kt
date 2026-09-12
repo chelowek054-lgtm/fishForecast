@@ -7,7 +7,7 @@ import androidx.room.PrimaryKey
  * Сохранённая карта — район рыбалки и главный контекст приложения.
  *
  * От выбранной карты зависит всё остальное: по её центру запрашивается
- * погода, её норма давления идёт в расчёт клёва, её границы отбирают точки.
+ * погода, её норма давления идёт в расчёт клёва, ей принадлежат точки.
  * Сами тайлы лежат в базе MapLibre, здесь — описание, по которому карту
  * показывают в списке и находят в OfflineManager.
  */
@@ -61,7 +61,7 @@ data class SavedMapEntity(
     val centerLatitude: Double get() = (north + south) / 2
     val centerLongitude: Double get() = (east + west) / 2
 
-    /** Точка принадлежит карте, если попадает в её границы. */
+    /** Попадает ли точка в рамку карты. Принадлежность решает `FishingSpotEntity.mapId`. */
     fun contains(latitude: Double, longitude: Double): Boolean =
         latitude in south..north && longitude in west..east
 
