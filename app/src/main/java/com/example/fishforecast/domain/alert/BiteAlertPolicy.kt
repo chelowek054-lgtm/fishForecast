@@ -1,5 +1,6 @@
 package com.example.fishforecast.domain.alert
 
+import com.example.fishforecast.data.local.entities.FishEntity
 import java.time.Duration
 import java.time.LocalDateTime
 import java.time.LocalTime
@@ -129,6 +130,21 @@ fun distanceKm(
         cos(Math.toRadians(fromLatitude)) * cos(Math.toRadians(toLatitude)) *
         sin(dLon / 2) * sin(dLon / 2)
     return 2 * EARTH_RADIUS_KM * asin(min(1.0, sqrt(a)))
+}
+
+/**
+ * Виды, за которыми рыболов ездит.
+ *
+ * Круг складывается из его же данных — видов точек, уловов и выездов, — и
+ * отдельной настройки не требует. Вид, удалённый из справочника, в круг не
+ * попадает, даже если остался у старого улова.
+ *
+ * Пустой круг — рыболов ещё ничего не отметил — значит все виды: иначе новый
+ * пользователь так и не узнал бы, что уведомления вообще есть.
+ */
+fun speciesOfInterest(all: List<FishEntity>, marked: Collection<Int>): List<FishEntity> {
+    val ids = marked.toSet()
+    return all.filter { it.id in ids }.ifEmpty { all }
 }
 
 /** Не чаще одного зова в эти часы, каким бы хорошим ни был прогноз. */

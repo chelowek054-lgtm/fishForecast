@@ -1730,7 +1730,7 @@ links:
         "to": "app/src/main/java/com/example/fishforecast/data/local/AlertStore.kt",
         "evidence": {
           "path": "app/src/main/java/com/example/fishforecast/data/worker/BiteAlertWorker.kt",
-          "line": 21,
+          "line": 22,
           "fragment": "import com.example.fishforecast.data.local.AlertStore"
         }
       },
@@ -1739,7 +1739,7 @@ links:
         "to": "app/src/main/java/com/example/fishforecast/data/local/entities/DailySunEntity.kt",
         "evidence": {
           "path": "app/src/main/java/com/example/fishforecast/data/worker/BiteAlertWorker.kt",
-          "line": 24,
+          "line": 25,
           "fragment": "import com.example.fishforecast.data.local.entities.DailySunEntity"
         }
       },
@@ -1748,7 +1748,7 @@ links:
         "to": "app/src/main/java/com/example/fishforecast/data/local/entities/FishEntity.kt",
         "evidence": {
           "path": "app/src/main/java/com/example/fishforecast/data/worker/BiteAlertWorker.kt",
-          "line": 25,
+          "line": 26,
           "fragment": "import com.example.fishforecast.data.local.entities.FishEntity"
         }
       },
@@ -1757,7 +1757,7 @@ links:
         "to": "app/src/main/java/com/example/fishforecast/data/local/entities/SavedMapEntity.kt",
         "evidence": {
           "path": "app/src/main/java/com/example/fishforecast/data/worker/BiteAlertWorker.kt",
-          "line": 26,
+          "line": 27,
           "fragment": "import com.example.fishforecast.data.local.entities.SavedMapEntity"
         }
       },
@@ -1766,7 +1766,7 @@ links:
         "to": "app/src/main/java/com/example/fishforecast/data/local/entities/WeatherEntity.kt",
         "evidence": {
           "path": "app/src/main/java/com/example/fishforecast/data/worker/BiteAlertWorker.kt",
-          "line": 27,
+          "line": 28,
           "fragment": "import com.example.fishforecast.data.local.entities.WeatherEntity"
         }
       },
@@ -1775,7 +1775,7 @@ links:
         "to": "app/src/main/java/com/example/fishforecast/data/repository",
         "evidence": {
           "path": "app/src/main/java/com/example/fishforecast/data/worker/BiteAlertWorker.kt",
-          "line": 22,
+          "line": 23,
           "fragment": "data.repository.FishRepository"
         }
       },
@@ -1784,7 +1784,7 @@ links:
         "to": "app/src/main/java/com/example/fishforecast/data/repository/FishingContextRepository.kt",
         "evidence": {
           "path": "app/src/main/java/com/example/fishforecast/data/worker/BiteAlertWorker.kt",
-          "line": 23,
+          "line": 24,
           "fragment": "import com.example.fishforecast.data.repository.FishingContextRepository"
         }
       },
@@ -1793,7 +1793,7 @@ links:
         "to": "app/src/main/java/com/example/fishforecast/data/repository/FishRepository.kt",
         "evidence": {
           "path": "app/src/main/java/com/example/fishforecast/data/worker/BiteAlertWorker.kt",
-          "line": 22,
+          "line": 23,
           "fragment": "import com.example.fishforecast.data.repository.FishRepository"
         }
       },
@@ -1802,7 +1802,7 @@ links:
         "to": "app/src/main/java/com/example/fishforecast/domain/alert/BiteAlertPolicy.kt",
         "evidence": {
           "path": "app/src/main/java/com/example/fishforecast/data/worker/BiteAlertWorker.kt",
-          "line": 28,
+          "line": 29,
           "fragment": "import com.example.fishforecast.domain.alert.AlertDecision"
         }
       },
@@ -1811,7 +1811,7 @@ links:
         "to": "app/src/main/java/com/example/fishforecast/domain/bite/FindBiteWindowUseCase.kt",
         "evidence": {
           "path": "app/src/main/java/com/example/fishforecast/data/worker/BiteAlertWorker.kt",
-          "line": 31,
+          "line": 33,
           "fragment": "domain.bite.FindBiteWindowUseCase"
         }
       },
@@ -1820,7 +1820,7 @@ links:
         "to": "app/src/main/java/com/example/fishforecast/domain/location/LocationTracker.kt",
         "evidence": {
           "path": "app/src/main/java/com/example/fishforecast/data/worker/BiteAlertWorker.kt",
-          "line": 32,
+          "line": 34,
           "fragment": "import com.example.fishforecast.domain.location.LocationTracker"
         }
       },
@@ -1829,7 +1829,7 @@ links:
         "to": "app/src/main/java/com/example/fishforecast/domain/water/WaterState.kt",
         "evidence": {
           "path": "app/src/main/java/com/example/fishforecast/data/worker/BiteAlertWorker.kt",
-          "line": 33,
+          "line": 35,
           "fragment": "import com.example.fishforecast.domain.water.WaterState"
         }
       },
@@ -1838,7 +1838,7 @@ links:
         "to": "app/src/main/java/com/example/fishforecast/MainActivity.kt",
         "evidence": {
           "path": "app/src/main/java/com/example/fishforecast/data/worker/BiteAlertWorker.kt",
-          "line": 19,
+          "line": 20,
           "fragment": "com.example.fishforecast.MainActivity"
         }
       },
@@ -2047,6 +2047,15 @@ links:
           "path": "app/src/main/java/com/example/fishforecast/di/SensorModule.kt",
           "line": 4,
           "fragment": "domain.sensor.PressureProvider"
+        }
+      },
+      {
+        "from": "app/src/main/java/com/example/fishforecast/domain/alert/BiteAlertPolicy.kt",
+        "to": "app/src/main/java/com/example/fishforecast/data/local/entities/FishEntity.kt",
+        "evidence": {
+          "path": "app/src/main/java/com/example/fishforecast/domain/alert/BiteAlertPolicy.kt",
+          "line": 3,
+          "fragment": "import com.example.fishforecast.data.local.entities.FishEntity"
         }
       },
       {
@@ -4427,10 +4436,19 @@ links:
       },
       {
         "from": "app/src/test/java/com/example/fishforecast/domain/alert/BiteAlertPolicyTest.kt",
+        "to": "app/src/main/java/com/example/fishforecast/data/local/entities/FishEntity.kt",
+        "evidence": {
+          "path": "app/src/test/java/com/example/fishforecast/domain/alert/BiteAlertPolicyTest.kt",
+          "line": 3,
+          "fragment": "import com.example.fishforecast.data.local.entities.FishEntity"
+        }
+      },
+      {
+        "from": "app/src/test/java/com/example/fishforecast/domain/alert/BiteAlertPolicyTest.kt",
         "to": "app/src/main/java/com/example/fishforecast/domain/alert/BiteAlertPolicy.kt",
         "evidence": {
           "path": "app/src/test/java/com/example/fishforecast/domain/alert/BiteAlertPolicyTest.kt",
-          "line": 28,
+          "line": 29,
           "fragment": "AlertHistory"
         }
       },
@@ -5714,7 +5732,7 @@ links:
         "direction": "read",
         "evidence": {
           "path": "app/src/main/java/com/example/fishforecast/data/repository/FishRepository.kt",
-          "line": 108,
+          "line": 111,
           "fragment": "context.assets.open(ASSET_NAME).bufferedReader()"
         }
       },
@@ -5724,7 +5742,7 @@ links:
         "direction": "read",
         "evidence": {
           "path": "app/src/main/java/com/example/fishforecast/data/repository/FishRepository.kt",
-          "line": 86,
+          "line": 89,
           "fragment": "val text = api.getCatalog(url)"
         }
       },
@@ -5734,7 +5752,7 @@ links:
         "direction": "read",
         "evidence": {
           "path": "app/src/main/java/com/example/fishforecast/data/repository/FishRepository.kt",
-          "line": 43,
+          "line": 46,
           "fragment": "val catalogUrl: Flow<String?> = store.catalogUrl"
         }
       },
@@ -5744,7 +5762,7 @@ links:
         "direction": "write",
         "evidence": {
           "path": "app/src/main/java/com/example/fishforecast/data/repository/FishRepository.kt",
-          "line": 47,
+          "line": 50,
           "fragment": "suspend fun setCatalogUrl(url: String?) = store.setCatalogUrl(url)"
         }
       },
@@ -5764,7 +5782,7 @@ links:
         "direction": "write",
         "evidence": {
           "path": "app/src/main/java/com/example/fishforecast/data/repository/FishRepository.kt",
-          "line": 123,
+          "line": 126,
           "fragment": "fishDao.insertFish(entity)"
         }
       },
@@ -5994,7 +6012,7 @@ links:
         "direction": "write",
         "evidence": {
           "path": "app/src/main/java/com/example/fishforecast/data/worker/BiteAlertWorker.kt",
-          "line": 181,
+          "line": 188,
           "fragment": "manager.notify("
         }
       },
@@ -6004,7 +6022,7 @@ links:
         "direction": "read",
         "evidence": {
           "path": "app/src/main/java/com/example/fishforecast/data/worker/BiteAlertWorker.kt",
-          "line": 58,
+          "line": 63,
           "fragment": "fishRepository.getAllFish().first()"
         }
       },
@@ -6014,7 +6032,7 @@ links:
         "direction": "write",
         "evidence": {
           "path": "app/src/main/java/com/example/fishforecast/data/worker/BiteAlertWorker.kt",
-          "line": 221,
+          "line": 234,
           "fragment": "enqueueUniquePeriodicWork("
         }
       },
@@ -6673,7 +6691,7 @@ links:
         "to": "app/src/main/java/com/example/fishforecast/domain/bite/FindBiteWindowUseCase.kt",
         "evidence": {
           "path": "app/src/main/java/com/example/fishforecast/data/worker/BiteAlertWorker.kt",
-          "line": 66,
+          "line": 73,
           "fragment": "val window = findBiteWindow("
         }
       },

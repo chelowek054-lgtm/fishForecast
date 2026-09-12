@@ -39,6 +39,9 @@ class FishRepository @Inject constructor(
 
     suspend fun getFishById(id: Int): FishEntity? = fishDao.getFishById(id)
 
+    /** Виды, отмеченные рыболовом у точек, в уловах и выездах. */
+    suspend fun fishIdsInUse(): List<Int> = fishDao.fishIdsInUse()
+
     /** Адрес общего справочника; пусто — источник не задан. */
     val catalogUrl: Flow<String?> = store.catalogUrl
 

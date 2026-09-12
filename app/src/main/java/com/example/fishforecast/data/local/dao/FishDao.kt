@@ -15,6 +15,17 @@ interface FishDao {
     @Query("SELECT * FROM fish")
     suspend fun allFish(): List<FishEntity>
 
+    /**
+     * Виды, которые рыболов где-то отметил: у точки, в улове или в выезде.
+     * По ним уведомление понимает, за кем он ездит.
+     */
+    @Query(
+        "SELECT fishId FROM fishing_spots WHERE fishId IS NOT NULL " +
+            "UNION SELECT fishId FROM catches WHERE fishId IS NOT NULL " +
+            "UNION SELECT targetFishId FROM fishing_sessions WHERE targetFishId IS NOT NULL"
+    )
+    suspend fun fishIdsInUse(): List<Int>
+
     /** Поиск по глобальному идентификатору: так узнаётся чужой вид. */
     @Query("SELECT * FROM fish WHERE uid = :uid")
     suspend fun getFishByUid(uid: String): FishEntity?

@@ -5,6 +5,7 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.content.Context
 import android.content.pm.PackageManager
+import android.graphics.BitmapFactory
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
@@ -27,6 +28,7 @@ import com.example.fishforecast.data.local.entities.SavedMapEntity
 import com.example.fishforecast.data.local.entities.WeatherEntity
 import com.example.fishforecast.domain.alert.AlertDecision
 import com.example.fishforecast.domain.alert.decideAlert
+import com.example.fishforecast.domain.alert.speciesOfInterest
 import com.example.fishforecast.domain.alert.travelTime
 import com.example.fishforecast.domain.bite.FindBiteWindowUseCase
 import com.example.fishforecast.domain.location.LocationTracker
@@ -55,7 +57,12 @@ class BiteAlertWorker @AssistedInject constructor(
 
     override suspend fun doWork(): Result {
         val map = fishingContext.currentMap() ?: return Result.success()
-        val fishList = fishRepository.getAllFish().first()
+        // Окно ищется только среди видов, за которыми рыболов ездит: налим,
+        // которого он не ловит, не повод его беспокоить.
+        val fishList = speciesOfInterest(
+            all = fishRepository.getAllFish().first(),
+            marked = fishRepository.fishIdsInUse()
+        )
         val forecast = fishingContext.activeForecast.first()
         if (fishList.isEmpty() || forecast.isEmpty()) return Result.success()
 
@@ -182,6 +189,12 @@ class BiteAlertWorker @AssistedInject constructor(
             NOTIFICATION_ID,
             NotificationCompat.Builder(context, CHANNEL_ID)
                 .setSmallIcon(R.drawable.ic_notification)
+                // Силуэт в строке состояния читается плохо: картинка
+                // приложения в самом уведомлении говорит, от кого оно.
+                .setLargeIcon(
+                    BitmapFactory.decodeResource(context.resources, R.drawable.ic_launcher_image)
+                )
+                .setColor(ContextCompat.getColor(context, R.color.brand_primary))
                 .setContentTitle(title)
                 .setContentText(text)
                 .setStyle(NotificationCompat.BigTextStyle().bigText(text))

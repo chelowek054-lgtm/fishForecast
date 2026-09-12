@@ -1,5 +1,6 @@
 package com.example.fishforecast.domain.alert
 
+import com.example.fishforecast.data.local.entities.FishEntity
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -37,6 +38,45 @@ class BiteAlertPolicyTest {
 
     private fun reasonOf(decision: AlertDecision): String =
         (decision as AlertDecision.Skip).reason
+
+    // ---------- за кем звать ----------
+
+    private fun fish(id: Int, name: String) = FishEntity(
+        id = id,
+        name = name,
+        optMinTemp = 18f,
+        optMaxTemp = 26f,
+        absMinTemp = 4f,
+        absMaxTemp = 32f
+    )
+
+    private val carp = fish(1, "Карп")
+    private val pike = fish(2, "Щука")
+    private val burbot = fish(3, "Налим")
+    private val catalog = listOf(carp, pike, burbot)
+
+    @Test
+    fun `зовёт только за видами точек, уловов и выездов`() {
+        // Карп отмечен и у точки, и в улове — в круге он один раз. Налима
+        // рыболов не ловит, и налим его не позовёт.
+        val chosen = speciesOfInterest(catalog, marked = listOf(1, 2, 1))
+
+        assertEquals(listOf(carp, pike), chosen)
+    }
+
+    @Test
+    fun `вид, удалённый из справочника, в круг не попадает`() {
+        // Старый улов помнит вид под номером 99, но справочник его уже забыл.
+        val chosen = speciesOfInterest(catalog, marked = listOf(2, 99))
+
+        assertEquals(listOf(pike), chosen)
+    }
+
+    @Test
+    fun `пока ничего не отмечено, ищет среди всех видов`() {
+        // Иначе новый пользователь не узнал бы, что уведомления вообще есть.
+        assertEquals(catalog, speciesOfInterest(catalog, marked = emptyList()))
+    }
 
     // ---------- ради чего всё затевалось ----------
 
