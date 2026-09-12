@@ -2,10 +2,10 @@
 id: T-0001
 type: task
 title: Вынести веса модели клёва в документ знаний
-status: ready
+status: backlog
 owner: dev
 created: 2026-08-30
-updated: 2026-09-03
+updated: 2026-09-12
 change: feature
 tags: [client, bite-model]
 links:
@@ -44,3 +44,4 @@ links:
 
 - 2026-08-30 · заведена · architect
 - 2026-09-03 · починено change_missing · architect
+- 2026-09-12 · в очередь · architect
