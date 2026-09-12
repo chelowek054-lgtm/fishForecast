@@ -11,6 +11,7 @@ phase: P-0002
 tags: [trip-plan, plan-2026-09]
 links:
   implements: [R-0005]
+  affects: [M-0011]
   verified_by: [V-0005]
 ---
 
@@ -31,7 +32,12 @@ links:
   суток» — по световому профилю вида, а не гильдии, «Монтаж» — по виду и
   способу.
 
-Карта изменения — после подтверждения документа.
+Документ написан — [trip-plan.md](../../../app/docs/architecture/client/trip-plan.md),
+§5 «Экран: четыре вопроса», — и ждёт подтверждения вместе с картой
+изменения M-0011.
+
+Код — `FishingStrategy.kt` (три блока), `SessionPanel.kt` (шапка и группы),
+тесты — `FishingStrategyTest`.
 
 ## Чего не делаем
 
