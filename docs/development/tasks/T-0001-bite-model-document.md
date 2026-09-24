@@ -2,10 +2,10 @@
 id: T-0001
 type: task
 title: Вынести веса модели клёва в документ знаний
-status: backlog
+status: dropped
 owner: dev
 created: 2026-08-30
-updated: 2026-09-12
+updated: 2026-09-24
 change: feature
 tags: [client, bite-model]
 links:
@@ -50,3 +50,4 @@ links:
 - 2026-08-30 · заведена · architect
 - 2026-09-03 · починено change_missing · architect
 - 2026-09-12 · в очередь · architect
+- 2026-09-24 · снята · architect · Задача снята: приложение переписывается на три продукта (A-0001), и план против нынешней Android-базы больше не ведёт к цели. Намерение, если оно ещё живо, вернётся новой задачей после подтверждения функциональной карты M-0013.
